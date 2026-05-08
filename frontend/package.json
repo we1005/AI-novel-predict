@@ -1,0 +1,32 @@
+{
+  "name": "novel-writer-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.2.2",
+    "@types/dagre": "^0.7.54",
+    "@xyflow/react": "^12.10.2",
+    "antd": "^6.3.7",
+    "cytoscape": "^3.30.2",
+    "dagre": "^0.8.5",
+    "echarts": "^5.5.1",
+    "next": "14.2.13",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/cytoscape": "^3.21.5",
+    "@types/node": "22.7.4",
+    "@types/react": "18.3.10",
+    "@types/react-dom": "18.3.0",
+    "typescript": "5.6.2"
+  }
+}

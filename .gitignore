@@ -1,0 +1,42 @@
+# --- secrets / API keys ---
+backend/.env
+backend/data/settings.json
+
+# --- per-user runtime data (books, vector store, audit DB) ---
+backend/data/
+
+# --- python ---
+backend/.venv/
+backend/**/__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# --- node / next ---
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/tsconfig.tsbuildinfo
+
+# --- macOS / IDE ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# --- claude / local agent state ---
+.claude/
+
+# --- copyrighted / personal corpus material ---
+末法王座.txt
+*.utf8.txt
+网页小说剧情展示/
+
+# --- third-party reference projects ---
+MiroFish/
+
+# --- personal notes (contains real API keys) ---
+多个模型.md
+需求.md

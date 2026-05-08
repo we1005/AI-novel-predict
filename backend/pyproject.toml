@@ -1,0 +1,27 @@
+[project]
+name = "novel-writer-backend"
+version = "0.1.0"
+description = "Chinese novel continuation tool — backend"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.6",
+    "openai>=1.40",
+    "chardet>=5.2",
+    "chromadb>=0.5",
+    "sentence-transformers>=3.0",
+    "httpx>=0.27",
+    "python-multipart>=0.0.9",
+    "tenacity>=8.2",
+    "python-dotenv>=1.0",
+    "json-repair>=0.30",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
