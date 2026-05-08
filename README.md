@@ -315,6 +315,28 @@ cp ~/Downloads/我的小说.txt backend/data/library/
 
 ---
 
+
+
+## 界面示例截图
+
+对小说已有部分的结构化信息提取：
+
+![img_v3_0211g_dd3b5398-f80f-4493-8b41-0df0bb5e9bag](README.assets/img_v3_0211g_dd3b5398-f80f-4493-8b41-0df0bb5e9bag.jpg)
+
+![img_v3_0211g_2c259836-2636-4ee0-8caf-2ee6e4984bag](README.assets/img_v3_0211g_2c259836-2636-4ee0-8caf-2ee6e4984bag.jpg)
+
+未来剧情大纲预测：
+
+![img_v3_0211g_b6f90f44-c6f9-4d0a-8ac2-9c4161c15d8g](README.assets/img_v3_0211g_b6f90f44-c6f9-4d0a-8ac2-9c4161c15d8g.jpg)
+
+![img_v3_0211g_da269bd4-4968-42e2-b1a1-a5f9a2e2134g](README.assets/img_v3_0211g_da269bd4-4968-42e2-b1a1-a5f9a2e2134g.jpg)
+
+![img_v3_0211g_946e3ebc-caed-42c9-a906-3b9c3aff659g](README.assets/img_v3_0211g_946e3ebc-caed-42c9-a906-3b9c3aff659g.jpg)
+
+
+
+
+
 ## 📜 License
 
 MIT
