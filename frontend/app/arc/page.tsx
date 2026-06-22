@@ -661,8 +661,30 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
   const [idx, setIdx] = useState(defaultIndex);
   const [job, setJob] = useState<any | null>(null);
   const [running, setRunning] = useState(false);
+  const [bookJob, setBookJob] = useState<any | null>(null);
+  const [bookRunning, setBookRunning] = useState(false);
+  const [batch, setBatch] = useState(3);
 
   useEffect(() => { setIdx(defaultIndex); }, [defaultIndex]);
+
+  // B · 启动/续写整本书（按 projection 的逐-phase OutlineRun 顺序）
+  const startWriteBook = async () => {
+    if (!job?.id) return;
+    setBookRunning(true);
+    try {
+      const r = await api.writeBook(job.id, { max_chapters: batch || null });
+      let attempts = 0;
+      const t = setInterval(async () => {
+        attempts += 1;
+        try {
+          const d = await api.bookWriteGet(r.id);
+          setBookJob(d);
+          if (d.status !== "writing") { setBookRunning(false); clearInterval(t); return; }
+        } catch { /* transient */ }
+        if (attempts >= 480) { clearInterval(t); setBookRunning(false); }  // ~40 min cap
+      }, 5000);
+    } catch { setBookRunning(false); }
+  };
 
   const project = async () => {
     setRunning(true); setJob(null);
@@ -734,6 +756,32 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
               <p className="muted" style={{ fontSize: 12 }}>仍未收束伏笔 id：{v.still_open_foreshadow_ids.join(", ")}</p>
             )}
           </div>
+          {/* B · 滚动地平线整本书写作 */}
+          <div className="card" style={{ background: "var(--panel-2)", marginBottom: 12, borderLeft: "3px solid var(--good)" }}>
+            <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <strong style={{ fontSize: 13 }}>✍️ 写整本书</strong>
+              <span className="muted" style={{ fontSize: 12 }}>按大纲逐章成稿 → 每章写完回灌记忆 → 下一章读得到。可分批/续写。</span>
+              <label style={{ fontSize: 12, marginLeft: "auto" }}>一次写
+                <input type="number" value={batch} min={0} max={71}
+                  onChange={(e) => setBatch(Math.max(0, +e.target.value || 0))}
+                  style={{ width: 56, margin: "0 4px", padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--panel)", color: "inherit" }} />
+                章（0=全部）
+              </label>
+              <button onClick={startWriteBook} disabled={bookRunning} style={{ padding: "5px 14px" }}>
+                {bookRunning ? `写作中…${bookJob ? `（${bookJob.chapters_done}/${bookJob.chapters_total} · ${bookJob.stage || ""}）` : ""}`
+                  : (bookJob && bookJob.chapters_done > 0 ? "接着写" : "开始写整本书")}
+              </button>
+            </div>
+            {bookJob && (
+              <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                进度 {bookJob.chapters_done}/{bookJob.chapters_total} · 状态 {bookJob.status}
+                {(bookJob.log || []).length > 0 && (
+                  <span> · 最近：{(bookJob.log || []).slice(-3).map((l: any) => `第${l.chapter}章(${l.status}${l.reingest ? "·回灌✓" : ""})`).join(" ")}</span>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* full outline grouped by phase */}
           {groups.map((g, gi) => (
             <div key={gi} style={{ marginBottom: 12 }}>

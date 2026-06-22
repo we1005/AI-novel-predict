@@ -605,6 +605,63 @@ def run_batch(start: int, end: int) -> dict[str, Any]:
         raise
 
 
+def _persist_dispatch(name: str, s, out: dict, *, batch_id: int, chapter_range) -> None:
+    if name == "entity":
+        _persist_entities(s, out.get("entities", []))
+    elif name == "foreshadow":
+        _persist_foreshadowings(s, out.get("planted", []), out.get("resolved", []))
+    elif name == "state":
+        _persist_states(s, out.get("states", []))
+    elif name == "plot":
+        _persist_plot(s, out.get("plot_points", []))
+    elif name == "world":
+        _persist_world(s, out.get("rules", []))
+    elif name == "mystery":
+        _persist_mystery_actions(s, out.get("actions", []), batch_id=batch_id, chapter_range=chapter_range)
+
+
+def extract_one_chapter(chapter_index: int, text: str) -> dict[str, Any]:
+    """写→回灌记忆反馈环 (A)：增量抽取**单个已生成章节**的记忆，使后续章节的
+    上下文能"读到"刚写出来的新章节（实体/伏笔/状态/世界规则/疑点）。
+
+    复用同一套 6-agent 抽取，但读的是原始正文（不是 corpus 偏移）。Best-effort：
+    任何失败都标 batch failed 并抛出，但调用方应吞掉异常（不拖垮成稿）。
+    """
+    init_schema()
+    text = (text or "").strip()
+    if not text:
+        return {"status": "skipped", "reason": "empty"}
+    user_text = (f"以下是第 {chapter_index} 章的正文（新续写出的章节）。"
+                 f"请按你的职责从中抽取结构化信息。\n\n{text}")
+    agents = all_agents()
+    with session_scope() as s:
+        batch = ExtractionBatch(chapter_start=chapter_index, chapter_end=chapter_index + 1,
+                                status="running")
+        s.add(batch); s.flush(); batch_id = batch.id
+    chapter_range = (chapter_index, chapter_index)
+    total_cost = 0.0
+    try:
+        for name in ["entity", "foreshadow", "state", "plot", "world", "mystery"]:
+            with session_scope() as s:
+                _, sys_blocks = _build_cached_context(s)
+            out, cost = _agent_call(name=name, system_blocks=sys_blocks, user_text=user_text,
+                                    tool=agents[name]["tool"], system_text=agents[name]["system"])
+            total_cost += cost
+            with session_scope() as s:
+                _persist_dispatch(name, s, out, batch_id=batch_id, chapter_range=chapter_range)
+        with session_scope() as s:
+            b = s.get(ExtractionBatch, batch_id)
+            if b:
+                b.status = "done"; b.cost_usd = total_cost; b.finished_at = datetime.utcnow()
+        return {"status": "done", "chapter": chapter_index, "cost_usd": total_cost}
+    except Exception as exc:  # noqa: BLE001
+        with session_scope() as s:
+            b = s.get(ExtractionBatch, batch_id)
+            if b:
+                b.status = "failed"; b.error = str(exc)[:500]; b.finished_at = datetime.utcnow()
+        raise
+
+
 def run_all(
     *,
     batch_size: int = BATCH_SIZE_CHAPTERS,

@@ -342,6 +342,7 @@ def write_chapter(
     chapter_index: int,
     skip_reviews: bool = False,
     max_attempts: int = 3,
+    reingest: bool = True,
 ) -> dict[str, Any]:
     # 1) Load outline + chapter outline
     with session_scope() as s:
@@ -553,6 +554,24 @@ def write_chapter(
         d.cost_usd = total_cost
         d.status = final_status
         d.updated_at = datetime.utcnow()
+
+    # A · 写→回灌记忆反馈环：把刚写好的章节增量抽取进记忆，让下一章"读到"它。
+    # 后台线程，best-effort，绝不拖垮/阻断成稿返回。
+    # success status is inconsistent across paths ("approved" / "approve" /
+    # "ship_with_warnings" / "shipped_with_warnings") — match by prefix.
+    _ok = bool(final_text) and str(final_status).startswith(("approv", "ship"))
+    if reingest and _ok:
+        def _reingest():
+            try:
+                from ..ingest.extract import extract_one_chapter
+                extract_one_chapter(chapter_index, final_text)
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            import threading
+            threading.Thread(target=_reingest, daemon=True).start()
+        except Exception:  # noqa: BLE001
+            pass
 
     return {
         "id": draft_id,

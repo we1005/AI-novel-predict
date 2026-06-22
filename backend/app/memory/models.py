@@ -400,7 +400,27 @@ class StoryProjection(Base):
     arc_title = Column(String)
     phases_json = Column(JSON)          # sanitized phase plan
     chapters_json = Column(JSON)        # aggregated, re-anchored full outline
+    outline_run_ids = Column(JSON)      # per-phase OutlineRun ids (draftable units)
     verdict_json = Column(JSON)         # completeness 裁决
+    error = Column(Text)
+    cost_usd = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class BookWrite(Base):
+    """B · 滚动地平线整本书写作 job：按 projection 的逐 phase OutlineRun 顺序，
+    逐章「成稿 → 同步回灌记忆」，可检查点/续跑/分批。append-only（一次会话一行）。"""
+
+    __tablename__ = "book_write"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    projection_id = Column(Integer)
+    status = Column(String, default="writing")   # writing / paused / done / failed
+    stage = Column(String, default="")           # 当前进度文案
+    chapters_total = Column(Integer, default=0)
+    chapters_done = Column(Integer, default=0)
+    current_chapter = Column(Integer)
+    log_json = Column(JSON)                       # [{chapter, status, attempts, reingest}]
     error = Column(Text)
     cost_usd = Column(Float, default=0.0)
     created_at = Column(DateTime, default=datetime.utcnow)

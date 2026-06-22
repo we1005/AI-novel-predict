@@ -189,6 +189,7 @@ def project_full_book(arc_run_id: int, chosen_index: int, on_stage=None) -> dict
     sane = _sanitize_phases(phases, after_chapter, total_est if isinstance(total_est, int) else None)
 
     all_chapters: list[dict] = []
+    outline_run_ids: list[int] = []
     cost = 0.0
     cursor = after_chapter + 1
     prev_tail: str | None = None
@@ -218,6 +219,14 @@ def project_full_book(arc_run_id: int, chosen_index: int, on_stage=None) -> dict
             if c.get("ending_hook") is not None:
                 c["ending_hook"] = _as_str(c.get("ending_hook"))
             cursor += 1
+        # Persist this phase as a real, draftable OutlineRun (single source of
+        # truth — /outline edits it, /draft writes from it). The projection layer
+        # only aggregates + judges on top; it does not keep a separate outline copy.
+        if chs:
+            rid = _persist_phase_outline(arc_run_id, chosen_index, i, sp["name"], chs,
+                                         res.get("cost_usd", 0.0))
+            if rid:
+                outline_run_ids.append(rid)
         all_chapters.extend(chs)
         cost += res.get("cost_usd", 0.0)
         if chs:
@@ -241,9 +250,33 @@ def project_full_book(arc_run_id: int, chosen_index: int, on_stage=None) -> dict
         "total_chapters": len(all_chapters),
         "phases": sane,
         "chapters": all_chapters,
+        "outline_run_ids": outline_run_ids,
         "verdict": verdict,
         "cost_usd": round(cost, 5),
     }
+
+
+def _persist_phase_outline(arc_run_id: int, chosen_index: int, phase_index: int,
+                           phase_name: str, chapters: list[dict], cost: float) -> int | None:
+    """Write one phase's re-anchored chapters as a real OutlineRun so /outline can
+    edit it and /draft can write from it. Returns the new OutlineRun id."""
+    from datetime import datetime
+    from ..db import session_scope
+    from ..memory.models import OutlineRun
+    try:
+        with session_scope() as s:
+            row = OutlineRun(
+                source_kind="arc", source_run_id=arc_run_id, source_chosen_index=chosen_index,
+                phase_index=phase_index, phase_name=phase_name,
+                chapter_start=chapters[0]["chapter_index"],
+                chapter_end=chapters[-1]["chapter_index"],
+                chapters_json=chapters, user_hints="（整本推演自动生成）",
+                cost_usd=cost, created_at=datetime.utcnow(),
+            )
+            s.add(row); s.flush()
+            return row.id
+    except Exception:  # noqa: BLE001
+        return None
 
 
 # --------------------------------------------------------------------------
@@ -289,6 +322,7 @@ def run_and_store(job_id: int, arc_run_id: int, chosen_index: int) -> None:
                 row.arc_title = res["arc_title"]
                 row.phases_json = res["phases"]
                 row.chapters_json = res["chapters"]
+                row.outline_run_ids = res.get("outline_run_ids") or []
                 row.verdict_json = res["verdict"]
                 row.cost_usd = res["cost_usd"]
                 row.status = "done"; row.stage = "done"
@@ -325,6 +359,7 @@ def get_job(job_id: int) -> dict | None:
                 "arc_title": r.arc_title, "status": r.status, "stage": r.stage or "",
                 "after_chapter": r.after_chapter, "end_chapter": r.end_chapter,
                 "total_chapters": r.total_chapters, "phases": r.phases_json or [],
-                "chapters": r.chapters_json or [], "verdict": r.verdict_json or {},
+                "chapters": r.chapters_json or [], "outline_run_ids": r.outline_run_ids or [],
+                "verdict": r.verdict_json or {},
                 "error": r.error, "cost_usd": r.cost_usd,
                 "updated_at": r.updated_at.isoformat() if r.updated_at else None}

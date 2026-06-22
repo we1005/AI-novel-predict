@@ -10,6 +10,7 @@ from ..db import session_scope
 from ..memory.models import PredictionRun
 from . import arc as arc_pipeline
 from ..arc import project as projection
+from ..arc import bookwriter
 from .pipeline import _gather_context, run_predict, stage_c_stream
 
 router = APIRouter()
@@ -76,6 +77,39 @@ def projections_list(limit: int = 20):
 @router.get("/projections/{job_id}")
 def projection_get(job_id: int):
     r = projection.get_job(job_id)
+    if not r:
+        raise HTTPException(404)
+    return r
+
+
+# ---------------------------------------------------------------------------
+# B · 滚动地平线整本书写作（write-book）
+# ---------------------------------------------------------------------------
+
+
+class WriteBookRequest(BaseModel):
+    max_chapters: int | None = None   # 分批：一次写几章（None=全部）
+    skip_reviews: bool = False
+    reingest: bool = True             # 每章写完同步回灌记忆（A）
+
+
+@router.post("/projections/{projection_id}/write-book")
+def write_book(projection_id: int, body: WriteBookRequest, background: BackgroundTasks):
+    """按 projection 的逐-phase OutlineRun 顺序逐章成稿 + 同步回灌；可续写/分批。"""
+    jid = bookwriter.create_job(projection_id)
+    background.add_task(bookwriter.run_and_store, jid, projection_id,
+                        body.max_chapters, body.skip_reviews, body.reingest)
+    return {"id": jid, "status": "writing"}
+
+
+@router.get("/book-writes")
+def book_writes_list(limit: int = 20):
+    return bookwriter.list_jobs(limit=limit)
+
+
+@router.get("/book-writes/{job_id}")
+def book_write_get(job_id: int):
+    r = bookwriter.get_job(job_id)
     if not r:
         raise HTTPException(404)
     return r

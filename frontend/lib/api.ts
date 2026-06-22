@@ -252,4 +252,9 @@ export const api = {
     j<any>(`/predict/arc/runs/${runId}/project`, { method: "POST", body: JSON.stringify({ chosen_index: chosenIndex }) }),
   projectionList: () => j<any[]>("/predict/projections"),
   projectionGet: (id: number) => j<any>(`/predict/projections/${id}`),
+  // B · 滚动地平线整本书写作
+  writeBook: (projectionId: number, opts: { max_chapters?: number | null; skip_reviews?: boolean; reingest?: boolean } = {}) =>
+    j<any>(`/predict/projections/${projectionId}/write-book`, { method: "POST", body: JSON.stringify(opts) }),
+  bookWriteGet: (id: number) => j<any>(`/predict/book-writes/${id}`),
+  bookWriteList: () => j<any[]>("/predict/book-writes"),
 };
