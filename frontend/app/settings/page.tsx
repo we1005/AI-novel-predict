@@ -8,7 +8,6 @@ import {
   Tooltip,
   message,
   Modal,
-  Empty,
 } from "antd";
 import {
   ThunderboltOutlined,
@@ -27,6 +26,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   LinkOutlined,
+  CloudServerOutlined,
 } from "@ant-design/icons";
 import { api } from "@/lib/api";
 import PageTitle from "@/components/PageTitle";
@@ -34,11 +34,24 @@ import PageTitle from "@/components/PageTitle";
 type Model = {
   id: string;
   label: string;
+  provider: string;
   tier: "max" | "plus" | "flash";
   tag: string;
   price_in: number;
   price_out: number;
   desc: string;
+};
+
+type ProviderInfo = {
+  id: string;
+  label: string;
+  env_var: string;
+  default_base_url: string;
+  api_key: string;            // masked override (empty if none)
+  api_key_set: boolean;
+  api_key_source: "settings" | "env" | "none";
+  base_url: string;           // raw override (non-secret)
+  effective_base_url: string;
 };
 
 type Override = {
@@ -59,19 +72,18 @@ type AgentRow = {
 
 type Lane = { id: "fast" | "strong"; label: string; current: string };
 
+type ProviderCred = { api_key: string; base_url: string };
+
 type SettingsBundle = {
   settings: {
     default_model_fast: string;
     default_model_strong: string;
-    api_key: string;            // masked
-    api_key_set: boolean;
-    api_key_source: "settings" | "env" | "none";
-    base_url: string;
-    effective_base_url: string;
+    providers: Record<string, ProviderCred>;   // masked api_key
     agents: Record<string, Override>;
   };
   agents: AgentRow[];
   models: Model[];
+  providers: ProviderInfo[];
   lanes: Lane[];
 };
 
@@ -99,16 +111,22 @@ export default function SettingsPage() {
   const [draft, setDraft] = useState<{
     default_model_fast: string;
     default_model_strong: string;
-    api_key: string;          // empty string = no change; full new key = update
-    base_url: string;
+    // Per-provider creds. api_key="" means "no change"; a full new key updates it.
+    providers: Record<string, ProviderCred>;
     agents: Record<string, Override>;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
-  const [keyVisible, setKeyVisible] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [keyVisible, setKeyVisible] = useState<Record<string, boolean>>({});
+  const [testing, setTesting] = useState<Record<string, boolean>>({});
+  const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string }>>({});
+
+  const emptyProviderDraft = (providers: ProviderInfo[]): Record<string, ProviderCred> =>
+    providers.reduce<Record<string, ProviderCred>>((acc, p) => {
+      acc[p.id] = { api_key: "", base_url: p.base_url };
+      return acc;
+    }, {});
 
   const fetchAll = async () => {
     setLoading(true);
@@ -118,8 +136,7 @@ export default function SettingsPage() {
       setDraft({
         default_model_fast: b.settings.default_model_fast,
         default_model_strong: b.settings.default_model_strong,
-        api_key: "",                       // never prefill — user types to change
-        base_url: b.settings.base_url,
+        providers: emptyProviderDraft(b.providers),
         agents: { ...b.settings.agents },
       });
     } catch (e) {
@@ -135,8 +152,12 @@ export default function SettingsPage() {
     if (!bundle || !draft) return false;
     if (draft.default_model_fast !== bundle.settings.default_model_fast) return true;
     if (draft.default_model_strong !== bundle.settings.default_model_strong) return true;
-    if (draft.api_key.length > 0) return true;   // user typed a new key
-    if (draft.base_url !== bundle.settings.base_url) return true;
+    for (const p of bundle.providers) {
+      const d = draft.providers[p.id];
+      if (!d) continue;
+      if (d.api_key.length > 0) return true;        // typed a new key
+      if (d.base_url !== p.base_url) return true;    // changed base url
+    }
     for (const id of Object.keys(draft.agents)) {
       const a = draft.agents[id];
       const b = bundle.settings.agents[id];
@@ -147,19 +168,32 @@ export default function SettingsPage() {
   }, [bundle, draft]);
 
   const save = async () => {
-    if (!draft) return;
+    if (!draft || !bundle) return;
     setSaving(true);
     try {
-      // Strip empty api_key so we don't overwrite the existing one with "".
-      const payload: any = { ...draft };
-      if (!payload.api_key) delete payload.api_key;
+      // Only send providers whose api_key was typed or base_url changed; strip
+      // empty api_key so we never overwrite an existing key with "".
+      const providers: Record<string, ProviderCred> = {};
+      for (const p of bundle.providers) {
+        const d = draft.providers[p.id];
+        if (!d) continue;
+        const row: any = {};
+        if (d.api_key) row.api_key = d.api_key;
+        if (d.base_url !== p.base_url) row.base_url = d.base_url;
+        if (Object.keys(row).length) providers[p.id] = row;
+      }
+      const payload: any = {
+        default_model_fast: draft.default_model_fast,
+        default_model_strong: draft.default_model_strong,
+        agents: draft.agents,
+      };
+      if (Object.keys(providers).length) payload.providers = providers;
       const updated: SettingsBundle = await api.settingsPut(payload);
       setBundle(updated);
       setDraft({
         default_model_fast: updated.settings.default_model_fast,
         default_model_strong: updated.settings.default_model_strong,
-        api_key: "",
-        base_url: updated.settings.base_url,
+        providers: emptyProviderDraft(updated.providers),
         agents: { ...updated.settings.agents },
       });
       message.success("设置已保存");
@@ -170,31 +204,33 @@ export default function SettingsPage() {
     }
   };
 
-  const runTest = async () => {
+  const runTest = async (pid: string) => {
     if (!draft) return;
-    setTesting(true);
-    setTestResult(null);
+    setTesting((t) => ({ ...t, [pid]: true }));
+    setTestResult((r) => ({ ...r, [pid]: undefined as any }));
     try {
+      const d = draft.providers[pid];
       const r = await api.settingsTestKey({
-        api_key: draft.api_key || undefined,    // undefined → use saved key
-        base_url: draft.base_url || undefined,
+        provider: pid,
+        api_key: d?.api_key || undefined,    // undefined → use saved key
+        base_url: d?.base_url || undefined,
       });
       if (r.ok) {
-        setTestResult({ ok: true, msg: `成功 · ${r.model} · 返回："${r.sample}"` });
+        setTestResult((s) => ({ ...s, [pid]: { ok: true, msg: `成功 · ${r.model} · 返回："${r.sample}"` } }));
       } else {
-        setTestResult({ ok: false, msg: r.error || "未知错误" });
+        setTestResult((s) => ({ ...s, [pid]: { ok: false, msg: r.error || "未知错误" } }));
       }
     } catch (e) {
-      setTestResult({ ok: false, msg: String(e) });
+      setTestResult((s) => ({ ...s, [pid]: { ok: false, msg: String(e) } }));
     } finally {
-      setTesting(false);
+      setTesting((t) => ({ ...t, [pid]: false }));
     }
   };
 
   const resetAll = () => {
     Modal.confirm({
       title: "重置所有覆盖？",
-      content: "默认模型将回到 qwen3.5-flash，所有 agent 的参数覆盖会被清空。",
+      content: "默认模型回到代码默认值，所有 agent 的参数覆盖与各 provider 的凭证覆盖都会被清空（环境变量里的 key 仍生效）。",
       okText: "重置",
       okButtonProps: { danger: true },
       onOk: async () => {
@@ -204,10 +240,10 @@ export default function SettingsPage() {
           setDraft({
             default_model_fast: updated.settings.default_model_fast,
             default_model_strong: updated.settings.default_model_strong,
-            api_key: "",
-            base_url: updated.settings.base_url,
+            providers: emptyProviderDraft(updated.providers),
             agents: { ...updated.settings.agents },
           });
+          setTestResult({});
           message.success("已重置为默认");
         } catch (e) {
           message.error("重置失败：" + String(e));
@@ -221,6 +257,17 @@ export default function SettingsPage() {
     setDraft({
       ...draft,
       [lane === "fast" ? "default_model_fast" : "default_model_strong"]: modelId,
+    });
+  };
+
+  const setProviderField = (pid: string, field: keyof ProviderCred, value: string) => {
+    if (!draft) return;
+    setDraft({
+      ...draft,
+      providers: {
+        ...draft.providers,
+        [pid]: { ...draft.providers[pid], [field]: value },
+      },
     });
   };
 
@@ -257,7 +304,7 @@ export default function SettingsPage() {
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <PageTitle
           title="模型与参数"
-          subtitle="切换 Qwen / DeepSeek 模型 · 21 个 agent 各自温度 / max_tokens / top_p"
+          subtitle="多 provider：阿里 DashScope / 火山引擎 Coding-Plan · 各 agent 独立模型与采样参数"
         />
         <div style={{ display: "flex", gap: 8 }}>
           <button className="ghost" onClick={resetAll} style={{ padding: "6px 14px" }}>
@@ -277,121 +324,29 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* ---------- API 凭证 ---------- */}
+      {/* ---------- API 凭证（按 provider） ---------- */}
       <div className="card" style={{ marginBottom: 20 }}>
         <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
-          <KeyOutlined /> API 凭证
-          {bundle.settings.api_key_set && (
-            <Tag color="green" style={{ fontSize: 11, marginLeft: 4 }}>
-              已配置（来源：{bundle.settings.api_key_source === "settings" ? "设置" : "环境变量"}）
-            </Tag>
-          )}
-          {!bundle.settings.api_key_set && bundle.settings.api_key_source === "env" && (
-            <Tag color="blue" style={{ fontSize: 11, marginLeft: 4 }}>来自环境变量</Tag>
-          )}
-          {bundle.settings.api_key_source === "none" && (
-            <Tag color="red" style={{ fontSize: 11, marginLeft: 4 }}>未配置</Tag>
-          )}
+          <KeyOutlined /> API 凭证（按服务商）
         </h3>
         <p className="muted" style={{ marginTop: -4, fontSize: 12 }}>
-          支持 DashScope (Qwen) / OpenAI 兼容端点。设置中的 key 优先于 <code style={{ fontSize: 11 }}>backend/.env</code>。Key 不会以明文返回——只显示首尾 4 位。
+          每个服务商有独立的 Key 与 Base URL。设置里的 Key 优先于 <code style={{ fontSize: 11 }}>backend/.env</code>。Key 不会明文返回——只显示首尾 4 位。模型按其所属服务商自动路由到对应凭证。
         </p>
 
-        <div style={{ marginTop: 14 }}>
-          {/* API Key */}
-          <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 4 }}>
-            API Key
-          </label>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-            <input
-              type={keyVisible ? "text" : "password"}
-              autoComplete="off"
-              spellCheck={false}
-              value={draft.api_key}
-              onChange={(e) => setDraft({ ...draft, api_key: e.target.value })}
-              placeholder={bundle.settings.api_key_set
-                ? `当前: ${bundle.settings.api_key} （留空则保持不变）`
-                : "粘贴 sk-xxx... 来配置"}
-              style={{
-                flex: 1,
-                fontFamily: "monospace",
-                fontSize: 13,
-                padding: "8px 12px",
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                background: "var(--panel)",
-                color: "inherit",
-              }}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))", gap: 14, marginTop: 14 }}>
+          {bundle.providers.map((p) => (
+            <ProviderCard
+              key={p.id}
+              info={p}
+              draft={draft.providers[p.id]}
+              keyVisible={!!keyVisible[p.id]}
+              onToggleVisible={() => setKeyVisible((v) => ({ ...v, [p.id]: !v[p.id] }))}
+              onChange={(field, value) => setProviderField(p.id, field, value)}
+              onTest={() => runTest(p.id)}
+              testing={!!testing[p.id]}
+              testResult={testResult[p.id] || null}
             />
-            <Tooltip title={keyVisible ? "隐藏" : "显示"}>
-              <button
-                className="ghost"
-                onClick={() => setKeyVisible(!keyVisible)}
-                style={{ padding: "8px 12px" }}
-                disabled={!draft.api_key}
-              >
-                {keyVisible ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-              </button>
-            </Tooltip>
-            {draft.api_key && (
-              <button
-                className="ghost"
-                onClick={() => setDraft({ ...draft, api_key: "" })}
-                style={{ padding: "8px 12px", fontSize: 12 }}
-              >
-                清空
-              </button>
-            )}
-          </div>
-
-          {/* Base URL */}
-          <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginTop: 12, marginBottom: 4 }}>
-            <LinkOutlined /> Base URL <span style={{ fontSize: 10 }}>（可选，留空使用默认）</span>
-          </label>
-          <input
-            type="text"
-            autoComplete="off"
-            spellCheck={false}
-            value={draft.base_url}
-            onChange={(e) => setDraft({ ...draft, base_url: e.target.value })}
-            placeholder={bundle.settings.effective_base_url}
-            style={{
-              width: "100%",
-              fontFamily: "monospace",
-              fontSize: 12,
-              padding: "8px 12px",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              background: "var(--panel)",
-              color: "inherit",
-            }}
-          />
-          <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-            当前生效：<code style={{ fontSize: 11 }}>{bundle.settings.effective_base_url}</code>
-          </div>
-
-          {/* Test button */}
-          <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 14 }}>
-            <button
-              onClick={runTest}
-              disabled={testing}
-              style={{ padding: "6px 16px", fontSize: 13 }}
-            >
-              {testing ? "测试中…" : "测试连接"}
-            </button>
-            {testResult && (
-              <div style={{
-                fontSize: 12,
-                color: testResult.ok ? "var(--good)" : "var(--bad)",
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-              }}>
-                {testResult.ok ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
-                {testResult.msg}
-              </div>
-            )}
-          </div>
+          ))}
         </div>
       </div>
 
@@ -411,6 +366,7 @@ export default function SettingsPage() {
             icon={<ThunderboltOutlined />}
             value={draft.default_model_fast}
             models={bundle.models}
+            providers={bundle.providers}
             onChange={(id) => setLaneDefault("fast", id)}
           />
           <LaneCard
@@ -419,6 +375,7 @@ export default function SettingsPage() {
             icon={<RocketOutlined />}
             value={draft.default_model_strong}
             models={bundle.models}
+            providers={bundle.providers}
             onChange={(id) => setLaneDefault("strong", id)}
           />
         </div>
@@ -442,6 +399,7 @@ export default function SettingsPage() {
                 agent={a}
                 draft={draft.agents[a.id]}
                 models={bundle.models}
+                providers={bundle.providers}
                 isActive={activeAgent === a.id}
                 onActivate={() => setActiveAgent(activeAgent === a.id ? null : a.id)}
                 onChange={(field, value) => setAgentField(a.id, field, value)}
@@ -455,17 +413,118 @@ export default function SettingsPage() {
 }
 
 // ---------------------------------------------------------------------------
+// Provider credential card
+// ---------------------------------------------------------------------------
+
+function ProviderCard({
+  info, draft, keyVisible, onToggleVisible, onChange, onTest, testing, testResult,
+}: {
+  info: ProviderInfo;
+  draft: ProviderCred;
+  keyVisible: boolean;
+  onToggleVisible: () => void;
+  onChange: (field: keyof ProviderCred, value: string) => void;
+  onTest: () => void;
+  testing: boolean;
+  testResult: { ok: boolean; msg: string } | null;
+}) {
+  const sourceTag =
+    info.api_key_source === "settings" ? <Tag color="green" style={{ fontSize: 11 }}>已配置（设置）</Tag>
+    : info.api_key_source === "env" ? <Tag color="blue" style={{ fontSize: 11 }}>来自环境变量</Tag>
+    : <Tag color="red" style={{ fontSize: 11 }}>未配置</Tag>;
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 14, background: "var(--bg)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <CloudServerOutlined style={{ color: "var(--accent-2)" }} />
+        <strong style={{ fontSize: 14 }}>{info.label}</strong>
+        {sourceTag}
+      </div>
+      <div className="muted" style={{ fontSize: 11, marginBottom: 10 }}>
+        环境变量 <code style={{ fontSize: 11 }}>{info.env_var}</code>
+      </div>
+
+      {/* API Key */}
+      <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 4 }}>API Key</label>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+        <input
+          type={keyVisible ? "text" : "password"}
+          autoComplete="off"
+          spellCheck={false}
+          value={draft?.api_key ?? ""}
+          onChange={(e) => onChange("api_key", e.target.value)}
+          placeholder={info.api_key_set
+            ? `当前: ${info.api_key || "（来自环境变量）"} （留空则保持不变）`
+            : "粘贴 key 来配置"}
+          style={{
+            flex: 1, fontFamily: "monospace", fontSize: 13, padding: "8px 12px",
+            border: "1px solid var(--border)", borderRadius: 6, background: "var(--panel)", color: "inherit",
+          }}
+        />
+        <Tooltip title={keyVisible ? "隐藏" : "显示"}>
+          <button className="ghost" onClick={onToggleVisible} style={{ padding: "8px 12px" }} disabled={!draft?.api_key}>
+            {keyVisible ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+          </button>
+        </Tooltip>
+        {draft?.api_key && (
+          <button className="ghost" onClick={() => onChange("api_key", "")} style={{ padding: "8px 12px", fontSize: 12 }}>
+            清空
+          </button>
+        )}
+      </div>
+
+      {/* Base URL */}
+      <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginTop: 12, marginBottom: 4 }}>
+        <LinkOutlined /> Base URL <span style={{ fontSize: 10 }}>（可选，留空使用默认）</span>
+      </label>
+      <input
+        type="text"
+        autoComplete="off"
+        spellCheck={false}
+        value={draft?.base_url ?? ""}
+        onChange={(e) => onChange("base_url", e.target.value)}
+        placeholder={info.default_base_url}
+        style={{
+          width: "100%", fontFamily: "monospace", fontSize: 12, padding: "8px 12px",
+          border: "1px solid var(--border)", borderRadius: 6, background: "var(--panel)", color: "inherit",
+        }}
+      />
+      <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+        当前生效：<code style={{ fontSize: 11 }}>{info.effective_base_url}</code>
+      </div>
+
+      {/* Test */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 14 }}>
+        <button onClick={onTest} disabled={testing} style={{ padding: "6px 16px", fontSize: 13 }}>
+          {testing ? "测试中…" : "测试连接"}
+        </button>
+        {testResult && (
+          <div style={{
+            fontSize: 12, color: testResult.ok ? "var(--good)" : "var(--bad)",
+            display: "flex", alignItems: "center", gap: 4,
+          }}>
+            {testResult.ok ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+            {testResult.msg}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Lane (default model) card
 // ---------------------------------------------------------------------------
 
 function LaneCard({
-  label, sub, icon, value, models, onChange,
+  label, sub, icon, value, models, providers, onChange,
 }: {
   label: string;
   sub: string;
   icon: React.ReactNode;
   value: string;
   models: Model[];
+  providers: ProviderInfo[];
   onChange: (id: string) => void;
 }) {
   return (
@@ -480,83 +539,114 @@ function LaneCard({
         <strong style={{ color: "var(--accent-2)" }}>{label}</strong>
         <span className="muted" style={{ fontSize: 11 }}>· {sub}</span>
       </div>
-      <ModelGrid value={value} models={models} onChange={onChange} compact />
+      <ModelGrid value={value} models={models} providers={providers} onChange={onChange} compact />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Model grid (cards)
+// Model grid (cards) — grouped by provider, then tier
 // ---------------------------------------------------------------------------
 
 function ModelGrid({
-  value, models, onChange, compact = false,
+  value, models, providers, onChange, compact = false,
 }: {
   value: string;
   models: Model[];
+  providers: ProviderInfo[];
   onChange: (id: string) => void;
   compact?: boolean;
 }) {
   const tiers: ("max" | "plus" | "flash")[] = ["max", "plus", "flash"];
+  // Preserve provider order from the providers list, then any extras.
+  const providerOrder = providers.map((p) => p.id);
+  const providerLabel: Record<string, string> = providers.reduce<Record<string, string>>((acc, p) => {
+    acc[p.id] = p.label;
+    return acc;
+  }, {});
+  const presentProviders = Array.from(new Set(models.map((m) => m.provider)))
+    .sort((a, b) => {
+      const ia = providerOrder.indexOf(a); const ib = providerOrder.indexOf(b);
+      return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+    });
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {tiers.map((tier) => {
-        const items = models.filter((m) => m.tier === tier);
-        if (items.length === 0) return null;
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {presentProviders.map((pid) => {
+        const provModels = models.filter((m) => m.provider === pid);
+        if (provModels.length === 0) return null;
         return (
-          <div key={tier}>
-            <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6, letterSpacing: 1 }}>
-              {TIER_LABEL[tier]}
-            </div>
+          <div key={pid}>
             <div style={{
-              display: "grid",
-              gap: 6,
-              gridTemplateColumns: compact ? "repeat(auto-fill, minmax(140px, 1fr))" : "repeat(auto-fill, minmax(200px, 1fr))",
+              fontSize: 11, color: "var(--accent-2)", marginBottom: 8,
+              display: "flex", alignItems: "center", gap: 5, fontWeight: 600,
             }}>
-              {items.map((m) => {
-                const active = m.id === value;
+              <CloudServerOutlined style={{ fontSize: 11 }} />
+              {providerLabel[pid] || pid}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {tiers.map((tier) => {
+                const items = provModels.filter((m) => m.tier === tier);
+                if (items.length === 0) return null;
                 return (
-                  <Tooltip key={m.id} title={
-                    <div style={{ fontSize: 11 }}>
-                      <div>{m.desc}</div>
-                      <div className="muted" style={{ marginTop: 4 }}>
-                        ${m.price_in}/M in · ${m.price_out}/M out
-                      </div>
+                  <div key={tier}>
+                    <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 6, letterSpacing: 1 }}>
+                      {TIER_LABEL[tier]}
                     </div>
-                  }>
-                    <div
-                      onClick={() => onChange(m.id)}
-                      style={{
-                        cursor: "pointer",
-                        padding: compact ? "8px 10px" : "10px 12px",
-                        borderRadius: 8,
-                        border: active ? `2px solid ${TIER_COLOR[m.tier]}` : "1px solid var(--border)",
-                        background: active ? `${TIER_COLOR[m.tier]}1A` : "var(--panel)",
-                        position: "relative",
-                        transition: "all 0.15s",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
-                        <span style={{
-                          fontFamily: "monospace",
-                          fontSize: compact ? 11 : 12,
-                          fontWeight: active ? 600 : 400,
-                          color: active ? TIER_COLOR[m.tier] : "var(--text)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}>
-                          {m.id}
-                        </span>
-                        {active && <CheckCircleFilled style={{ color: TIER_COLOR[m.tier], fontSize: 12 }} />}
-                      </div>
-                      {!compact && (
-                        <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 3 }}>
-                          {m.tag} · ${m.price_in}/${m.price_out}
-                        </div>
-                      )}
+                    <div style={{
+                      display: "grid",
+                      gap: 6,
+                      gridTemplateColumns: compact ? "repeat(auto-fill, minmax(150px, 1fr))" : "repeat(auto-fill, minmax(210px, 1fr))",
+                    }}>
+                      {items.map((m) => {
+                        const active = m.id === value;
+                        const priced = m.price_in > 0 || m.price_out > 0;
+                        return (
+                          <Tooltip key={m.id} title={
+                            <div style={{ fontSize: 11 }}>
+                              <div>{m.desc}</div>
+                              <div className="muted" style={{ marginTop: 4 }}>
+                                {priced ? `$${m.price_in}/M in · $${m.price_out}/M out` : "订阅计费（per-token 显示为 0）"}
+                              </div>
+                            </div>
+                          }>
+                            <div
+                              onClick={() => onChange(m.id)}
+                              style={{
+                                cursor: "pointer",
+                                padding: compact ? "8px 10px" : "10px 12px",
+                                borderRadius: 8,
+                                border: active ? `2px solid ${TIER_COLOR[m.tier]}` : "1px solid var(--border)",
+                                background: active ? `${TIER_COLOR[m.tier]}1A` : "var(--panel)",
+                                position: "relative",
+                                transition: "all 0.15s",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+                                <span style={{
+                                  fontFamily: "monospace",
+                                  fontSize: compact ? 11 : 12,
+                                  fontWeight: active ? 600 : 400,
+                                  color: active ? TIER_COLOR[m.tier] : "var(--text)",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}>
+                                  {m.id}
+                                </span>
+                                {active && <CheckCircleFilled style={{ color: TIER_COLOR[m.tier], fontSize: 12 }} />}
+                              </div>
+                              {!compact && (
+                                <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 3 }}>
+                                  {m.tag}{priced ? ` · $${m.price_in}/$${m.price_out}` : " · 订阅"}
+                                </div>
+                              )}
+                            </div>
+                          </Tooltip>
+                        );
+                      })}
                     </div>
-                  </Tooltip>
+                  </div>
                 );
               })}
             </div>
@@ -572,11 +662,12 @@ function ModelGrid({
 // ---------------------------------------------------------------------------
 
 function AgentCard({
-  agent, draft, models, isActive, onActivate, onChange,
+  agent, draft, models, providers, isActive, onActivate, onChange,
 }: {
   agent: AgentRow;
   draft: Override;
   models: Model[];
+  providers: ProviderInfo[];
   isActive: boolean;
   onActivate: () => void;
   onChange: (field: keyof Override, value: any) => void;
@@ -651,6 +742,7 @@ function AgentCard({
             <ModelGrid
               value={draft.model || effective.model}
               models={models}
+              providers={providers}
               onChange={(id) => onChange("model", id)}
               compact
             />

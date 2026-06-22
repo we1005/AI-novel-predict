@@ -51,7 +51,8 @@ function ArcPageInner() {
   const initId = search?.get("id");
   const initCandidate = search?.get("candidate");
 
-  const [after, setAfter] = useState(1472);
+  const [after, setAfter] = useState(0);
+  const [lastChapter, setLastChapter] = useState<number | null>(null);
   const [n, setN] = useState(2);
   const [target, setTarget] = useState(100);
   const [hints, setHints] = useState("");
@@ -88,6 +89,15 @@ function ArcPageInner() {
     api.arcList().then(setHistory).catch(() => {});
     refreshOutlineMap();
   }, [run]);
+
+  // Default "起始章节" to the book's actual last chapter (book-agnostic).
+  useEffect(() => {
+    api.chapterCount().then((c: any) => {
+      const last = c?.last || c?.total || 0;
+      setLastChapter(last);
+      setAfter((cur) => (cur === 0 ? last : cur));
+    }).catch(() => {});
+  }, []);
 
   // Deep-link: load arc by ?id= once on mount
   useEffect(() => {
@@ -172,7 +182,9 @@ function ArcPageInner() {
       <div className="card">
         <h2>触发预测</h2>
         <div className="row" style={{ alignItems: "center" }}>
-          <label>起始章节<input type="number" value={after} onChange={(e) => setAfter(+e.target.value)} style={{ width: 100, marginLeft: 6 }} /></label>
+          <label>起始章节<input type="number" value={after} onChange={(e) => setAfter(+e.target.value)} style={{ width: 100, marginLeft: 6 }} />
+            {lastChapter != null && <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>（本书共 {lastChapter} 章）</span>}
+          </label>
           <label>候选数<input type="number" value={n} onChange={(e) => setN(+e.target.value)} style={{ width: 70, marginLeft: 6 }} min={1} max={4} /></label>
           <label>目标延展章节<input type="number" value={target} onChange={(e) => setTarget(+e.target.value)} style={{ width: 90, marginLeft: 6 }} min={20} max={500} /></label>
         </div>

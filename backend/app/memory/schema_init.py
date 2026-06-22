@@ -39,6 +39,7 @@ def init_schema(engine: Engine | None = None) -> None:
         _ensure_column(conn, "mysteries", "last_updated_chapter", "INTEGER")
         _ensure_column(conn, "mysteries", "updates_log_json", "TEXT")
         _ensure_column(conn, "entities", "role", "TEXT")
+        _ensure_column(conn, "bilingual_draft", "stage", "TEXT DEFAULT ''")
 
 
 def _ensure_column(conn, table: str, col: str, decl: str) -> None:

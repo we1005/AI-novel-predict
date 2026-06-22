@@ -214,6 +214,49 @@ def hero_items(entity_id: int | None = None) -> dict[str, Any]:
             ],
         })
 
+    # Fallback for books whose protagonist has no inventory snapshots (mecha /
+    # multi-POV / non-cultivation settings produce no state-diff items): show the
+    # book's item/skill entities as a catalog so the page isn't empty.
+    catalog = False
+    if not items_out:
+        catalog = True
+        with session_scope() as s2:
+            ents = s2.execute(
+                select(Entity).where(Entity.type.in_(["item", "skill"]))
+                .order_by(desc(Entity.importance))
+            ).scalars().all()
+            all_fs2 = s2.execute(select(Foreshadowing)).scalars().all()
+            ch_titles2 = dict(s2.execute(select(Chapter.number, Chapter.title)).all())
+            for e in ents:
+                related_fs = [
+                    f for f in all_fs2
+                    if e.id in (f.related_entity_ids_json or [])
+                    or (e.name and len(e.name) >= 2 and e.name in (f.description or ""))
+                ]
+                fc = e.first_appear_chapter or 0
+                items_out.append({
+                    "name": e.name,
+                    "kind": e.type,
+                    "first_seen_chapter": fc,
+                    "last_seen_chapter": fc,
+                    "still_owned": True,
+                    "entity_id": e.id,
+                    "entity_importance": e.importance,
+                    "description": (e.description or "")[:400],
+                    "events": ([{"chapter": fc, "kind": "首次出现",
+                                 "chapter_title": ch_titles2.get(fc, "")}] if fc else []),
+                    "related_foreshadows": [
+                        {
+                            "id": f.id, "type": f.type, "status": f.status,
+                            "planted_chapter": f.planted_chapter,
+                            "resolved_chapter": f.resolved_chapter,
+                            "description": (f.description or "")[:240],
+                            "resolved_description": (f.resolved_description or "")[:240] if f.resolved_description else None,
+                        }
+                        for f in related_fs
+                    ],
+                })
+
     # Sort: foreshadow-rich first, then by importance.
     items_out.sort(
         key=lambda x: (
@@ -224,6 +267,7 @@ def hero_items(entity_id: int | None = None) -> dict[str, Any]:
     )
 
     return {
+        "catalog_mode": catalog,
         "hero": {
             "id": hero.id,
             "name": hero.name,

@@ -57,7 +57,7 @@ const EVENT_LABEL: Record<string, string> = {
 };
 
 export default function ItemsPage() {
-  const [data, setData] = useState<{ hero: any; items: Item[] } | null>(null);
+  const [data, setData] = useState<{ hero: any; items: Item[]; catalog_mode?: boolean } | null>(null);
   const [filterKind, setFilterKind] = useState<"all" | "item" | "skill" | "concept">("all");
   const [filterStatus, setFilterStatus] = useState<"all" | "owned" | "lost">("all");
   const [filterFs, setFilterFs] = useState<"all" | "with_fs">("all");
@@ -100,9 +100,18 @@ export default function ItemsPage() {
   return (
     <>
       <PageTitle title="宝物功法谱"
-        subtitle={`${data?.hero?.name || "主角"}沿途获得 / 失去的物品与功法 — 物中藏笔，看哪些钩子还没收`} />
+        subtitle={data?.catalog_mode
+          ? "全书宝物 / 功法目录（按重要度与伏笔关联排序）— 物中藏笔，看哪些钩子还没收"
+          : `${data?.hero?.name || "主角"}沿途获得 / 失去的物品与功法 — 物中藏笔，看哪些钩子还没收`} />
 
-      {data?.hero?.id && (
+      {data?.catalog_mode && (
+        <div style={{ margin: "0 0 14px", padding: "8px 12px", borderRadius: 6, fontSize: 12,
+                      background: "rgba(82,196,26,0.1)", border: "1px solid var(--good)", color: "var(--good)" }}>
+          ⓘ 本书未按"主角库存"记录物品（如机甲/多主角设定），已自动切换为「全书宝物目录」模式，按重要度+伏笔关联展示 {data.items.length} 件。
+        </div>
+      )}
+
+      {data?.hero?.id && !data?.catalog_mode && (
         <div style={{ marginBottom: 14 }}>
           <a
             href={`/character/${data.hero.id}`}

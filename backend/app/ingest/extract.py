@@ -438,22 +438,64 @@ def _persist_world(session, items: list[dict[str, Any]]) -> None:
             session.expunge(rule)
 
 
+def _extract_loads_json(s: str) -> dict[str, Any]:
+    """Parse a JSON object out of model text (strip fences, repair)."""
+    import json
+    import re
+    s = re.sub(r"```json|```", "", s or "").strip()
+    try:
+        return json.loads(s)
+    except Exception:
+        try:
+            from json_repair import repair_json
+            d = json.loads(repair_json(s))
+            return d if isinstance(d, dict) else {}
+        except Exception:
+            return {}
+
+
 def _agent_call(*, name: str, system_blocks: list[dict[str, Any]], user_text: str,
                 tool: dict[str, Any], system_text: str) -> tuple[dict[str, Any], float]:
     sys_blocks = [{"type": "text", "text": system_text}, *system_blocks]
-    resp = llm.call(
+    # Happy path: forced tool_choice. Works first-try on small/medium context.
+    try:
+        resp = llm.call(
+            agent=f"extract.{name}",
+            model=MODEL_FAST,
+            system=sys_blocks,
+            messages=[{"role": "user", "content": user_text}],
+            tools=[tool],
+            tool_choice={"type": "tool", "name": tool["name"]},
+            max_tokens=4096,
+            temperature=0.2,
+        )
+        if resp.tool_use:
+            return resp.tool_use["input"], resp.cost_usd
+        # Non-empty content but no tool call — try to parse JSON from content.
+        if (resp.text or "").strip():
+            parsed = _extract_loads_json(resp.text)
+            if parsed:
+                return parsed, resp.cost_usd
+    except Exception:  # noqa: BLE001
+        # Empty after retries — typically a volc reasoning model dropping the
+        # tool output on large context (改进记录 #14). Fall through to JSON-in-text.
+        pass
+
+    # Fallback: JSON-in-text — reliable when forced tool_choice silently fails on
+    # large context. Embed the tool's schema; no tools; repair-parse the content.
+    import json as _json
+    hint = ("\n\n# 输出格式（严格 · 覆盖前述任何「调用工具」指示）\n"
+            "只输出一个 JSON 对象，不要任何其它文字、不要 markdown 围栏。必须严格符合此 JSON Schema：\n"
+            + _json.dumps(tool.get("input_schema", {}), ensure_ascii=False))
+    resp2 = llm.call(
         agent=f"extract.{name}",
         model=MODEL_FAST,
-        system=sys_blocks,
+        system=[{"type": "text", "text": system_text + hint}, *system_blocks],
         messages=[{"role": "user", "content": user_text}],
-        tools=[tool],
-        tool_choice={"type": "tool", "name": tool["name"]},
-        max_tokens=4096,
+        max_tokens=8000,
         temperature=0.2,
     )
-    if not resp.tool_use:
-        return {}, resp.cost_usd
-    return resp.tool_use["input"], resp.cost_usd
+    return _extract_loads_json(resp2.text), resp2.cost_usd
 
 
 def run_batch(start: int, end: int) -> dict[str, Any]:
@@ -543,18 +585,23 @@ def run_batch(start: int, end: int) -> dict[str, Any]:
 
         with session_scope() as s:
             b = s.get(ExtractionBatch, batch_id)
-            b.status = "done"
-            b.cost_usd = total_cost
-            b.finished_at = datetime.utcnow()
+            if b:
+                b.status = "done"
+                b.cost_usd = total_cost
+                b.finished_at = datetime.utcnow()
 
         return {"batch_id": batch_id, "status": "done", "cost_usd": total_cost}
 
     except Exception as exc:  # noqa: BLE001
+        # Mark failed so the batch never hangs in "running" (which would make
+        # run_all skip its range forever). Guard against a missing row so this
+        # handler can't itself crash and mask the original exception.
         with session_scope() as s:
             b = s.get(ExtractionBatch, batch_id)
-            b.status = "failed"
-            b.error = str(exc)[:1000]
-            b.finished_at = datetime.utcnow()
+            if b:
+                b.status = "failed"
+                b.error = str(exc)[:1000]
+                b.finished_at = datetime.utcnow()
         raise
 
 

@@ -123,7 +123,16 @@ def refine(*, source_kind: str, source_run_id: int, chosen_index: int,
     ctx = _gather_context(after_chapter)
     blocks = _ctx_blocks(ctx)
 
-    system_chain: list[Any] = [{"type": "text", "text": OUTLINE_REFINE_SYSTEM}, *blocks]
+    # JSON-in-text, not forced tool_choice: outline uses the same ~89k-char
+    # context as predict/arc, where doubao-code's forced tool_choice silently
+    # returns empty tool_calls + empty content (改进记录 #14). Embed the schema
+    # and let the existing json_repair fallback parse it.
+    _outline_hint = (
+        "\n\n# 输出格式（严格 · 覆盖前述任何「调用工具」指示）\n"
+        "只输出一个 JSON 对象，不要任何其它文字、不要 markdown 围栏。必须严格符合此 JSON Schema：\n"
+        + json.dumps(OUTLINE_REFINE_TOOL["input_schema"], ensure_ascii=False)
+    )
+    system_chain: list[Any] = [{"type": "text", "text": OUTLINE_REFINE_SYSTEM + _outline_hint}, *blocks]
     combined_hints = "\n".join([h for h in [src.get("user_hints"), user_hints] if h]).strip()
     if combined_hints:
         system_chain.append({
@@ -150,9 +159,7 @@ def refine(*, source_kind: str, source_run_id: int, chosen_index: int,
         model=MODEL_STRONG,
         system=system_chain,
         messages=[{"role": "user", "content": user}],
-        tools=[OUTLINE_REFINE_TOOL],
-        tool_choice={"type": "tool", "name": OUTLINE_REFINE_TOOL["name"]},
-        max_tokens=10000,
+        max_tokens=12000,
         temperature=0.6,
     )
     chapters_raw = (resp.tool_use or {}).get("input", {}).get("chapters", [])

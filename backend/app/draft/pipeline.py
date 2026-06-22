@@ -37,12 +37,34 @@ from ..llm.prompts.reviewers import (
     PLOT_REVIEWER_TOOL,
     STYLE_REVIEWER_SYSTEM,
     STYLE_REVIEWER_TOOL,
+    gate_decision,
+    hard_issue_score,
     heuristic_decision,
 )
-from ..llm.prompts.writer import WRITER_SYSTEM, build_writer_user_message
+from ..llm.prompts.writer import WRITER_SYSTEM, build_writer_system, build_writer_user_message
 from ..memory import fts as fts_recall
 from ..memory.models import ChapterDraft, OutlineRun
 from ..predict.pipeline import _ctx_blocks, _gather_context
+
+
+import re as _re
+
+# Models sometimes emit Markdown emphasis (**词**) into prose despite being told
+# not to. Strip it so the exported novel is clean. Chinese prose essentially
+# never uses bare * / _ legitimately, so this is safe.
+_MD_BOLD = _re.compile(r"\*\*(.+?)\*\*", _re.S)
+_MD_BOLD_U = _re.compile(r"__(.+?)__", _re.S)
+_MD_HEADER = _re.compile(r"^\s{0,3}#{1,6}\s+", _re.M)
+
+
+def _strip_inline_markdown(text: str) -> str:
+    if not text:
+        return text
+    text = _MD_BOLD.sub(r"\1", text)
+    text = _MD_BOLD_U.sub(r"\1", text)
+    text = text.replace("**", "")            # leftover unpaired markers
+    text = _MD_HEADER.sub("", text)          # stray "## " line-leading headers
+    return text
 
 
 def _coerce_dict(v: Any) -> dict:
@@ -64,25 +86,61 @@ def _coerce_dict(v: Any) -> dict:
     return {}
 
 
-def _gather_style_refs(*, after_chapter: int, must_include: list[str]) -> list[dict]:
-    """7-8 style anchor snippets: the 5 most recent chapters' bodies (truncated)
-    plus 2-3 topic-relevant historical hits via FTS."""
+def _recent_chapter_prose(after_chapter: int, n: int = 4, per_chars: int = 900) -> list[dict]:
+    """Pull the actual prose of the most-recent ``n`` chapters as the style
+    anchor — book-agnostic (no hardcoded protagonist name) and real continuous
+    text, which anchors voice far better than tiny FTS snippets.
 
-    refs: list[dict] = []
-    # Most-recent: pull last 5 chapters via FTS-style query (chapter range).
-    # FTS doesn't have "by chapter" trivially, so we use a simple query.
-    # Skip if we can't reasonably do it.
+    Reads from the ``chapter_fts.body`` column (full chapter text), which is
+    populated for every ingested book. Returns [] gracefully on any error so
+    the caller can fall back to an FTS query."""
+
+    from sqlalchemy import text as _sql_text
+    from ..db import get_engine
+
+    out: list[dict] = []
     try:
-        recent = fts_recall.search(
-            query="林云",  # almost always present in the protagonist novel
-            limit=5,
-            before_chapter=after_chapter + 1,
-        )
-        refs.extend(recent)
+        with get_engine().begin() as conn:
+            rows = conn.execute(
+                _sql_text(
+                    "SELECT chapter, title, body FROM chapter_fts "
+                    "WHERE chapter <= :c AND chapter IS NOT NULL "
+                    "ORDER BY chapter DESC LIMIT :n"
+                ),
+                {"c": after_chapter, "n": n},
+            ).mappings().all()
     except Exception:
-        pass
-    # Topic-relevant: use must_include phrases as queries.
-    for phrase in (must_include or [])[:3]:
+        return []
+
+    for r in rows:
+        # Take the tail of the chapter (most recent voice), with scraper/footer
+        # junk stripped so it never pollutes the style anchor.
+        snip = _clean_tail(r.get("body") or "", per_chars)
+        if not snip:
+            continue
+        out.append({"chapter": r.get("chapter"), "title": r.get("title") or "", "snip": snip})
+    # rows came newest-first; present oldest-first so refs read in order.
+    out.reverse()
+    return out
+
+
+def _gather_style_refs(*, after_chapter: int, must_include: list[str]) -> list[dict]:
+    """Style anchors: the most-recent chapters' real prose (book-agnostic) plus
+    a couple of topic-relevant historical hits via FTS for flavor."""
+
+    refs: list[dict] = _recent_chapter_prose(after_chapter, n=4)
+
+    # Fallback: if corpus/offsets unavailable, use a generic recent-FTS pull.
+    if not refs:
+        try:
+            # Match any chapter before the cut; an empty-ish query isn't allowed,
+            # so probe with a few very common CJK function words.
+            refs = fts_recall.search(query="的 了 他", limit=4, before_chapter=after_chapter + 1)
+        except Exception:
+            refs = []
+
+    # Topic-relevant supplement: use must_include phrases as queries.
+    for phrase in (must_include or [])[:2]:
         if not phrase or len(phrase) < 4:
             continue
         try:
@@ -90,6 +148,7 @@ def _gather_style_refs(*, after_chapter: int, must_include: list[str]) -> list[d
             refs.extend(hits)
         except Exception:
             continue
+
     # Dedup by chapter.
     seen = set()
     out = []
@@ -99,7 +158,67 @@ def _gather_style_refs(*, after_chapter: int, must_include: list[str]) -> list[d
             continue
         seen.add(ch)
         out.append(r)
-    return out[:8]
+    return out[:7]
+
+
+# Scraper/footer junk that some corpora append to the final chapter. We cut the
+# text at the first occurrence so it never leaks into the writer's continuity ctx.
+_CORPUS_JUNK_MARKERS = (
+    "【全书完】", "全书完", "（全文完）", "(全文完)", "全文完",
+    "书香门第", "本作品来自互联网", "版权归作者", "本书由", "未经允许",
+    "请勿用于商业", "更多精彩", "txt下载", "TXT下载",
+)
+
+
+def _clean_tail(txt: str, n_chars: int) -> str | None:
+    txt = (txt or "").strip()
+    if not txt:
+        return None
+    cut = len(txt)
+    for mk in _CORPUS_JUNK_MARKERS:
+        i = txt.find(mk)
+        if i != -1:
+            cut = min(cut, i)
+    txt = txt[:cut].strip()
+    if not txt:
+        return None
+    return txt[-n_chars:] if len(txt) > n_chars else txt
+
+
+def _prev_chapter_tail(outline_run_id: int, chapter_index: int, n_chars: int = 700) -> str | None:
+    """Tail of the immediately-preceding chapter so the writer continues serially
+    instead of re-establishing the scene.
+
+    Prefers the previous *generated* chapter's final text (same outline run); if
+    there's no such draft (e.g. this is the first continuation chapter, whose
+    predecessor is an original ingested chapter), falls back to the original
+    chapter body from chapter_fts. Returns None if neither exists."""
+
+    # 1) Previous generated chapter (same run).
+    with session_scope() as s:
+        row = s.execute(
+            select(ChapterDraft).where(
+                ChapterDraft.outline_run_id == outline_run_id,
+                ChapterDraft.chapter_index == chapter_index - 1,
+            ).limit(1)
+        ).scalar_one_or_none()
+        if row and row.final_text:
+            return _clean_tail(row.final_text, n_chars)
+
+    # 2) Fall back to the original ingested chapter (the book→continuation seam).
+    from sqlalchemy import text as _sql_text
+    from ..db import get_engine
+    try:
+        with get_engine().begin() as conn:
+            r = conn.execute(
+                _sql_text("SELECT body FROM chapter_fts WHERE chapter = :c LIMIT 1"),
+                {"c": chapter_index - 1},
+            ).mappings().first()
+    except Exception:
+        return None
+    if not r:
+        return None
+    return _clean_tail(r.get("body") or "", n_chars)
 
 
 def _writer_call(
@@ -110,6 +229,7 @@ def _writer_call(
     previous_attempt: dict | None,
     chapter_index: int,
     cached_blocks: list,
+    prev_chapter_tail: str | None = None,
 ) -> tuple[str, float, int]:
     user = build_writer_user_message(
         chapter_outline=chapter_outline,
@@ -117,16 +237,25 @@ def _writer_call(
         is_revision=is_revision,
         previous_attempt=previous_attempt,
         chapter_index=chapter_index,
+        prev_chapter_tail=prev_chapter_tail,
     )
+    # If this book has author-style mimic mode on, lead the writer with that
+    # profile instead of the default 网文 voice.
+    try:
+        from ..style.pipeline import continuation_style_guide
+        mimic_guide = continuation_style_guide()
+    except Exception:
+        mimic_guide = None
+    writer_system = build_writer_system(mimic_guide)
     resp = llm.call(
         agent="draft.writer",
         model=MODEL_STRONG,
-        system=[{"type": "text", "text": WRITER_SYSTEM}, *cached_blocks],
+        system=[{"type": "text", "text": writer_system}, *cached_blocks],
         messages=[{"role": "user", "content": user}],
         max_tokens=8000,
         temperature=0.75,
     )
-    return resp.text or "", resp.cost_usd, resp.elapsed_ms
+    return _strip_inline_markdown(resp.text or ""), resp.cost_usd, resp.elapsed_ms
 
 
 def _reviewer_call(
@@ -241,6 +370,9 @@ def write_chapter(
         must_include=chapter_outline.get("must_include") or [],
     )
 
+    # 3b) Serial continuity: tail of the previous generated chapter, if any.
+    prev_tail = _prev_chapter_tail(outline_run_id, chapter_index)
+
     # 4) Create or reuse a ChapterDraft row.
     with session_scope() as s:
         existing = s.execute(
@@ -272,6 +404,10 @@ def write_chapter(
     total_cost = 0.0
     final_text = ""
     final_status = "approved"
+    # Track the best attempt by *hard* (plot+consistency) issue score, so if we
+    # ever fall through all attempts we keep the cleanest draft — not the last
+    # one, which is usually the most over-revised.
+    best_attempt: dict | None = None  # {"score": int, "prose": str, "attempt": int}
 
     def _flush_progress(stage: str) -> None:
         """Push current `attempts` + total_cost + a `stage` marker to the
@@ -298,6 +434,7 @@ def write_chapter(
             previous_attempt=prev_attempt_feedback,
             chapter_index=chapter_index,
             cached_blocks=cached_blocks,
+            prev_chapter_tail=prev_tail,
         )
         total_cost += w_cost
         attempt_record.update({
@@ -369,9 +506,22 @@ def write_chapter(
             max_attempts=max_attempts,
         )
         total_cost += e_cost
+        # Authoritative gate: only plot/consistency hard issues force a revise.
+        # Style is advisory and never blocks (prevents the review death-spiral).
+        gated = gate_decision(reviews, attempt, max_attempts)
+        if editor_out.get("decision") != gated:
+            editor_out["decision"] = gated
+            editor_out.setdefault("rationale", "")
+            editor_out["rationale"] = (editor_out["rationale"] + " | 门控覆盖：仅硬伤触发返工").strip(" |")
         attempt_record["editor"] = editor_out
         attempt_record["stage"] = "done"
         _flush_progress(f"attempt_{attempt}_done")
+
+        # Remember the cleanest attempt seen so far.
+        score = hard_issue_score(reviews)
+        attempt_record["hard_score"] = score
+        if best_attempt is None or score < best_attempt["score"]:
+            best_attempt = {"score": score, "prose": prose, "attempt": attempt}
 
         decision = editor_out.get("decision")
         if decision in {"approve", "ship_with_warnings"}:
@@ -388,8 +538,11 @@ def write_chapter(
             "failed_issues_quoted": failed,
         }
     else:
-        # Fell through all attempts without break
-        final_text = (attempts[-1]["prose"] if attempts else "")
+        # Fell through all attempts: keep the cleanest draft, not the last.
+        if best_attempt is not None:
+            final_text = best_attempt["prose"]
+        else:
+            final_text = (attempts[-1]["prose"] if attempts else "")
         final_status = "shipped_with_warnings"
 
     # Persist

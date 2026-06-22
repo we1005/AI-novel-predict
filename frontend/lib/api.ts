@@ -71,10 +71,13 @@ export const api = {
   plot: (minImportance: number = 50) =>
     j<any[]>(`/memory/plot?min_importance=${minImportance}`),
 
-  graphCharacters: (upTo?: number) =>
-    j<{ nodes: any[]; edges: any[] }>(
-      `/graph/characters${upTo != null ? `?up_to_chapter=${upTo}` : ""}`
-    ),
+  graphCharacters: (upTo?: number, topN?: number) => {
+    const qs = new URLSearchParams();
+    if (topN != null) qs.set("top_n", String(topN));
+    if (upTo != null) qs.set("up_to_chapter", String(upTo));
+    const q = qs.toString();
+    return j<{ nodes: any[]; edges: any[] }>(`/graph/characters${q ? `?${q}` : ""}`);
+  },
   graphForeshadowings: (upTo?: number) =>
     j<{ items: any[] }>(
       `/graph/foreshadowings${upTo != null ? `?up_to_chapter=${upTo}` : ""}`
@@ -88,7 +91,7 @@ export const api = {
     j<any>("/sim/profiles/rebuild", { method: "POST", body: JSON.stringify(params) }),
 
   interviewStream: async (params: { character_id: number; after_chapter: number; question: string }, onChunk: (s: string) => void) => {
-    const r = await fetch("http://localhost:8000/sim/interview", {
+    const r = await fetch(BASE + "/sim/interview", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(params),
@@ -120,7 +123,13 @@ export const api = {
       { method: "POST" },
     ),
   relationships: () => j<any[]>("/graph/relationships"),
-  timeline: () => j<any[]>("/graph/timeline"),
+  graphDedup: () =>
+    j<{ candidates: number; confirmed: number; merged: number; errors: number }>(
+      "/graph/dedup", { method: "POST" }),
+  graphRecomputeImportance: () =>
+    j<{ updated: number }>("/graph/recompute-importance", { method: "POST" }),
+  timeline: (minImportance?: number) =>
+    j<any[]>(`/graph/timeline${minImportance != null ? `?min_importance=${minImportance}` : ""}`),
 
   predictRun: (afterChapter: number, candidates: number = 5) =>
     j<any>("/predict/run", {
@@ -203,12 +212,27 @@ export const api = {
   booksDelete: (slug: string) =>
     j<any>(`/books/${encodeURIComponent(slug)}`, { method: "DELETE" }),
 
+  // ----- Style (author voice analysis) -----
+  styleGet: () => j<any>("/style"),
+  styleAnalyze: (sampleN: number = 8) =>
+    j<any>("/style/analyze", { method: "POST", body: JSON.stringify({ sample_n: sampleN }) }),
+  styleToggle: (payload: { mimic_enabled?: boolean; bilingual?: boolean }) =>
+    j<any>("/style/toggle", { method: "PUT", body: JSON.stringify(payload) }),
+  bilingualStart: (payload: { brief: string; after_chapter: number; chapter_n?: number }) =>
+    j<any>("/style/bilingual", { method: "POST", body: JSON.stringify(payload) }),
+  bilingualList: () => j<any[]>("/style/bilingual"),
+  bilingualGet: (id: number) => j<any>(`/style/bilingual/${id}`),
+  revoiceStart: (payload: { voice: string; source_chapter?: number; text?: string }) =>
+    j<any>("/style/revoice", { method: "POST", body: JSON.stringify(payload) }),
+  revoiceList: () => j<any[]>("/style/revoice"),
+  revoiceGet: (id: number) => j<any>(`/style/revoice/${id}`),
+
   // ----- Settings -----
   settingsGet: () => j<any>("/settings"),
   settingsPut: (payload: any) =>
     j<any>("/settings", { method: "PUT", body: JSON.stringify(payload) }),
   settingsReset: () => j<any>("/settings/reset", { method: "POST" }),
-  settingsTestKey: (payload: { api_key?: string; base_url?: string; model?: string } = {}) =>
+  settingsTestKey: (payload: { api_key?: string; base_url?: string; model?: string; provider?: string } = {}) =>
     j<any>("/settings/test-key", { method: "POST", body: JSON.stringify(payload) }),
 
   arcRun: (afterChapter: number, nCandidates: number = 3, targetChapters: number = 100, userHints: string = "") =>

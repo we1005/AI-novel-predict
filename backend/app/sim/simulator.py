@@ -387,14 +387,16 @@ def run_simulation(
             # persist incrementally so a polling client can see progress
             with session_scope() as s:
                 row = s.get(SimulationRun, sim_id)
-                row.rounds_json = list(rounds)
-                row.cost_usd = total_cost
-                row.updated_at = datetime.utcnow()
+                if row:
+                    row.rounds_json = list(rounds)
+                    row.cost_usd = total_cost
+                    row.updated_at = datetime.utcnow()
 
         # ReportAgent synthesizes
         with session_scope() as s:
             row = s.get(SimulationRun, sim_id)
-            row.status = "reporting"
+            if row:
+                row.status = "reporting"
 
         cast_profiles_brief = [
             {
@@ -417,10 +419,11 @@ def run_simulation(
 
         with session_scope() as s:
             row = s.get(SimulationRun, sim_id)
-            row.final_text = text
-            row.cost_usd = total_cost
-            row.status = "done"
-            row.updated_at = datetime.utcnow()
+            if row:
+                row.final_text = text
+                row.cost_usd = total_cost
+                row.status = "done"
+                row.updated_at = datetime.utcnow()
 
         return {
             "id": sim_id,

@@ -27,35 +27,55 @@ from sqlalchemy.orm import Session
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 
 from ..config import (
+    DEFAULT_PROVIDER,
     MODEL_FAST,
     MODEL_STRONG,
     OPENAI_API_KEY,
     OPENAI_BASE_URL,
     PRICE_PER_MTOK,
+    PROVIDERS,
 )
 from ..db import session_scope
 from ..memory.models import LLMCall
-from ..settings.store import apply_overrides, credentials_version, get_credentials
+from ..settings.store import (
+    apply_overrides,
+    credentials_version,
+    get_credentials,
+    provider_for_model,
+)
 
-_client: OpenAI | None = None
+# One cached OpenAI() per provider id. Invalidated whenever credentials_version()
+# bumps (i.e. settings.json creds changed).
+_clients: dict[str, OpenAI] = {}
 _client_version: int = -1
 
 
-def get_client() -> OpenAI:
-    """Return a process-cached OpenAI client. Recreates if settings.json
-    overrode the API key / base URL since the last call."""
-    global _client, _client_version
+def get_client(model: str | None = None) -> OpenAI:
+    """Return a process-cached OpenAI client for ``model``'s provider.
+
+    Routes by the model's provider so a single request always uses the right
+    base_url + api_key. Recreates clients if settings.json overrode credentials
+    since the last call. ``model=None`` resolves the default provider.
+    """
+    global _clients, _client_version
     cur_version = credentials_version()
-    if _client is None or _client_version != cur_version:
-        api_key, base_url = get_credentials()
-        if not api_key:
-            raise RuntimeError(
-                "API key not set — configure DASHSCOPE_API_KEY in backend/.env "
-                "or set one in /settings"
-            )
-        _client = OpenAI(api_key=api_key, base_url=base_url or OPENAI_BASE_URL)
+    if _client_version != cur_version:
+        _clients = {}                      # creds changed → drop all cached clients
         _client_version = cur_version
-    return _client
+
+    pid = provider_for_model(model) if model else DEFAULT_PROVIDER
+    client = _clients.get(pid)
+    if client is None:
+        api_key, base_url = get_credentials(model)
+        if not api_key:
+            env_var = PROVIDERS.get(pid, {}).get("env_key", "DASHSCOPE_API_KEY")
+            raise RuntimeError(
+                f"API key not set for provider '{pid}' — configure {env_var} in "
+                f"backend/.env or set one in /settings"
+            )
+        client = OpenAI(api_key=api_key, base_url=base_url or OPENAI_BASE_URL)
+        _clients[pid] = client
+    return client
 
 
 def cached_block(text: str) -> str:
@@ -169,10 +189,11 @@ def call(
     top_p: float | None = None,
     extra_log: dict[str, Any] | None = None,
 ) -> LLMResponse:
-    client = get_client()
     model, temperature, max_tokens, top_p = apply_overrides(
         agent, model=model, temperature=temperature, max_tokens=max_tokens, top_p=top_p,
     )
+    # Route to the right provider (base_url + api_key) based on the resolved model.
+    client = get_client(model)
     kwargs: dict[str, Any] = {
         "model": model,
         "messages": _normalize_messages(system, messages),
@@ -192,8 +213,11 @@ def call(
             else:
                 kwargs["tool_choice"] = tool_choice
             # Qwen3.x models default to thinking mode, which rejects forced
-            # tool_choice. Disable it whenever we're forcing a specific tool.
-            kwargs["extra_body"] = {"enable_thinking": False}
+            # tool_choice. Disable it whenever we're forcing a specific tool —
+            # but only on DashScope; the param is non-standard and other
+            # providers (e.g. 火山引擎) would reject the unknown body field.
+            if provider_for_model(model) == "dashscope":
+                kwargs["extra_body"] = {"enable_thinking": False}
 
     t0 = time.perf_counter()
     resp = client.chat.completions.create(**kwargs)
@@ -211,11 +235,29 @@ def call(
     tool_use: dict[str, Any] | None = None
     if msg and getattr(msg, "tool_calls", None):
         first = msg.tool_calls[0]
+        raw_args = first.function.arguments or "{}"
         try:
-            args = json.loads(first.function.arguments or "{}")
+            args = json.loads(raw_args)
         except json.JSONDecodeError:
-            args = {"_raw": first.function.arguments}
+            # Some models emit slightly-malformed tool-arg JSON (trailing commas,
+            # unescaped quotes, truncation). Try to repair before giving up.
+            try:
+                from json_repair import repair_json
+                repaired = json.loads(repair_json(raw_args))
+                args = repaired if isinstance(repaired, dict) else {"_raw": raw_args}
+            except Exception:
+                args = {"_raw": raw_args}
         tool_use = {"name": first.function.name, "input": args}
+
+    # Empty-output guard: reasoning models occasionally spend the whole token
+    # budget on hidden reasoning and emit no content (and no tool call). That's
+    # a transient failure — raise so the @retry wrapper re-runs the call. Only
+    # treat as empty when there's genuinely nothing (no text AND no tool use).
+    if not (text or "").strip() and tool_use is None:
+        raise RuntimeError(
+            f"empty LLM response (agent={agent}, model={model}, "
+            f"finish={getattr(resp.choices[0], 'finish_reason', '?') if resp.choices else '?'}) — retrying"
+        )
 
     with session_scope() as s:
         _record(s, agent=agent, model=model, usage=usage, elapsed_ms=elapsed, cost=cost,
@@ -246,10 +288,10 @@ def stream_text(
     chunks to the HTTP response.
     """
 
-    client = get_client()
     model, temperature, max_tokens, top_p = apply_overrides(
         agent, model=model, temperature=temperature, max_tokens=max_tokens, top_p=top_p,
     )
+    client = get_client(model)
     kwargs: dict[str, Any] = {
         "model": model,
         "messages": _normalize_messages(system, messages),

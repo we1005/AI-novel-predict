@@ -24,6 +24,7 @@ import {
   ApiOutlined,
   SettingOutlined,
   BookOutlined,
+  HighlightOutlined,
 } from "@ant-design/icons";
 import { ThemeProvider, useTheme, type UiTheme } from "./ThemeProvider";
 
@@ -39,6 +40,7 @@ const NAV_ITEMS: { key: string; icon: React.ReactNode; label: string }[] = [
   { key: "/predict", icon: <BulbOutlined />, label: "预测·章" },
   { key: "/arc", icon: <CompassOutlined />, label: "预测·全弧" },
   { key: "/sim", icon: <TeamOutlined />, label: "角色仿真" },
+  { key: "/style", icon: <HighlightOutlined />, label: "文笔风格" },
   { key: "/outline", icon: <EditOutlined />, label: "大纲" },
   { key: "/draft", icon: <FileTextOutlined />, label: "成稿" },
   { key: "/monitor", icon: <DashboardOutlined />, label: "监控" },
@@ -230,6 +232,7 @@ function ClassicShell({ children }: { children: React.ReactNode }) {
         <Link href="/predict">预测·章</Link>
         <Link href="/arc">预测·全弧</Link>
         <Link href="/sim">角色仿真</Link>
+        <Link href="/style">文笔风格</Link>
         <Link href="/outline">大纲</Link>
         <Link href="/draft">成稿</Link>
         <Link href="/monitor">监控</Link>

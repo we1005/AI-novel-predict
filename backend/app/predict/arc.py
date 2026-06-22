@@ -41,6 +41,19 @@ def _coerce_list(v: Any) -> list:
     return []
 
 
+def _schema_json_hint(schema: dict) -> str:
+    """Build a strict 'output only JSON matching this schema' instruction.
+
+    JSON-in-text instead of forced tool_choice: doubao/volc reasoning models
+    silently return finish_reason=tool_calls with an EMPTY tool_calls array (and
+    empty content) on large context (arc context is ~90k chars), producing 0
+    arcs/scores. Embedding the real schema keeps the shape accurate (改进记录 #15).
+    """
+    return ("\n\n# 输出格式（严格 · 覆盖前述任何「调用工具」指示）\n"
+            "只输出一个 JSON 对象，不要任何其它文字、不要 markdown 代码块围栏。"
+            "必须严格符合以下 JSON Schema：\n" + json.dumps(schema, ensure_ascii=False))
+
+
 def _extract_json_from_text(text: str, key: str) -> Any:
     """Fallback when the model writes JSON to message content instead of
     invoking the tool. Uses ``json-repair`` to tolerate model errors."""
@@ -107,13 +120,12 @@ def stage_a(after_chapter: int, n_candidates: int, target_chapters: int,
     )
     if user_hints.strip():
         user += "\n\n再次强调：每个候选都必须显式体现 system 中【用户创作偏好】里的方向。"
+    system_chain[0] = {"type": "text", "text": ARC_SYSTEM + _schema_json_hint(ARC_TOOL["input_schema"])}
     resp = llm.call(
         agent="arc.diverge",
         model=MODEL_STRONG,
         system=system_chain,
         messages=[{"role": "user", "content": user}],
-        tools=[ARC_TOOL],
-        tool_choice={"type": "tool", "name": ARC_TOOL["name"]},
         max_tokens=16000,
         temperature=0.95,
         top_p=0.95,
@@ -157,14 +169,13 @@ def stage_b(arcs: list[dict], ctx: dict, user_hints: str = "") -> tuple[dict, fl
         "以下是 N 个完整故事弧候选。请按职责打 5 维分并选出 winner。\n\n候选：\n"
         + llm.stable_json(arcs)
     )
+    system_chain[0] = {"type": "text", "text": ARC_SCORING_SYSTEM + _schema_json_hint(ARC_SCORING_TOOL["input_schema"])}
     resp = llm.call(
         agent="arc.score",
         model=MODEL_STRONG,
         system=system_chain,
         messages=[{"role": "user", "content": user}],
-        tools=[ARC_SCORING_TOOL],
-        tool_choice={"type": "tool", "name": ARC_SCORING_TOOL["name"]},
-        max_tokens=4000,
+        max_tokens=8000,
         temperature=0.2,
     )
     out = (resp.tool_use or {}).get("input", {}) or {}
@@ -175,7 +186,36 @@ def stage_b(arcs: list[dict], ctx: dict, user_hints: str = "") -> tuple[dict, fl
         elif isinstance(parsed, dict):
             out = parsed
     out["scores"] = _coerce_list(out.get("scores", []))
+    out = _ensure_arc_winner(out, len(arcs))
     return out, resp.cost_usd
+
+
+def _ensure_arc_winner(score: dict, n_arcs: int) -> dict:
+    """Guarantee a valid winner_index. The JSON-in-text scorer sometimes omits
+    it or returns null/out-of-range; without this, ArcRun.chosen_index is None
+    and downstream outline.refine crashes with 'chosen_index out of range'.
+    Falls back to the highest summed-score candidate."""
+    if not isinstance(score, dict):
+        score = {}
+    wi = score.get("winner_index")
+    if isinstance(wi, int) and 0 <= wi < n_arcs:
+        return score
+    best, best_sum = 0, -1.0
+    dims = ("coherence", "foreshadow_use", "character_consistency", "novelty",
+            "macro_logic", "pacing", "payoff", "originality")
+    for sc in (score.get("scores") or []):
+        if not isinstance(sc, dict):
+            continue
+        idx = sc.get("index")
+        if not isinstance(idx, int) or not (0 <= idx < n_arcs):
+            continue
+        ssum = sum(float(sc.get(k, 0) or 0) for k in dims)
+        if ssum > best_sum:
+            best_sum, best = ssum, idx
+    score["winner_index"] = best if n_arcs else 0
+    if not score.get("winner_reason"):
+        score["winner_reason"] = "（自动选择综合得分最高的候选）"
+    return score
 
 
 def run_arc(after_chapter: int, *, n_candidates: int = 3,

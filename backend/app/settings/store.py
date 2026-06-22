@@ -30,7 +30,13 @@ import json
 import threading
 from typing import Any
 
-from ..config import DATA_DIR, MODEL_FAST, MODEL_STRONG
+from ..config import (
+    DATA_DIR,
+    DEFAULT_PROVIDER,
+    MODEL_FAST,
+    MODEL_STRONG,
+    PROVIDERS,
+)
 
 # ---------------------------------------------------------------------------
 # Static catalogues
@@ -38,45 +44,89 @@ from ..config import DATA_DIR, MODEL_FAST, MODEL_STRONG
 
 # 已知模型（用户可在这里之外手动输入任意模型名）。
 # 价格是 USD per million tokens；不在表中的也能用，只是 cost 列显示 0。
+# ``provider`` 决定走哪个 base_url + api_key（见 config.PROVIDERS）。
 KNOWN_MODELS: list[dict[str, Any]] = [
+    # ═══════════════ 阿里 DashScope (Qwen) ═══════════════
     # ── 思考 / 顶配 ──
-    {"id": "qwen3-max-preview", "label": "Qwen3-Max-Preview",
+    {"id": "qwen3-max-preview", "label": "Qwen3-Max-Preview", "provider": "dashscope",
      "tier": "max", "tag": "深度思考", "price_in": 0.83, "price_out": 3.33,
      "desc": "极强思考能力，最长上下文"},
-    {"id": "qwen-max",          "label": "Qwen-Max",
+    {"id": "qwen-max",          "label": "Qwen-Max", "provider": "dashscope",
      "tier": "max", "tag": "稳定旗舰", "price_in": 0.33, "price_out": 1.33,
      "desc": "稳定的旗舰创作模型"},
 
     # ── 平衡 ──
-    {"id": "qwen-plus",         "label": "Qwen-Plus",
+    {"id": "qwen-plus",         "label": "Qwen-Plus", "provider": "dashscope",
      "tier": "plus", "tag": "性价比", "price_in": 0.11, "price_out": 0.28,
      "desc": "性价比之选；中等创意任务"},
 
     # ── Flash 系列（默认） ──
-    {"id": "qwen3.5-flash",     "label": "Qwen3.5-Flash",
+    {"id": "qwen3.5-flash",     "label": "Qwen3.5-Flash", "provider": "dashscope",
      "tier": "flash", "tag": "默认", "price_in": 0.04, "price_out": 0.42,
      "desc": "默认抽取/决策模型；快且便宜"},
-    {"id": "qwen-flash",        "label": "Qwen-Flash",
+    {"id": "qwen-flash",        "label": "Qwen-Flash", "provider": "dashscope",
      "tier": "flash", "tag": "快速", "price_in": 0.04, "price_out": 0.42,
      "desc": "更轻量的 Flash 版本"},
 
     # ── 用户截图里看到的较新候选（如未来开放可填入） ──
-    {"id": "qwen3.6-flash",     "label": "Qwen3.6-Flash",
+    {"id": "qwen3.6-flash",     "label": "Qwen3.6-Flash", "provider": "dashscope",
      "tier": "flash", "tag": "新", "price_in": 0.04, "price_out": 0.42,
      "desc": "更高效率，更低成本"},
-    {"id": "qwen3.6-plus",      "label": "Qwen3.6-Plus",
+    {"id": "qwen3.6-plus",      "label": "Qwen3.6-Plus", "provider": "dashscope",
      "tier": "plus", "tag": "深度思考", "price_in": 0.11, "price_out": 0.28,
      "desc": "更低成本更强思考"},
-    {"id": "qwen3.6-max-preview", "label": "Qwen3.6-Max-Preview",
+    {"id": "qwen3.6-max-preview", "label": "Qwen3.6-Max-Preview", "provider": "dashscope",
      "tier": "max", "tag": "Coding+", "price_in": 0.83, "price_out": 3.33,
      "desc": "Coding 与 Agent 执行能力提升"},
-    {"id": "deepseek-v4-flash", "label": "DeepSeek-V4-Flash",
-     "tier": "flash", "tag": "外部", "price_in": 0.05, "price_out": 0.50,
-     "desc": "DeepSeek 的轻量快速版"},
-    {"id": "deepseek-v4-pro",   "label": "DeepSeek-V4-Pro",
-     "tier": "max", "tag": "外部", "price_in": 0.40, "price_out": 1.50,
-     "desc": "性能比肩顶级闭源模型"},
+
+    # ═══════════════ 火山引擎 Coding-Plan (豆包 / Kimi / GLM / MiniMax) ═══════════════
+    # 走 config.PROVIDERS["volc"] —— 价格并入 coding-plan 订阅，故 cost 列显示 0。
+    # ── Coding 旗舰 / 顶配 ──
+    {"id": "doubao-seed-2.0-code", "label": "Doubao-Seed-2.0-Code", "provider": "volc",
+     "tier": "max", "tag": "Coding旗舰", "price_in": 0.0, "price_out": 0.0,
+     "desc": "豆包 2.0 代码旗舰，最强 Coding/Agent"},
+    {"id": "doubao-seed-2.0-pro", "label": "Doubao-Seed-2.0-Pro", "provider": "volc",
+     "tier": "max", "tag": "通用旗舰", "price_in": 0.0, "price_out": 0.0,
+     "desc": "豆包 2.0 通用旗舰，强推理与长文"},
+    {"id": "minimax-m3", "label": "MiniMax-M3", "provider": "volc",
+     "tier": "max", "tag": "旗舰", "price_in": 0.0, "price_out": 0.0,
+     "desc": "MiniMax M3 旗舰模型"},
+    {"id": "glm-5.2", "label": "GLM-5.2 (glm-latest)", "provider": "volc",
+     "tier": "max", "tag": "旗舰", "price_in": 0.0, "price_out": 0.0,
+     "desc": "智谱 GLM-5.2，指向 glm-latest"},
+    {"id": "deepseek-v4-pro", "label": "DeepSeek-V4-Pro", "provider": "volc",
+     "tier": "max", "tag": "旗舰", "price_in": 0.0, "price_out": 0.0,
+     "desc": "DeepSeek V4 Pro，性能比肩顶级闭源"},
+
+    # ── 平衡 / Coding ──
+    {"id": "doubao-seed-code", "label": "Doubao-Seed-Code", "provider": "volc",
+     "tier": "plus", "tag": "Coding", "price_in": 0.0, "price_out": 0.0,
+     "desc": "豆包代码模型（上一代）"},
+    {"id": "minimax-m2.7", "label": "MiniMax-M2.7", "provider": "volc",
+     "tier": "plus", "tag": "性价比", "price_in": 0.0, "price_out": 0.0,
+     "desc": "MiniMax M2.7 平衡模型"},
+    {"id": "kimi-k2.6", "label": "Kimi-K2.6", "provider": "volc",
+     "tier": "plus", "tag": "长文", "price_in": 0.0, "price_out": 0.0,
+     "desc": "月之暗面 Kimi K2.6"},
+
+    # ── 轻量 / 快速 ──
+    {"id": "doubao-seed-2.0-lite", "label": "Doubao-Seed-2.0-Lite", "provider": "volc",
+     "tier": "flash", "tag": "快速", "price_in": 0.0, "price_out": 0.0,
+     "desc": "豆包 2.0 轻量版，快且便宜"},
+    {"id": "deepseek-v4-flash", "label": "DeepSeek-V4-Flash", "provider": "volc",
+     "tier": "flash", "tag": "快速", "price_in": 0.0, "price_out": 0.0,
+     "desc": "DeepSeek V4 轻量快速版"},
 ]
+
+# model id → provider id（路由 base_url + api_key 用）。
+_MODEL_PROVIDER: dict[str, str] = {m["id"]: m.get("provider", DEFAULT_PROVIDER)
+                                   for m in KNOWN_MODELS}
+
+
+def provider_for_model(model_id: str) -> str:
+    """Which provider a model id belongs to. Unknown ids → default provider
+    (keeps hand-typed Qwen model names working)."""
+    return _MODEL_PROVIDER.get(model_id, DEFAULT_PROVIDER)
 
 
 # Tier shorthand → 默认归属哪条 lane（用作"重置成默认"的依据）。
@@ -147,6 +197,35 @@ AGENT_REGISTRY: list[dict[str, Any]] = [
      "temperature": 0.2, "max_tokens": 4000, "top_p": None,
      "desc": "Editor 仲裁"},
 
+    # ── 文笔风格 ──
+    {"id": "style.analyze",      "group": "文笔", "lane": LANE_STRONG,
+     "temperature": 0.3, "max_tokens": 8000, "top_p": None,
+     "desc": "作者文风分析（抽样章节 → 结构化风格画像）"},
+    {"id": "translate.zh2en",    "group": "文笔", "lane": LANE_STRONG,
+     "temperature": 0.4, "max_tokens": 8000, "top_p": None,
+     "desc": "中→英 翻译（双语续写用）"},
+    {"id": "translate.en2zh",    "group": "文笔", "lane": LANE_STRONG,
+     "temperature": 0.4, "max_tokens": 8000, "top_p": None,
+     "desc": "英→中 翻译（双语续写用）"},
+    {"id": "bilingual.merge",    "group": "文笔", "lane": LANE_STRONG,
+     "temperature": 0.6, "max_tokens": 32000, "top_p": None,
+     "desc": "双语取长补短融合，产出最终中英版本（reasoning 长度不稳，留足 max_tokens + 长度兜底）"},
+    {"id": "bilingual.en_writer", "group": "文笔", "lane": LANE_STRONG,
+     "temperature": 0.8, "max_tokens": 8000, "top_p": None,
+     "desc": "英文母语独立成稿（双语续写用，走 minimax-m3 散文道）"},
+    {"id": "revoice.skeleton",   "group": "文笔", "lane": LANE_STRONG,
+     "temperature": 0.2, "max_tokens": 4000, "top_p": None,
+     "desc": "重写文笔：抽剧情骨架（结构化 JSON → doubao-code）"},
+    {"id": "revoice.write.wangwen", "group": "文笔", "lane": LANE_STRONG,
+     "temperature": 0.75, "max_tokens": 8000, "top_p": None,
+     "desc": "重写文笔：网文腔重写"},
+    {"id": "revoice.write.mimic", "group": "文笔", "lane": LANE_STRONG,
+     "temperature": 0.75, "max_tokens": 8000, "top_p": None,
+     "desc": "重写文笔：仿原作者笔法重写"},
+    {"id": "revoice.write.en",   "group": "文笔", "lane": LANE_STRONG,
+     "temperature": 0.75, "max_tokens": 8000, "top_p": None,
+     "desc": "重写文笔：英文母语重写"},
+
     # ── 仿真 ──
     {"id": "profile.build",      "group": "仿真", "lane": LANE_FAST,
      "temperature": 0.3, "max_tokens": 4000, "top_p": None,
@@ -174,13 +253,22 @@ _SETTINGS_PATH = DATA_DIR / "settings.json"
 _LOCK = threading.Lock()
 
 
+def _empty_providers() -> dict[str, dict[str, str]]:
+    # Per-provider credential overrides. Empty string → fall back to env
+    # (config.PROVIDERS[...]). Keyed by provider id.
+    return {pid: {"api_key": "", "base_url": ""} for pid in PROVIDERS}
+
+
 def _empty_settings() -> dict[str, Any]:
     return {
         "default_model_fast": MODEL_FAST,
         "default_model_strong": MODEL_STRONG,
-        # API credentials (override what's in backend/.env). Empty string → use env.
+        # Legacy single-credential fields — map to the DEFAULT_PROVIDER
+        # (dashscope). Kept for backward compat; new per-provider creds live
+        # under "providers". Empty string → use env.
         "api_key": "",
         "base_url": "",
+        "providers": _empty_providers(),
         "agents": {a["id"]: {"model": None, "temperature": None,
                              "max_tokens": None, "top_p": None}
                    for a in AGENT_REGISTRY},
@@ -202,6 +290,24 @@ def _load_raw() -> dict[str, Any]:
     base["default_model_strong"] = data.get("default_model_strong") or MODEL_STRONG
     base["api_key"] = data.get("api_key") or ""
     base["base_url"] = data.get("base_url") or ""
+
+    # Per-provider creds. Backfill any provider missing from an older file, and
+    # migrate the legacy top-level api_key/base_url onto the default provider so
+    # an existing single-credential config keeps working after the upgrade.
+    saved_providers = data.get("providers") or {}
+    for pid in base["providers"]:
+        sp = saved_providers.get(pid) or {}
+        base["providers"][pid] = {
+            "api_key": sp.get("api_key") or "",
+            "base_url": sp.get("base_url") or "",
+        }
+    dp = base["providers"].get(DEFAULT_PROVIDER)
+    if dp is not None:
+        if not dp["api_key"] and base["api_key"]:
+            dp["api_key"] = base["api_key"]
+        if not dp["base_url"] and base["base_url"]:
+            dp["base_url"] = base["base_url"]
+
     saved_agents = data.get("agents") or {}
     for aid in base["agents"]:
         if aid in saved_agents:
@@ -287,24 +393,73 @@ def _mask_key(key: str) -> str:
     return key[:4] + "*" * (len(key) - 8) + key[-4:]
 
 
+def _provider_override(cur: dict[str, Any], pid: str) -> dict[str, str]:
+    return (cur.get("providers") or {}).get(pid) or {"api_key": "", "base_url": ""}
+
+
+def resolve_provider_creds(pid: str, cur: dict[str, Any] | None = None) -> tuple[str, str]:
+    """(api_key, base_url) for a provider. settings.json override → env default."""
+    if cur is None:
+        cur = _settings_cached()
+    meta = PROVIDERS.get(pid, PROVIDERS[DEFAULT_PROVIDER])
+    ov = _provider_override(cur, pid)
+    api_key = ov.get("api_key") or meta.get("api_key") or ""
+    base_url = ov.get("base_url") or meta.get("base_url") or ""
+    return api_key, base_url
+
+
+def list_providers() -> list[dict[str, Any]]:
+    """Per-provider metadata for the settings UI (keys masked, never raw)."""
+    cur = _settings_cached()
+    out: list[dict[str, Any]] = []
+    for pid, meta in PROVIDERS.items():
+        ov = _provider_override(cur, pid)
+        ov_key = ov.get("api_key") or ""
+        env_key = meta.get("api_key") or ""
+        eff_key, eff_url = resolve_provider_creds(pid, cur)
+        out.append({
+            "id": pid,
+            "label": meta.get("label", pid),
+            "env_var": meta.get("env_key", ""),
+            "default_base_url": meta.get("base_url", ""),
+            "api_key": _mask_key(ov_key),          # masked override (if any)
+            "api_key_set": bool(eff_key),
+            "api_key_source": ("settings" if ov_key else ("env" if env_key else "none")),
+            "base_url": ov.get("base_url") or "",   # raw override (non-secret)
+            "effective_base_url": eff_url,
+        })
+    return out
+
+
 def get_settings() -> dict[str, Any]:
     cur = _settings_cached()
     # Don't leak the full API key over the wire — return a masked version
     # plus enough metadata for the UI to know whether one is configured.
-    from ..config import OPENAI_API_KEY as ENV_KEY, OPENAI_BASE_URL as ENV_URL
+    # Legacy top-level api_key/base_url mirror the DEFAULT_PROVIDER so the old
+    # single-provider UI keeps rendering even before it's upgraded.
     safe_settings = dict(cur)
-    safe_settings["api_key"] = _mask_key(cur.get("api_key") or "")
-    safe_settings["api_key_set"] = bool(cur.get("api_key"))
+    def_key, def_url = resolve_provider_creds(DEFAULT_PROVIDER, cur)
+    def_ov = _provider_override(cur, DEFAULT_PROVIDER)
+    safe_settings["api_key"] = _mask_key(def_ov.get("api_key") or "")
+    safe_settings["api_key_set"] = bool(def_key)
     safe_settings["api_key_source"] = (
-        "settings" if cur.get("api_key") else ("env" if ENV_KEY else "none")
+        "settings" if def_ov.get("api_key") else
+        ("env" if PROVIDERS[DEFAULT_PROVIDER].get("api_key") else "none")
     )
-    safe_settings["base_url"] = cur.get("base_url") or ""
-    safe_settings["effective_base_url"] = cur.get("base_url") or ENV_URL
+    safe_settings["base_url"] = def_ov.get("base_url") or ""
+    safe_settings["effective_base_url"] = def_url
+    # Mask any per-provider keys carried in the raw settings dict.
+    safe_settings["providers"] = {
+        pid: {"api_key": _mask_key((v or {}).get("api_key") or ""),
+              "base_url": (v or {}).get("base_url") or ""}
+        for pid, v in (cur.get("providers") or {}).items()
+    }
 
     return {
         "settings": safe_settings,
         "agents": list_agents(),
         "models": list_models(),
+        "providers": list_providers(),
         "lanes": [
             {"id": LANE_FAST, "label": "FAST",
              "current": cur["default_model_fast"]},
@@ -314,11 +469,15 @@ def get_settings() -> dict[str, Any]:
     }
 
 
-def get_credentials() -> tuple[str, str]:
-    """Return (api_key, base_url) for the OpenAI client. Settings override env."""
-    from ..config import OPENAI_API_KEY as ENV_KEY, OPENAI_BASE_URL as ENV_URL
+def get_credentials(model_id: str | None = None) -> tuple[str, str]:
+    """Return (api_key, base_url) for the OpenAI client.
+
+    With a ``model_id``, routes to that model's provider. Without one, falls
+    back to the default provider (backward-compatible behaviour).
+    """
     cur = _settings_cached()
-    return (cur.get("api_key") or ENV_KEY, cur.get("base_url") or ENV_URL)
+    pid = provider_for_model(model_id) if model_id else DEFAULT_PROVIDER
+    return resolve_provider_creds(pid, cur)
 
 
 def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
@@ -334,18 +493,50 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
         if "default_model_strong" in payload and isinstance(payload["default_model_strong"], str):
             cur["default_model_strong"] = payload["default_model_strong"].strip() or MODEL_STRONG
 
+        def _is_masked(v: str) -> bool:
+            # Treat the masked placeholder ("****...****") as "no change".
+            return bool(v) and set(v) <= set("*") | set(v[:4]) | set(v[-4:]) and "*" in v
+
+        cur.setdefault("providers", _empty_providers())
+        for pid in PROVIDERS:
+            cur["providers"].setdefault(pid, {"api_key": "", "base_url": ""})
+
+        # Legacy single-credential fields → route onto the default provider.
         if "api_key" in payload and isinstance(payload["api_key"], str):
             new_key = payload["api_key"].strip()
-            # Treat the masked placeholder ("****...****") as "no change".
-            looks_masked = new_key and set(new_key) <= set("*") | set(new_key[:4]) | set(new_key[-4:]) and "*" in new_key
-            if not looks_masked and new_key != cur.get("api_key"):
+            row = cur["providers"][DEFAULT_PROVIDER]
+            if not _is_masked(new_key) and new_key != row.get("api_key"):
+                row["api_key"] = new_key
                 cur["api_key"] = new_key
                 creds_changed = True
         if "base_url" in payload and isinstance(payload["base_url"], str):
             new_url = payload["base_url"].strip()
-            if new_url != cur.get("base_url"):
+            row = cur["providers"][DEFAULT_PROVIDER]
+            if new_url != row.get("base_url"):
+                row["base_url"] = new_url
                 cur["base_url"] = new_url
                 creds_changed = True
+
+        # Per-provider credential overrides.
+        prov = payload.get("providers") or {}
+        for pid, ov in prov.items():
+            if pid not in cur["providers"] or not isinstance(ov, dict):
+                continue
+            row = cur["providers"][pid]
+            if "api_key" in ov and isinstance(ov["api_key"], str):
+                nk = ov["api_key"].strip()
+                if not _is_masked(nk) and nk != row.get("api_key"):
+                    row["api_key"] = nk
+                    creds_changed = True
+                    if pid == DEFAULT_PROVIDER:
+                        cur["api_key"] = nk
+            if "base_url" in ov and isinstance(ov["base_url"], str):
+                nu = ov["base_url"].strip()
+                if nu != row.get("base_url"):
+                    row["base_url"] = nu
+                    creds_changed = True
+                    if pid == DEFAULT_PROVIDER:
+                        cur["base_url"] = nu
 
         ag = payload.get("agents") or {}
         for aid, ov in ag.items():

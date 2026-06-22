@@ -239,10 +239,24 @@ function CharacterGraph({ upTo }: { upTo?: number }) {
   const [topN, setTopN] = useState(40);
   const [extracting, setExtracting] = useState(false);
   const [msg, setMsg] = useState("");
+  const [narrNote, setNarrNote] = useState<string>("");
+
+  // Surface narrative structure (from 文笔风格 analysis) so multi-POV / non-linear
+  // books are explained rather than looking "broken".
+  useEffect(() => {
+    api.styleGet().then((d: any) => {
+      const ns = d?.profile?.narrative_structure;
+      if (!ns) return;
+      const techs: string[] = ns.techniques || [];
+      const flags = techs.filter((t) => /多视角|多主角|POV|非线性|插叙|倒叙|环形/i.test(t));
+      if (ns.mode === "nonlinear" || flags.length) {
+        setNarrNote(`本书叙事：${ns.mode === "nonlinear" ? "非线性" : "线性"}${flags.length ? " · " + flags.join("/") : ""}。多视角/多线的书，同一角色易被分批抽成多个名字——建议先点「整理图谱」去重。`);
+      }
+    }).catch(() => {});
+  }, []);
 
   const reload = () => {
-    const url = `/graph/characters?top_n=${topN}${upTo ? `&up_to_chapter=${upTo}` : ""}`;
-    fetch("http://localhost:8000" + url).then((r) => r.json()).then(setData);
+    api.graphCharacters(upTo || undefined, topN).then(setData).catch(() => {});
   };
 
   useEffect(() => { reload(); }, [upTo, topN]);
@@ -258,6 +272,27 @@ function CharacterGraph({ upTo }: { upTo?: number }) {
       reload();
     } catch (e: any) {
       setMsg(String(e));
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  // One-click cleanup for messy (multi-batch / multi-POV) books: merge duplicate
+  // entities → recompute importance → re-extract relationships.
+  const runTidy = async () => {
+    setExtracting(true);
+    setMsg("");
+    try {
+      setMsg("① 实体去重中…");
+      const d = await api.graphDedup();
+      setMsg(`① 去重完成（合并 ${d.merged}）　② 重算重要度…`);
+      await api.graphRecomputeImportance();
+      setMsg(`① 去重 ${d.merged}　② 重要度已重算　③ 抽取关系中…`);
+      const r = await api.extractRelationships(Math.max(40, topN));
+      setMsg(`✅ 整理完成：合并 ${d.merged} 个重复实体 · 角色 ${r.roles_assigned} · 关系 ${r.relationships} 条`);
+      reload();
+    } catch (e: any) {
+      setMsg("整理失败：" + String(e));
     } finally {
       setExtracting(false);
     }
@@ -341,10 +376,20 @@ function CharacterGraph({ upTo }: { upTo?: number }) {
           <option value={60}>top 60</option>
           <option value={100}>top 100</option>
         </select>
-        <button onClick={runExtract} disabled={extracting} style={{ marginLeft: "auto", padding: "4px 12px", fontSize: 12 }}>
-          {extracting ? "抽取中…（~30 秒）" : "🔍 LLM 抽取关系 + 角色"}
+        <button onClick={runTidy} disabled={extracting} style={{ marginLeft: "auto", padding: "4px 12px", fontSize: 12, background: "var(--accent)" }}
+          title="多视角/多批次的书容易产生重复实体（同一角色多个名字），先合并去重、重算重要度，再抽关系。复杂的书强烈建议先点这个。">
+          {extracting ? "整理中…" : "🧹 整理图谱（去重+重算+关系）"}
+        </button>
+        <button onClick={runExtract} disabled={extracting} style={{ padding: "4px 12px", fontSize: 12 }}>
+          {extracting ? "…" : "🔍 仅抽关系"}
         </button>
       </div>
+      {narrNote && (
+        <div style={{ margin: "8px 0", padding: "8px 12px", borderRadius: 6, fontSize: 12,
+                      background: "rgba(250,173,20,0.12)", border: "1px solid #faad14", color: "#d48806" }}>
+          ⓘ {narrNote}
+        </div>
+      )}
       <p className="muted" style={{ marginBottom: 8 }}>
         {theme === "modern"
           ? "节点按角色配色（主角红 / 反派紫 / 盟友蓝 / 配角橙 / 龙套灰）。点击节点或边查看详情。"
@@ -502,7 +547,7 @@ function Timeline() {
   const [rows, setRows] = useState<any[]>([]);
   const [minImp, setMinImp] = useState(60);
   useEffect(() => {
-    fetch(`http://localhost:8000/graph/timeline?min_importance=${minImp}`).then((r) => r.json()).then(setRows);
+    api.timeline(minImp).then(setRows).catch(() => {});
   }, [minImp]);
 
   return (

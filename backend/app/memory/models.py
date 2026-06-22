@@ -318,3 +318,65 @@ class ArcRun(Base):
     chosen_index = Column(Integer)
     cost_usd = Column(Float, default=0.0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class StyleProfile(Base):
+    """Per-book author writing-style analysis (opt-in, token-heavy).
+
+    One row per book (latest analysis wins). ``profile_json`` holds the
+    structured style breakdown (voice, scene-type styles, tropes, vocabulary,
+    POV, pacing, setting/register, and a synthesized 续写指导). ``mimic_enabled``
+    is the switch: when true, continuation should imitate this author's style
+    instead of the default punchy-网文 voice. ``bilingual`` marks Western-setting
+    books that should get the dual ZH/EN cross-translation continuation.
+    """
+
+    __tablename__ = "style_profile"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    profile_json = Column(JSON)            # structured analysis
+    summary = Column(Text)                 # short human-readable digest
+    sampled_chapters = Column(JSON, default=list)
+    mimic_enabled = Column(Integer, default=0)   # 0/1 — mimic author voice in续写
+    bilingual = Column(Integer, default=0)       # 0/1 — dual ZH/EN continuation
+    model = Column(String)
+    cost_usd = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class BilingualDraft(Base):
+    """A bilingual (ZH/EN) cross-translated continuation chapter.
+
+    Produced by the STYLE-3 pipeline: independent ZH(mimic) + EN(native) drafts
+    → cross-translate → merge. Holds both final versions plus intermediates.
+    """
+
+    __tablename__ = "bilingual_draft"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chapter = Column(Integer)
+    brief = Column(Text)
+    status = Column(String, default="writing")  # writing / done / failed
+    stage = Column(String, default="")  # granular progress: zh_draft/en_recreate/translate/merge/done
+    final_zh = Column(Text)
+    final_en = Column(Text)
+    drafts_json = Column(JSON)   # intermediates: zh_orig/en_orig/en_from_zh/zh_from_en
+    error = Column(Text)
+    cost_usd = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class RevoiceJob(Base):
+    """A 推翻文笔保留主干剧情 (re-voice) job: skeleton + rewrite in a target voice."""
+
+    __tablename__ = "revoice_job"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_chapter = Column(Integer)   # source chapter number (if from book), else null
+    voice = Column(String)             # wangwen / mimic / english
+    status = Column(String, default="writing")
+    skeleton_json = Column(JSON)
+    rewritten = Column(Text)
+    error = Column(Text)
+    cost_usd = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)

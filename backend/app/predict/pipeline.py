@@ -18,8 +18,10 @@ from ..db import session_scope
 from ..llm import client as llm
 from ..llm.prompts.prediction import (
     CANDIDATE_SYSTEM,
+    CANDIDATE_JSON_HINT,
     CANDIDATE_TOOL,
     SCORING_SYSTEM,
+    SCORING_JSON_HINT,
     SCORING_TOOL,
     WRITING_SYSTEM_TEMPLATE,
 )
@@ -131,8 +133,43 @@ def _gather_context(after_chapter: int) -> dict[str, Any]:
         }
 
 
+def _style_block() -> dict[str, Any] | None:
+    """If the active book has a style profile, surface its narrative structure +
+    tropes + setting so prediction (predict & arc) follows the BOOK's actual
+    storytelling habits instead of a generic 网文-macro-mystery template. When
+    mimic is on, this is binding; otherwise it's reference."""
+    try:
+        from ..style.pipeline import get_profile
+        p = get_profile()
+    except Exception:
+        p = None
+    if not p:
+        return None
+    prof = p.get("profile") or {}
+    ns = prof.get("narrative_structure") or {}
+    parts = []
+    if ns:
+        parts.append(
+            "叙事结构：mode=%s；技法=%s；视角=%s；节奏=%s"
+            % (ns.get("mode"), "、".join(ns.get("techniques") or []),
+               (ns.get("pov_structure") or "")[:120], (ns.get("pacing") or "")[:160])
+        )
+    tropes = prof.get("tropes")
+    if isinstance(tropes, list) and tropes:
+        parts.append("作者常用套路/母题：" + "、".join(str(t) for t in tropes[:10]))
+    if prof.get("setting_register"):
+        parts.append("世界观/文化语域：" + str(prof["setting_register"])[:200])
+    if not parts:
+        return None
+    if p.get("mimic_enabled"):
+        head = "【本书叙事基因 — 已开启「模仿原作者」，预测后续剧情必须顺着作者的叙事结构、节奏与套路走】\n"
+    else:
+        head = "【本书叙事基因 — 预测时作为参考，避免生成与本书气质相悖的走向】\n"
+    return llm.cached_block(head + "\n".join("- " + x for x in parts))
+
+
 def _ctx_blocks(ctx: dict[str, Any]) -> list[dict[str, Any]]:
-    return [
+    blocks = [
         llm.cached_block("【未收束伏笔表】\n" + llm.stable_json(ctx["open_foreshadowings"])),
         llm.cached_block(
             "【读者追问的核心问题（宏观疑点 — 续写时这些悬念不能丢）】\n"
@@ -143,6 +180,26 @@ def _ctx_blocks(ctx: dict[str, Any]) -> list[dict[str, Any]]:
         llm.cached_block("【近期重要剧情节点】\n" + llm.stable_json(ctx["recent_plot"])),
         llm.cached_block("【最近 5 章标题】\n" + llm.stable_json(ctx["recent_chapter_titles"])),
     ]
+    sb = _style_block()
+    if sb:
+        blocks.append(sb)
+    return blocks
+
+
+def _loads_json(s: str) -> dict:
+    """Parse a JSON object out of model text (strips fences, repairs)."""
+    import json
+    import re
+    s = re.sub(r"```json|```", "", s or "").strip()
+    try:
+        d = json.loads(s)
+    except Exception:
+        try:
+            from json_repair import repair_json
+            d = json.loads(repair_json(s))
+        except Exception:
+            return {}
+    return d if isinstance(d, dict) else {}
 
 
 # Stage A
@@ -153,18 +210,20 @@ def stage_a(after_chapter: int, n: int = DEFAULT_CANDIDATES) -> tuple[list[dict]
         f"已写到第 {after_chapter} 章。请提出 {n} 条**走向迥异**的下一段（约 1~3 章规模）剧情候选。\n"
         "记得在 uses_foreshadow_ids 中标注实际利用的伏笔 id。"
     )
+    # JSON-in-text rather than forced tool_choice: doubao/volc reasoning models
+    # silently emit finish_reason=tool_calls with an EMPTY tool_calls array when
+    # the context is large (predict context is ~90k chars), yielding 0 candidates.
+    # Plain-JSON output + repair-parse is reliable at that size (改进记录 #15).
     resp = llm.call(
         agent="predict.diverge",
         model=MODEL_STRONG,
-        system=[{"type": "text", "text": CANDIDATE_SYSTEM}, *blocks],
+        system=[{"type": "text", "text": CANDIDATE_SYSTEM + CANDIDATE_JSON_HINT}, *blocks],
         messages=[{"role": "user", "content": user}],
-        tools=[CANDIDATE_TOOL],
-        tool_choice={"type": "tool", "name": CANDIDATE_TOOL["name"]},
         max_tokens=8000,
         temperature=0.95,
         top_p=0.95,
     )
-    cands = (resp.tool_use or {}).get("input", {}).get("candidates", [])
+    cands = _loads_json(resp.text).get("candidates", []) or []
     return cands, ctx, resp.cost_usd
 
 
@@ -178,14 +237,12 @@ def stage_b(candidates: list[dict], ctx: dict) -> tuple[dict, float]:
     resp = llm.call(
         agent="predict.score",
         model=MODEL_STRONG,
-        system=[{"type": "text", "text": SCORING_SYSTEM}, *blocks],
+        system=[{"type": "text", "text": SCORING_SYSTEM + SCORING_JSON_HINT}, *blocks],
         messages=[{"role": "user", "content": user}],
-        tools=[SCORING_TOOL],
-        tool_choice={"type": "tool", "name": SCORING_TOOL["name"]},
-        max_tokens=4000,
+        max_tokens=6000,
         temperature=0.2,
     )
-    return (resp.tool_use or {}).get("input", {}), resp.cost_usd
+    return _loads_json(resp.text), resp.cost_usd
 
 
 # Stage C — streaming
@@ -229,11 +286,36 @@ def stage_c_stream(
     return {"text": "".join(accumulated)}
 
 
+def _ensure_winner(score: dict, n_cands: int) -> dict:
+    """Guarantee a valid winner_index. The scoring model occasionally omits it
+    or returns null/out-of-range; without this, outline.refine crashes with
+    'chosen_index out of range'. Fall back to the highest summed-score candidate."""
+    if not isinstance(score, dict):
+        score = {}
+    wi = score.get("winner_index")
+    if isinstance(wi, int) and 0 <= wi < n_cands:
+        return score
+    best, best_sum = 0, -1.0
+    for sc in (score.get("scores") or []):
+        idx = sc.get("index")
+        if not isinstance(idx, int) or not (0 <= idx < n_cands):
+            continue
+        ssum = sum(float(sc.get(k, 0) or 0) for k in
+                   ("coherence", "foreshadow_use", "character_consistency", "novelty"))
+        if ssum > best_sum:
+            best_sum, best = ssum, idx
+    score["winner_index"] = best if n_cands else 0
+    if not score.get("winner_reason"):
+        score["winner_reason"] = "（自动选择综合得分最高的候选）"
+    return score
+
+
 def run_predict(after_chapter: int, n: int = DEFAULT_CANDIDATES) -> dict:
     """A + B (no write). Returns saved PredictionRun id."""
 
     cands, ctx, cost_a = stage_a(after_chapter, n=n)
     score, cost_b = stage_b(cands, ctx)
+    score = _ensure_winner(score, len(cands))
     with session_scope() as s:
         run = PredictionRun(
             after_chapter=after_chapter,

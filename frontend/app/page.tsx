@@ -130,7 +130,7 @@ export default function Home() {
 
       <div style={{ marginTop: 32, padding: "18px 24px", background: "var(--panel-2)", borderRadius: 8,
                     fontFamily: "var(--serif)", fontSize: 14, color: "var(--muted)", textAlign: "center" }}>
-        本工具基于 Qwen3.5-flash · 全链路 prompt cache · SQLite + ChromaDB · React Flow 可视化
+        多模型可选（火山引擎 Coding-Plan / 阿里通义）· 写作 minimax-m3 · 全链路 prompt 缓存友好 · SQLite + ChromaDB · React Flow 可视化
       </div>
     </>
   );

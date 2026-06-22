@@ -16,6 +16,7 @@ from .mysteries.api import router as mysteries_router
 from .outline.api import router as outline_router
 from .predict.api import router as predict_router
 from .settings.api import router as settings_router
+from .style.api import router as style_router
 
 app = FastAPI(title="Novel Writer API", version="0.1.0")
 
@@ -56,4 +57,5 @@ app.include_router(outline_router, prefix="/outline", tags=["outline"])
 app.include_router(draft_router, prefix="/draft", tags=["draft"])
 app.include_router(sim_router, prefix="/sim", tags=["sim"])
 app.include_router(settings_router, prefix="/settings", tags=["settings"])
+app.include_router(style_router, prefix="/style", tags=["style"])
 app.include_router(books_router, prefix="/books", tags=["books"])

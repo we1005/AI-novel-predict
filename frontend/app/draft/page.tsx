@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Drawer } from "antd";
+import { Drawer, message } from "antd";
 import { api } from "@/lib/api";
 import { useTheme } from "@/components/ThemeProvider";
 import PageTitle from "@/components/PageTitle";
@@ -50,6 +50,38 @@ const SEVERITY_COLOR: Record<string, string> = {
   minor: "var(--muted)",
 };
 
+const DECISION_LABEL: Record<string, string> = {
+  approve: "通过",
+  revise: "返工",
+  ship_with_warnings: "带警告发布",
+};
+
+const DECISION_COLOR: Record<string, string> = {
+  approve: "var(--good)",
+  revise: "var(--warn)",
+  ship_with_warnings: "#e0af68",
+};
+
+// Bilingual job granular-stage labels (backend BilingualDraft.stage)
+const BI_STAGE_LABEL: Record<string, string> = {
+  zh_draft: "写中文稿",
+  en_recreate: "英文再创作",
+  translate: "交叉互译",
+  merge: "取长补短融合",
+  done: "完成",
+};
+
+const selectStyle: React.CSSProperties = {
+  minWidth: 220,
+  maxWidth: 420,
+  padding: "7px 10px",
+  borderRadius: 6,
+  border: "1px solid var(--border)",
+  background: "var(--panel)",
+  color: "inherit",
+  fontSize: 13,
+};
+
 export default function DraftPage() {
   return (
     <Suspense fallback={<div className="card">加载中…</div>}>
@@ -81,10 +113,46 @@ function DraftPageInner() {
   // form
   const [outlineRunId, setOutlineRunId] = useState(initOutlineRunId || "");
   const [chapterIndex, setChapterIndex] = useState(initChapterIndex || "");
+  // Dropdown data so the user never has to type raw IDs.
+  const [outlineRuns, setOutlineRuns] = useState<any[]>([]);
+  const [outlineChapters, setOutlineChapters] = useState<any[]>([]);
 
   const reload = () => api.draftList().then(setDrafts).catch(() => {});
 
   useEffect(() => { reload(); }, []);
+
+  // Load outline runs for the picker; auto-select one if none chosen yet.
+  useEffect(() => {
+    api.outlineList().then((runs: any[]) => {
+      setOutlineRuns(runs || []);
+      if (!outlineRunId && runs && runs.length) {
+        setOutlineRunId(String(runs[0].id));
+      }
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When the chosen outline run changes, load its chapters and auto-pick the
+  // first not-yet-drafted chapter (or the first chapter).
+  useEffect(() => {
+    if (!outlineRunId) { setOutlineChapters([]); return; }
+    api.outlineGet(Number(outlineRunId)).then((run: any) => {
+      const chs = run?.chapters || [];
+      setOutlineChapters(chs);
+      const draftedForRun = new Set(
+        drafts.filter((d) => d.outline_run_id === Number(outlineRunId))
+              .map((d) => d.chapter_index)
+      );
+      const cur = Number(chapterIndex);
+      const stillValid = chs.some((c: any) => c.chapter_index === cur);
+      if (!stillValid) {
+        const firstUndrafted = chs.find((c: any) => !draftedForRun.has(c.chapter_index));
+        const pick = firstUndrafted || chs[0];
+        if (pick) setChapterIndex(String(pick.chapter_index));
+      }
+    }).catch(() => setOutlineChapters([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outlineRunId, drafts]);
 
   // Deep-link: ?id=N takes precedence; falls back to ?outline_run_id&chapter_index lookup.
   useEffect(() => {
@@ -131,8 +199,12 @@ function DraftPageInner() {
     reviewers_done: string[];
   } | null>(null);
 
-  const triggerWrite = async () => {
-    if (!outlineRunId || !chapterIndex) return;
+  // Optional explicit (orId, chIdx) lets "重写本章" reuse this without relying
+  // on the form-state values; defaults to the form selection.
+  const triggerWrite = async (orArg?: number, chArg?: number) => {
+    const orId = orArg ?? Number(outlineRunId);
+    const chIdx = chArg ?? Number(chapterIndex);
+    if (!orId || !chIdx) return;
     setBusy(true);
     setBusySince(Date.now());
     setMsg("");
@@ -143,9 +215,7 @@ function DraftPageInner() {
       try {
         const list = await api.draftList();
         const row = list.find(
-          (d: any) =>
-            d.outline_run_id === Number(outlineRunId) &&
-            d.chapter_index === Number(chapterIndex)
+          (d: any) => d.outline_run_id === orId && d.chapter_index === chIdx
         );
         if (!row) return;
         // Pull full detail to read attempts_json
@@ -165,7 +235,7 @@ function DraftPageInner() {
     poll();   // immediate first tick
 
     try {
-      const r = await api.draftWrite(Number(outlineRunId), Number(chapterIndex), {
+      const r = await api.draftWrite(orId, chIdx, {
         skip_reviews: skipReviews,
         max_attempts: maxAttempts,
       });
@@ -191,25 +261,80 @@ function DraftPageInner() {
         subtitle="Writer 出稿 → 文风 / 剧情 / 一致性 三审并行 → Editor 仲裁返工，最多 3 轮 ReAct" />
 
       <div className="card">
-        <h2>触发：写一个章节</h2>
-        <div className="row" style={{ alignItems: "center", flexWrap: "wrap" }}>
-          <label>OutlineRun id<input type="number" value={outlineRunId}
-            onChange={(e) => setOutlineRunId(e.target.value)}
-            style={{ width: 80, marginLeft: 6 }} /></label>
-          <label>章节号<input type="number" value={chapterIndex}
-            onChange={(e) => setChapterIndex(e.target.value)}
-            style={{ width: 90, marginLeft: 6 }} /></label>
-          <label>最多 attempts<input type="number" value={maxAttempts}
-            onChange={(e) => setMaxAttempts(+e.target.value)}
-            min={1} max={5} style={{ width: 60, marginLeft: 6 }} /></label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
-            <input type="checkbox" checked={skipReviews} onChange={(e) => setSkipReviews(e.target.checked)} />
-            跳过审查（快迭代）
-          </label>
-        </div>
-        <div style={{ marginTop: 10 }}>
-          <button onClick={triggerWrite} disabled={busy || !outlineRunId || !chapterIndex}>
-            {busy ? `写作中… ${elapsed}s` : skipReviews ? "写（跳过审查）" : "写（含审查）"}
+        <h2>写一个章节</h2>
+        {outlineRuns.length === 0 ? (
+          <p className="muted" style={{ fontSize: 13 }}>
+            还没有大纲。先到 <Link href="/outline" style={{ color: "var(--accent)" }}>大纲</Link> 页面把某条预测/全弧细化成逐章大纲，再回来成稿。
+          </p>
+        ) : (
+          <>
+            <div className="row" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 14 }}>
+              {/* Outline run picker */}
+              <label style={{ fontSize: 12, color: "var(--muted)" }}>
+                <div style={{ marginBottom: 4 }}>选大纲</div>
+                <select value={outlineRunId} onChange={(e) => setOutlineRunId(e.target.value)}
+                  style={selectStyle}>
+                  {outlineRuns.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      #{r.id} · {r.phase_name || (r.source_kind === "arc" ? "全弧" : "预测")} · 第{r.chapter_start}-{r.chapter_end}章（{r.chapter_count}章）
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {/* Chapter picker */}
+              <label style={{ fontSize: 12, color: "var(--muted)" }}>
+                <div style={{ marginBottom: 4 }}>选章节</div>
+                <select value={chapterIndex} onChange={(e) => setChapterIndex(e.target.value)}
+                  style={selectStyle} disabled={outlineChapters.length === 0}>
+                  {outlineChapters.map((c) => {
+                    const done = drafts.some(
+                      (d) => d.outline_run_id === Number(outlineRunId) && d.chapter_index === c.chapter_index
+                    );
+                    return (
+                      <option key={c.chapter_index} value={c.chapter_index}>
+                        {done ? "✓ " : ""}第{c.chapter_index}章 {c.title || "(无标题)"}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+
+              <label style={{ fontSize: 12, color: "var(--muted)" }}>
+                <div style={{ marginBottom: 4 }}>最多返工</div>
+                <input type="number" value={maxAttempts}
+                  onChange={(e) => setMaxAttempts(+e.target.value)}
+                  min={1} max={5} style={{ width: 64, padding: "7px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--panel)", color: "inherit" }} />
+              </label>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, paddingBottom: 8 }}>
+                <input type="checkbox" checked={skipReviews} onChange={(e) => setSkipReviews(e.target.checked)} />
+                跳过审查（快迭代）
+              </label>
+            </div>
+
+            {/* Selected-chapter preview so the user sees what they're about to write */}
+            {(() => {
+              const co = outlineChapters.find((c) => c.chapter_index === Number(chapterIndex));
+              if (!co) return null;
+              return (
+                <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--panel-2)", borderRadius: 8, borderLeft: "3px solid var(--c-foreshadow)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>第{co.chapter_index}章 · {co.title || "(无标题)"}</div>
+                  {co.intent && <p className="muted" style={{ fontSize: 12, margin: "4px 0 6px" }}>{co.intent}</p>}
+                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11, color: "var(--muted)" }}>
+                    {co.must_include?.length ? <span>必含 {co.must_include.length} 条</span> : null}
+                    {co.must_avoid?.length ? <span>必避 {co.must_avoid.length} 条</span> : null}
+                    {co.pacing ? <span>节奏：{String(co.pacing).slice(0, 24)}</span> : null}
+                    {co.word_target ? <span>目标 {co.word_target} 字</span> : null}
+                  </div>
+                </div>
+              );
+            })()}
+          </>
+        )}
+        <div style={{ marginTop: 12 }}>
+          <button onClick={() => triggerWrite()} disabled={busy || !outlineRunId || !chapterIndex}>
+            {busy ? `写作中… ${elapsed}s` : skipReviews ? "✍️ 写（跳过审查）" : "✍️ 写（含审查）"}
           </button>
           <span className="muted" style={{ marginLeft: 12, fontSize: 12 }}>
             带审查约 60-180 秒；跳过审查约 30-60 秒
@@ -295,7 +420,10 @@ function DraftPageInner() {
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            {selected ? <DraftDetail draft={selected} outline={selectedOutline} onSave={reload} /> : (
+            {selected ? (
+              <DraftDetail draft={selected} outline={selectedOutline} onSave={reload}
+                busy={busy} onRegenerate={() => triggerWrite(selected.outline_run_id, selected.chapter_index)} />
+            ) : (
               <div className="card muted">从左边选一个成稿查看</div>
             )}
           </div>
@@ -311,23 +439,71 @@ function DraftPageInner() {
         onClose={() => setDrawerOpen(false)}
         mask={false}
       >
-        {selected && <DraftDetail draft={selected} outline={selectedOutline} onSave={reload} />}
+        {selected && (
+          <DraftDetail draft={selected} outline={selectedOutline} onSave={reload}
+            busy={busy} onRegenerate={() => triggerWrite(selected.outline_run_id, selected.chapter_index)} />
+        )}
       </Drawer>
     </>
   );
 }
 
-function DraftDetail({ draft, outline, onSave }: { draft: any; outline: any | null; onSave: () => void }) {
+function DraftDetail({ draft, outline, onSave, busy, onRegenerate }: {
+  draft: any; outline: any | null; onSave: () => void;
+  busy?: boolean; onRegenerate?: () => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [textDraft, setTextDraft] = useState(draft.final_text || "");
   const [openAttempt, setOpenAttempt] = useState<number | null>(null);
 
+  // Bilingual: find/generate an EN version for THIS chapter, toggle 中/英/对照.
+  const [biJob, setBiJob] = useState<any | null>(null);
+  const [biView, setBiView] = useState<"zh" | "en" | "both">("both");
+  const [biRunning, setBiRunning] = useState(false);
+  const [mimicOn, setMimicOn] = useState<boolean | null>(null);
+
   useEffect(() => { setTextDraft(draft.final_text || ""); }, [draft.id, draft.final_text]);
+  useEffect(() => { api.styleGet().then((d: any) => setMimicOn(!!d?.mimic_enabled)).catch(() => {}); }, []);
+
+  // Look for an existing bilingual job for this chapter.
+  useEffect(() => {
+    setBiJob(null);
+    api.bilingualList().then((list) => {
+      const m = (list || []).find((b: any) => b.chapter === draft.chapter_index && b.status === "done");
+      if (m) api.bilingualGet(m.id).then(setBiJob).catch(() => {});
+    }).catch(() => {});
+  }, [draft.id, draft.chapter_index]);
 
   const save = async () => {
     await api.draftPatchText(draft.id, textDraft);
     setEditing(false);
     onSave();
+  };
+
+  const genBilingual = async () => {
+    const co = (outline?.chapters || []).find((c: any) => c.chapter_index === draft.chapter_index);
+    const brief = co
+      ? `【本章意图】${co.intent || ""}\n【必须包含】${(co.must_include || []).join("；")}\n【节奏】${co.pacing || ""}\n【钩子】${co.ending_hook || ""}\n保持悬疑，遵循原作叙事节奏。`
+      : `续写第${draft.chapter_index}章，承接前文，保持悬疑。`;
+    setBiRunning(true);
+    try {
+      const r = await api.bilingualStart({ brief, after_chapter: draft.chapter_index - 1, chapter_n: draft.chapter_index });
+      let attempts = 0;
+      const MAX_ATTEMPTS = 240; // ~20 min @ 5s — minimax-m3 bilingual wall-time is ~13-15 min (slow 32000-token merges); cap so a stuck job can't poll forever
+      const poll = setInterval(async () => {
+        attempts += 1;
+        try {
+          const d = await api.bilingualGet(r.id);
+          setBiJob(d); // update every tick so the live stage shows; final render gated on status below
+          if (d.status !== "writing") { setBiRunning(false); clearInterval(poll); return; }
+        } catch { /* transient — keep polling until the cap */ }
+        if (attempts >= MAX_ATTEMPTS) {
+          clearInterval(poll);
+          setBiRunning(false);
+          message.error("双语续写超时（>20 分钟），请到「文笔风格」页查看任务状态");
+        }
+      }, 5000);
+    } catch (e) { setBiRunning(false); }
   };
 
   return (
@@ -346,11 +522,85 @@ function DraftDetail({ draft, outline, onSave }: { draft: any; outline: any | nu
           }}>
             {STATUS_LABEL[draft.status] || draft.status}
           </span>
+          {mimicOn != null && (
+            <span className="tag" style={{
+              marginLeft: 6, fontSize: 11,
+              background: mimicOn ? "rgba(187,154,247,.15)" : "rgba(16,185,129,.12)",
+              color: mimicOn ? "var(--accent-2)" : "var(--good)",
+            }} title={mimicOn ? "本书已开启「模仿原作者文风」，本章按原作者笔法写" : "本章按默认网文笔法写（未开启仿写）"}>
+              文风：{mimicOn ? "仿写原作者" : "网文"}
+            </span>
+          )}
         </h2>
-        <span className="muted" style={{ fontSize: 12 }}>
-          {(draft.attempts || []).length} attempts · ${draft.cost_usd?.toFixed(4)}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span className="muted" style={{ fontSize: 12 }}>
+            {(draft.attempts || []).length} 轮 · ${draft.cost_usd?.toFixed(4)}
+          </span>
+          {onRegenerate && (
+            <button onClick={onRegenerate} disabled={busy}
+              style={{ padding: "4px 12px", fontSize: 12 }}>
+              {busy ? "写作中…" : "🔄 重写本章"}
+            </button>
+          )}
+          <button onClick={() => {
+            const title = `第${draft.chapter_index}章 ${draft.title || ""}`.trim();
+            let body = `${title}\n\n【中文】\n\n${draft.final_text || ""}`;
+            if (biJob?.status === "done" && biJob.final_en) {
+              body += `\n\n${"=".repeat(40)}\n\n【English】\n\n${biJob.final_en}`;
+            }
+            const blob = new Blob([body], { type: "text/plain;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url; a.download = `${title}${biJob?.final_en ? "_中英" : ""}.txt`;
+            a.click(); URL.revokeObjectURL(url);
+          }} className="ghost" style={{ padding: "4px 12px", fontSize: 12 }}
+            title="导出本章为 txt（有英文版则中英对照）">
+            ⬇ 导出
+          </button>
+        </div>
       </div>
+
+      {/* ---- Bilingual (中/英/对照) ---- */}
+      <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--panel-2)", borderRadius: 8, borderLeft: "3px solid var(--accent-2)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <strong style={{ fontSize: 13 }}>🌐 双语版本</strong>
+          {biJob?.status === "done" ? (
+            <div style={{ display: "flex", gap: 4 }}>
+              {(["zh", "both", "en"] as const).map((v) => (
+                <button key={v} onClick={() => setBiView(v)} className={biView === v ? "" : "ghost"}
+                  style={{ padding: "2px 10px", fontSize: 12 }}>
+                  {v === "zh" ? "中文" : v === "en" ? "English" : "对照"}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <button onClick={genBilingual} disabled={biRunning} style={{ padding: "3px 12px", fontSize: 12 }}>
+              {biRunning ? `生成中…${BI_STAGE_LABEL[biJob?.stage] ? `（${BI_STAGE_LABEL[biJob?.stage]}）` : "（约 5-15 分钟）"}` : "✨ 生成本章英文/双语版"}
+            </button>
+          )}
+          {biJob?.status === "done" && (
+            <span className="muted" style={{ fontSize: 11 }}>独立中英稿→互译→取长补短融合 · 可在「文笔风格」页看融合过程</span>
+          )}
+        </div>
+        {biJob?.status === "done" && (
+          <div style={{ display: "grid", gridTemplateColumns: biView === "both" ? "1fr 1fr" : "1fr", gap: 12, marginTop: 10 }}>
+            {(biView === "zh" || biView === "both") && (
+              <pre style={{ whiteSpace: "pre-wrap", fontFamily: 'ui-serif, "PingFang SC", serif', fontSize: 13.5, lineHeight: 1.75, background: "var(--bg)", padding: 12, borderRadius: 6, margin: 0, maxHeight: 520, overflow: "auto" }}>{biJob.final_zh}</pre>
+            )}
+            {(biView === "en" || biView === "both") && (
+              <pre style={{ whiteSpace: "pre-wrap", fontFamily: "Georgia, serif", fontSize: 13.5, lineHeight: 1.7, background: "var(--bg)", padding: 12, borderRadius: 6, margin: 0, maxHeight: 520, overflow: "auto" }}>{biJob.final_en}</pre>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* review-model legend so the semantics are clear */}
+      {(draft.attempts || []).some((a: any) => a.reviews) && (
+        <div className="muted" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.6 }}>
+          审查机制：<span style={{ color: LANE_COLOR.consistency }}>一致性</span> / <span style={{ color: LANE_COLOR.plot }}>剧情</span> 可触发返工（硬伤）；
+          <span style={{ color: LANE_COLOR.style }}>文风</span> 仅供参考，永不触发返工——避免为迎合主观文风把文笔越改越拧巴。
+        </div>
+      )}
 
       {/* attempts timeline */}
       {(draft.attempts || []).length > 1 && (
@@ -408,16 +658,34 @@ function DraftDetail({ draft, outline, onSave }: { draft: any; outline: any | nu
               </div>
             )}
 
-            {/* editor */}
-            {a.editor && (
-              <div style={{ background: "var(--panel-2)", padding: 10, borderRadius: 6, marginBottom: 12, borderLeft: "3px solid var(--accent-2)" }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--accent-2)", letterSpacing: 1 }}>EDITOR · {a.editor.decision}</div>
-                {a.editor.rationale && <p className="muted" style={{ fontSize: 12, margin: "4px 0" }}>{a.editor.rationale}</p>}
-                {a.editor.revision_brief && (
-                  <p style={{ fontSize: 13, margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{a.editor.revision_brief}</p>
-                )}
-              </div>
-            )}
+            {/* editor verdict */}
+            {a.editor && (() => {
+              const dec = a.editor.decision;
+              const styleOnly =
+                (a.reviews?.style?.issues?.length || 0) > 0 &&
+                (a.reviews?.plot?.issues?.length || 0) === 0 &&
+                (a.reviews?.consistency?.issues?.length || 0) === 0;
+              return (
+                <div style={{ background: "var(--panel-2)", padding: "10px 12px", borderRadius: 6, marginBottom: 12, borderLeft: `3px solid ${DECISION_COLOR[dec] || "var(--accent-2)"}` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", letterSpacing: 1 }}>编辑裁决</span>
+                    <span className="tag" style={{
+                      background: `${DECISION_COLOR[dec] || "#888"}25`,
+                      color: DECISION_COLOR[dec] || "#888", fontSize: 11, fontWeight: 600,
+                    }}>{DECISION_LABEL[dec] || dec}</span>
+                  </div>
+                  {a.editor.rationale && <p className="muted" style={{ fontSize: 12, margin: "6px 0 0" }}>{a.editor.rationale}</p>}
+                  {styleOnly && dec === "approve" && (
+                    <p style={{ fontSize: 11, margin: "4px 0 0", color: "var(--good)" }}>
+                      仅有文风建议——文风不触发返工，已直接通过。
+                    </p>
+                  )}
+                  {a.editor.revision_brief && dec !== "approve" && (
+                    <p style={{ fontSize: 13, margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{a.editor.revision_brief}</p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* prose */}
             <div>

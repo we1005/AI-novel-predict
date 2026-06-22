@@ -63,34 +63,38 @@ STYLE_REVIEWER_TOOL = {
     },
 }
 
-STYLE_REVIEWER_SYSTEM = """你是文风审查员。**只关心这些**：
+STYLE_REVIEWER_SYSTEM = """你是文风审查员。你**唯一的标尺**是 system 中的"风格参考片段"——那是从原作检索出的真实段落，代表这本书该有的文风。你的工作是判断本章是否与它们在同一条文风轨道上，而不是按你个人的文学品味去打分。
 
-1. 句式节奏：是否模仿原文（system 中"风格参考片段"）的长短句切换、留白节奏？
-2. 词汇 register：用词层次（古雅/通俗/专业）是否匹配原作？
-3. 描写密度：动作描写、环境描写、心理刻画的比例是否对齐？
-4. AI 翻译腔的检测：是否出现"似乎"、"某种"、"一种感觉"、"这是个重要时刻"等空话？
-5. 重复结构：是否过度使用同样的句式（"他...，他...，他..."）？
+# 最重要的纪律：以参考片段为锚，不要横跳
 
-# 你不该报这些（写在 out_of_scope_notes）
+- "句子长 / 短""华丽 / 朴实""密 / 疏"**本身都不是问题**。只有当本章**明显偏离参考片段**时才算问题。
+- 不要用"上一稿的反面"当标准——别这一稿嫌长句拖沓、下一稿又嫌短句破碎。永远拿本章去对参考片段，不是去对你刚才的意见。
+- 如果参考片段本身就是利落的网文节奏，那本章利落就是对的；如果参考片段细腻绵长，那本章细腻就是对的。**跟着原作走。**
+- 网文该有的短句、口语、爽点节奏都是正常的，不要因为它"不够文学"就报问题。
 
-- 剧情对错（是 PlotReviewer 的事）
-- 人物境界/物品/技能不一致（是 ConsistencyReviewer 的事）
-- 错别字/标点（用户能自己看出）
+# 真正该报的只有两类
 
-# severity 标准
+1. **确凿的 AI 翻译腔 / 空话**：如"似乎""某种""一种说不清的感觉""仿佛有什么事正在发生""这是一个重要的时刻""他感受到了某种力量"——这类落不到具体动作/对象的抽象空话。
+2. **与参考片段明显的语域断裂**：本章用词、腔调和参考片段不是一路货（例如原作通俗爽快，本章却端着翻译腔的欧式长句堆形容词）。
 
-- blocker: 出现明显 AI 翻译腔，整段读不下去；风格断崖式偏离原作
-- major: 几处句式僵硬 / 用词偏离 register / 部分段落空话堆积
-- minor: 一两个不太顺的句子；可有可无
+# 不该报这些（写进 out_of_scope_notes，不算 issue）
+
+- 剧情对错（PlotReviewer 的事）、设定/境界/物品不一致（ConsistencyReviewer 的事）、错别字标点。
+- 你个人觉得"可以更好"但说不出它具体偏离了参考片段哪里的——一律不算 issue。
+
+# severity 标准（从严，别轻易上 major）
+
+- blocker：**几乎不用**。仅当大段文字满是翻译腔空话、与原作完全不是一种语言时。
+- major：必须有 **≥2 处确凿的同类问题**（同为翻译腔空话，或同为明显语域断裂），且能各自给出原文 quote。单凭"我觉得这段节奏不好"不能上 major。
+- minor：个别不顺的句子；可改可不改。
 
 # 必须 grounding
 
-每条 issue 必须给出 ≤80 字的 **正文原文 quote**——不能空喊"风格不好"。如果你想说什么但找不到具体引用，那就不算 issue，写在 out_of_scope_notes。
+每条 issue 必须给出 ≤80 字、逐字摘自正文的 quote，并在 reasoning 里说明它**具体偏离了参考片段的什么**。找不到具体引用 = 不是 issue。
 
-# 何时不报 issue（重要！）
+# 何时直接放行（默认倾向放行）
 
-- 本章风格整体过得去，只有一两处可优化 → overall 写"风格基本对齐"，issues 写空数组或仅 minor。
-- 风格"朴实"不是问题——很多优秀小说就是朴实风格。
+本章与参考片段大体在一条轨道上、没有成片的翻译腔 → overall 写"风格对齐"，issues 留空。文风评审的目标是守住底线、别让翻译腔混进来，**不是**把每一稿都打回去精修。
 
 调用 report_style_issues。"""
 
@@ -174,28 +178,40 @@ CONSISTENCY_REVIEWER_TOOL = {
     },
 }
 
-CONSISTENCY_REVIEWER_SYSTEM = """你是一致性审查员。**只关心这些**：
+CONSISTENCY_REVIEWER_SYSTEM = """你是一致性审查员。你的职责是抓**矛盾**——本章和已确立设定直接打架的地方。
 
-1. **境界一致**：人物的境界/等级是否符合 system 中的"主要人物当前状态"？没经过铺垫不能跨级。
-2. **物品/技能一致**：本章用到的物品、技能、法术、传承——人物是否真的拥有？
-3. **关系一致**：师徒/亲属/敌对关系是否与既有设定一致？没有"突然变师徒"。
-4. **世界规则一致**：法术消耗、位面规则、魔力运作 是否符合 system 中"世界规则表"？
-5. **命名一致**：人物名、地点名、术语是否使用既有称谓？不要"林云"和"小云"乱用，除非上下文明确。
+# 最重要的纪律：只抓"矛盾"，不抓"新增"
 
-# 你不该报这些（写在 out_of_scope_notes）
+小说每一章都必然会写出 system 设定表里没有逐条列出的新细节——新的动作、新的招式用法、新的场景物件、临场的推演和命名。**这是写作的常态，不是错误。** 你**绝不能**因为"system 里没写过这条"就报 issue。
 
-- 风格问题
-- must_include 覆盖（PlotReviewer 的事）
+判断标准只有一个：**本章是否和 system 中明确写下的事实相矛盾？**
 
-# severity 标准
+- ✅ 允许（不要报）：system 没提过、但与既有设定不冲突的合理新细节。例如某法宝在 system 里只说"象征掌控物质位面"，本章让它挡下空间裂纹——这是合理延伸，**放行**。再如使用"神识/感知"这类通用词、临场给某个未命名威胁起个诨名——**放行**。
+- ❌ 报 issue（真矛盾）：本章写的内容**否定**了 system 白纸黑字的设定。例如 system 说"主角是八级"，本章却说他是"九级巅峰"且无晋级铺垫；system 说"A 是 B 的师父"，本章写成"A 是 B 的仇敌"；本章让人物使用一件 system 明确说**已损毁/已失去/从未拥有**的物品；违反 system"世界规则表"里**明令**的规则（如"魔力无法在此位面运作"却照常放术）。
 
-- blocker: 主角境界跳级；用了从未学过的核心功法；违反明确的世界规则
-- major: 物品状态不对；次要人物的能力/身份与档案不符
-- minor: 名字偶尔变体；表述上的小不一致
+# 具体看四类**矛盾**
+
+1. **境界倒退/暴涨**：与"主要人物当前状态"里写明的等级直接冲突，且无铺垫。
+2. **能力/物品冲突**：使用了 system 明确说没有、已失去或已损毁的东西；或某物的设定被改写成与 system 相反。
+3. **关系冲突**：与既有的师徒/亲属/敌对关系直接相反。
+4. **硬规则冲突**：违反"世界规则表"里**明确写死**的规则。
+
+# 不该报（写进 out_of_scope_notes 或干脆不写）
+
+- "system 没设定过 X" 这类**新增**（最常见的误报，务必克制）。
+- 风格问题、must_include 覆盖（别的审查员管）。
+- 通用词汇/临场命名，只要不和既有专有名词打架。
+
+# severity（从严）
+
+- blocker：直接颠覆主线设定的硬矛盾（境界乱跳、用了明确不存在的核心传承、违反明令世界规则）。
+- major：和 system 明确事实相矛盾的具体一处（须能引用 system 原文对照）。
+- minor：既有专有名词的轻微变体（"林云"写成"小云"且无上下文支撑）。
+- **拿不准是不是真矛盾、或只是"没写过" → 不报。** 宁可放过一个存疑的，也不要把合理的新细节误杀。
 
 # 必须 grounding
 
-issue.quote 必须引用本章正文中具体的不一致句子。reasoning 中要点出"system 中说 X 是 Y，但本章写成了 Z"。
+每条 issue 必须：① 引用本章正文 quote；② 在 reasoning 里指明"**system 明确说 X，本章却写成与之矛盾的 Z**"。如果你说不出 system 里那条被违反的明确设定，就不是 issue。
 
 调用 report_consistency_issues。"""
 
@@ -245,57 +261,98 @@ EDITOR_TOOL = {
     },
 }
 
-EDITOR_SYSTEM = """你是编辑总负责人。三位审查员（文风/剧情/一致性）已经各自给出 issues 和 overall。你的工作：
+EDITOR_SYSTEM = """你是编辑总负责人。三位审查员（文风/剧情/一致性）已各自给出 issues 和 overall。你的工作：
 
-1. **去重合并**：同一问题被两个 reviewer flag → 算 1 条 merged_issue（保留最严重的 severity）。冲突的建议 → 选更具体的。
-2. **决策**：根据下述启发式规则做出 approve / revise / ship_with_warnings 的决定：
-   - 任何 blocker → **revise**
-   - major 累计 ≥ 3 → revise
-   - 仅有 minor / 全 0 issues → **approve**
-   - 已经做过 3 次 attempt（system 会告知 attempt 序号）→ 即使有 blocker 也 ship_with_warnings（避免无限循环）
-3. **revision_brief**（仅 revise 时）：≤200 字、按优先级排序的整改要点，给 Writer 看。要包含：
-   - 最严重的 1-3 个问题摘要
-   - 每个问题对应的修改方向（不是简单复制 reviewer suggestion，而是综合后给一个清晰的方向）
-   - 提醒 Writer 不要把"应保留的部分"也大改
+1. **去重合并**：同一问题被多个 reviewer flag → 算 1 条 merged_issue（保留最严重 severity，每条标 lane）。冲突建议选更具体的。
+2. **决策**——核心原则：**只有"硬伤"才返工，文风不是硬伤。**
+   - 硬伤 = 剧情(plot)或一致性(consistency)的 blocker，或 must_include 缺失，或 plot+consistency 的 major 累计 ≥ 3。
+   - **有硬伤 → revise；没有硬伤 → approve。**
+   - **文风(style)问题一律不触发 revise。** 文风意见只写进 revision_brief 供 Writer 参考，但绝不能因为"句式偏长/偏短/不够文学"就把一稿打回去——那只会让文字越改越拧巴。
+   - 已是最后一轮 attempt（system 会告知序号）→ 仍有硬伤就 ship_with_warnings，否则 approve。
+3. **revision_brief**（仅 revise 时，≤200 字，给 Writer）：
+   - 先列必须改对的 1-3 个硬伤（设定/剧情），给清晰的修改方向（综合后的方向，不是照抄 suggestion）。
+   - 文风只给"一句话的总体方向"（如"整体向参考片段的节奏靠拢即可"），不要逐句列文风补丁。
+   - 提醒 Writer：读着顺的部分保留，按反馈写完整一稿，别整篇推翻。
 
-# 决策的微妙处
+# 注意
 
-- 如果 PlotReviewer 报 blocker（must_include 缺失）但 ConsistencyReviewer 报 approve → 问题真实，仍需 revise
-- 如果 StyleReviewer 主观地报 major（"句式偏简单"）但 PlotReviewer/ConsistencyReviewer 都 approve → 你可以把这条 downgrade 为 minor 然后 approve
-- ship_with_warnings 是最后兜底——告诉用户"这一稿仍有问题但已无法在本轮内修复"
+- PlotReviewer 报 must_include 缺失 / ConsistencyReviewer 报 blocker → 真问题，revise。
+- StyleReviewer 报一堆 major 但 plot/consistency 都干净 → **approve**，把文风意见放进 brief 即可，不要 revise。
+- ship_with_warnings 是兜底：本轮无法修完的硬伤如实告诉用户。
 
 调用 decide_revision。"""
 
 
-# Heuristic — used as fallback if Editor fails entirely.
-def heuristic_decision(reviews: dict[str, dict], attempt: int, max_attempts: int) -> dict:
-    all_issues: list[dict] = []
+# Lanes whose issues count as "hard" — only these can force a revision.
+# Style is deliberately excluded: it's advisory, never a gate (this is the fix
+# for the style-reviewer oscillation that used to thrash the writer).
+HARD_LANES = {"plot", "consistency"}
+
+
+def _collect_issues(reviews: dict[str, dict]) -> list[dict]:
+    out: list[dict] = []
     for lane, payload in reviews.items():
         for it in (payload or {}).get("issues", []) or []:
             if isinstance(it, dict):
-                all_issues.append({**it, "lane": lane})
-    blockers = [i for i in all_issues if i.get("severity") == "blocker"]
-    majors = [i for i in all_issues if i.get("severity") == "major"]
+                out.append({**it, "lane": lane})
+    return out
+
+
+def _must_include_misses(reviews: dict[str, dict]) -> list[dict]:
+    cov = (reviews.get("plot") or {}).get("must_include_coverage") or []
+    return [c for c in cov if isinstance(c, dict) and c.get("covered") is False]
+
+
+def gate_decision(reviews: dict[str, dict], attempt: int, max_attempts: int) -> str:
+    """Authoritative, deterministic approve/revise/ship decision.
+
+    Only plot+consistency blockers, must_include misses, or ≥3 plot+consistency
+    majors force a revision. Style issues never gate. This is applied on top of
+    the (LLM) editor's decision so behaviour is predictable regardless of how
+    the editor model feels about prose on any given run.
+    """
+    issues = _collect_issues(reviews)
+    hard = [i for i in issues if i.get("lane") in HARD_LANES]
+    blockers = [i for i in hard if i.get("severity") == "blocker"]
+    majors = [i for i in hard if i.get("severity") == "major"]
+    needs_fix = bool(blockers) or bool(_must_include_misses(reviews)) or len(majors) >= 3
 
     if attempt >= max_attempts:
-        decision = "ship_with_warnings" if (blockers or len(majors) >= 3) else "approve"
-    elif blockers:
-        decision = "revise"
-    elif len(majors) >= 3:
-        decision = "revise"
-    else:
-        decision = "approve"
+        return "ship_with_warnings" if needs_fix else "approve"
+    return "revise" if needs_fix else "approve"
+
+
+def hard_issue_score(reviews: dict[str, dict]) -> int:
+    """Weighted count of *hard* (plot+consistency) issues — used to pick the
+    best attempt when every attempt was forced to ship. Style is ignored on
+    purpose; it should never decide which draft the user keeps."""
+    issues = [i for i in _collect_issues(reviews) if i.get("lane") in HARD_LANES]
+    score = 0
+    for i in issues:
+        sev = i.get("severity")
+        score += 100 if sev == "blocker" else 10 if sev == "major" else 1
+    score += 50 * len(_must_include_misses(reviews))
+    return score
+
+
+# Heuristic — used as fallback if Editor fails entirely.
+def heuristic_decision(reviews: dict[str, dict], attempt: int, max_attempts: int) -> dict:
+    all_issues = _collect_issues(reviews)
+    decision = gate_decision(reviews, attempt, max_attempts)
 
     brief = ""
-    if decision == "revise":
-        top = (blockers + majors)[:3]
-        brief = "整改要点：\n" + "\n".join(
-            f"- [{i.get('severity')}/{i.get('lane')}] {i.get('reasoning','')[:60]} → {i.get('suggestion','')[:80]}"
-            for i in top
-        )
+    if decision in {"revise", "ship_with_warnings"}:
+        hard = [i for i in all_issues if i.get("lane") in HARD_LANES
+                and i.get("severity") in {"blocker", "major"}]
+        top = hard[:3]
+        if top:
+            brief = "必须改对的硬伤：\n" + "\n".join(
+                f"- [{i.get('severity')}/{i.get('lane')}] {i.get('reasoning','')[:60]} → {i.get('suggestion','')[:80]}"
+                for i in top
+            )
     return {
         "decision": decision,
         "merged_issues": all_issues,
         "revision_brief": brief,
-        "rationale": f"启发式 fallback: blockers={len(blockers)} majors={len(majors)} attempt={attempt}",
+        "rationale": f"启发式 fallback（仅硬伤触发返工）: decision={decision} attempt={attempt}",
     }

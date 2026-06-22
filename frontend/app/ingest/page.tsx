@@ -157,12 +157,23 @@ export default function IngestPage() {
     }
   };
 
-  // Live progress: count done vs total expected
+  // Live progress. IMPORTANT: drive the bar from *coverage* (chapters actually
+  // extracted ÷ total chapters), NOT from done-batch-count ÷ an estimate. The
+  // estimate (totalChapters / current batchSize) can disagree with the real
+  // batches (which may have been created at a different batch size), producing
+  // nonsense like "已完成 5 / 4 · 125%". Coverage is batch-size-independent.
   const totalChapters = count || 0;
-  const expectedBatches = totalChapters > 0 ? Math.ceil(totalChapters / batchSize) : 0;
+  // Batches the next "一键抽取全书" run would create at the chosen size — used
+  // only for the planning hint, never for progress.
+  const plannedBatches = totalChapters > 0 ? Math.ceil(totalChapters / batchSize) : 0;
   const doneBatches = batches.filter((b) => b.status === "done").length;
   const runningBatches = batches.filter((b) => b.status === "running").length;
   const failedBatches = batches.filter((b) => b.status === "failed").length;
+  const supersededBatches = batches.filter((b) => b.status === "superseded").length;
+  // Coverage-based progress (source of truth).
+  const covTotal = coverage?.total ?? totalChapters;
+  const covDone = coverage?.covered ?? 0;
+  const pct = covTotal > 0 ? Math.min(100, Math.round((covDone / covTotal) * 100)) : 0;
 
   const fmtBytes = (n: number) => {
     if (n < 1024) return `${n} B`;
@@ -237,40 +248,36 @@ export default function IngestPage() {
           6 个 agent 顺序跑（实体 / 伏笔 / 状态 / 剧情 / 世界规则 / 疑点），写入当前书的记忆库。
         </p>
 
-        {/* ---- Progress bar ---- */}
-        {expectedBatches > 0 && (
+        {/* ---- Progress bar (coverage-based, never exceeds 100%) ---- */}
+        {totalChapters > 0 && (
           <div style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
-              <span className="muted" style={{ fontSize: 12 }}>已完成</span>
-              <strong style={{ color: "var(--good)" }}>{doneBatches}</strong>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+              <span className="muted" style={{ fontSize: 12 }}>已抽取</span>
+              <strong style={{ color: "var(--good)" }}>{covDone}</strong>
               <span className="muted">/</span>
-              <strong>{expectedBatches}</strong>
-              <span className="muted" style={{ fontSize: 12 }}>批</span>
-              {runningBatches > 0 && (
-                <Tooltip title="当前 status='running' 的批次（包含历史未完成的）">
-                  <span style={{ fontSize: 12 }}>
-                    <span className="muted">· 运行中 </span>
-                    <strong style={{ color: "var(--accent)" }}>{runningBatches}</strong>
-                  </span>
-                </Tooltip>
-              )}
-              {failedBatches > 0 && (
-                <span style={{ color: "var(--bad)", fontSize: 12 }}>· 失败 {failedBatches}</span>
-              )}
+              <strong>{covTotal}</strong>
+              <span className="muted" style={{ fontSize: 12 }}>章</span>
+              {/* Batch tallies are secondary, shown as raw counts (no ratio). */}
+              <span className="muted" style={{ fontSize: 12, marginLeft: 6 }}>
+                · 批次：完成 <strong style={{ color: "var(--good)" }}>{doneBatches}</strong>
+                {runningBatches > 0 && <> · 运行中 <strong style={{ color: "var(--accent)" }}>{runningBatches}</strong></>}
+                {failedBatches > 0 && <span style={{ color: "var(--bad)" }}> · 失败 {failedBatches}</span>}
+                {supersededBatches > 0 && <> · 已覆盖 {supersededBatches}</>}
+              </span>
               {runningBatches > workers && (
-                <Tooltip title="运行中数 > 你的并发设置 → 含历史任务。如确定卡死，可清理（标记 >30 min 仍 running 的为失败）">
+                <Tooltip title="运行中批次数超过你的并发设置 → 多半是上次抽取中断留下的僵尸批次。点此把 >30 分钟仍 running 的标为失败，即可重新抽取。">
                   <button
                     className="ghost"
                     onClick={cleanupStuck}
                     disabled={busy}
                     style={{ padding: "2px 8px", fontSize: 11 }}
                   >
-                    清理僵尸批次
+                    清理僵尸批次（{runningBatches}）
                   </button>
                 </Tooltip>
               )}
               <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
-                ~{((doneBatches / Math.max(1, expectedBatches)) * 100).toFixed(0)}%
+                {pct}%
               </span>
             </div>
             <div style={{
@@ -278,7 +285,7 @@ export default function IngestPage() {
               background: "var(--bg)", overflow: "hidden", border: "1px solid var(--border)",
             }}>
               <div style={{
-                width: `${(doneBatches / Math.max(1, expectedBatches)) * 100}%`,
+                width: `${pct}%`,
                 height: "100%",
                 background: "linear-gradient(90deg, var(--accent), var(--accent-2))",
                 transition: "width 0.4s",
@@ -321,8 +328,8 @@ export default function IngestPage() {
             />
           </label>
           <span className="muted" style={{ fontSize: 11 }}>
-            {expectedBatches > 0
-              ? `预计 ${expectedBatches} 批，已完成会跳过`
+            {plannedBatches > 0
+              ? `每批 ${batchSize} 章 → 约 ${plannedBatches} 批，已覆盖章节会跳过`
               : "需先切分章节"}
           </span>
         </div>

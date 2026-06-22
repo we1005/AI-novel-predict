@@ -3,8 +3,14 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from . import projections, relationships as rel_pipeline
+from . import dedup as dedup_pipeline
 
 router = APIRouter()
+
+
+@router.post("/dedup")
+def dedup_entities():
+    return dedup_pipeline.run()
 
 
 @router.post("/relationships/extract")
