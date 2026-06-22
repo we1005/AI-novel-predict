@@ -72,13 +72,20 @@ def analyze(sample_n: int = 8) -> dict[str, Any]:
     if not samples:
         raise RuntimeError("no chapters to analyze — split + ingest the book first")
 
+    # JSON-in-text, not forced tool_choice: doubao-code silently returns
+    # finish=tool_calls with empty output on this big nested style schema
+    # (esp. long-chapter books like 龙族) — same failure as predict/arc (改进记录
+    # #14). Embed the schema; the _loads(resp.text) fallback below parses it.
+    _style_hint = (
+        "\n\n# 输出格式（严格 · 覆盖前述任何「调用工具」指示）\n"
+        "只输出一个 JSON 对象，不要任何其它文字、不要 markdown 围栏。必须严格符合此 JSON Schema：\n"
+        + json.dumps(STYLE_TOOL["input_schema"], ensure_ascii=False)
+    )
     resp = llm.call(
         agent="style.analyze",
         model=MODEL_STRONG,
-        system=STYLE_ANALYZE_SYSTEM,
+        system=STYLE_ANALYZE_SYSTEM + _style_hint,
         messages=[{"role": "user", "content": build_style_user_message(samples)}],
-        tools=[STYLE_TOOL],
-        tool_choice={"type": "tool", "name": STYLE_TOOL["name"]},
         max_tokens=8000,
         temperature=0.3,
     )

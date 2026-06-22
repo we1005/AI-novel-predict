@@ -25,8 +25,31 @@ from ..llm import client as llm
 from ..memory.models import Entity, EntityState, PlotPoint, Foreshadowing, Relationship
 
 
-def _norm(name: str) -> str:
-    return re.sub(r"[\s·.,\-—_、]", "", name or "").lower()
+def _norm(name) -> str:
+    if not isinstance(name, str):
+        name = "" if name is None else str(name)
+    return re.sub(r"[\s·.,\-—_、]", "", name).lower()
+
+
+def _alias_strs(v) -> list[str]:
+    """Coerce an entity's aliases_json (any shape the extractor produced) into a
+    clean list of strings. Extraction models occasionally emit a list-of-dict or
+    a dict instead of a list-of-str (e.g. entity 蜘蛛切 got a metadata object) —
+    pull a usable name out and drop the rest so dedup never crashes on it."""
+    out: list[str] = []
+    if v is None:
+        return out
+    items = v if isinstance(v, list) else [v]
+    for x in items:
+        if isinstance(x, str):
+            if x.strip():
+                out.append(x)
+        elif isinstance(x, dict):
+            for k in ("name", "alias", "title", "value"):
+                if isinstance(x.get(k), str) and x[k].strip():
+                    out.append(x[k]); break
+        # ignore other types
+    return out
 
 
 def _candidates() -> list[dict]:
@@ -34,7 +57,7 @@ def _candidates() -> list[dict]:
     with session_scope() as s:
         rows = s.execute(select(Entity)).scalars().all()
         ents = [{"id": e.id, "type": e.type, "name": e.name,
-                 "aliases": e.aliases_json or [], "importance": e.importance or 0,
+                 "aliases": _alias_strs(e.aliases_json), "importance": e.importance or 0,
                  "desc": (e.description or "")[:80]} for e in rows]
 
     by_type: dict[str, list[dict]] = {}
