@@ -255,6 +255,12 @@ function DraftPageInner() {
 
   const elapsed = busy && busySince ? Math.floor((Date.now() - busySince) / 1000) : 0;
 
+  // Timeline/history must reflect the SELECTED outline only — otherwise drafts
+  // from other outlines (e.g. a different arc/phase) leak into the list.
+  const shownDrafts = outlineRunId
+    ? drafts.filter((d) => d.outline_run_id === Number(outlineRunId))
+    : drafts;
+
   return (
     <>
       <PageTitle title="逐章成稿"
@@ -347,9 +353,10 @@ function DraftPageInner() {
       {theme === "modern" ? (
         <div className="card">
           <h2>章节时间线 — 点击查看完整 prose 与审查反馈</h2>
-          {drafts.length === 0 && <p className="muted">还没写过</p>}
+          {shownDrafts.length === 0 && <p className="muted">这个大纲还没写过章节</p>}
           <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 12 }}>
-            {drafts
+            {shownDrafts
+              .slice()
               .sort((a, b) => a.chapter_index - b.chapter_index)
               .map((d) => {
                 const sc = STATUS_COLOR[d.status] || "#888";
@@ -392,9 +399,9 @@ function DraftPageInner() {
         <div className="row" style={{ alignItems: "stretch", gap: 14 }}>
           <div className="card" style={{ flex: "0 0 280px", marginBottom: 0, maxHeight: 700, overflow: "auto" }}>
             <h2>历史成稿</h2>
-            {drafts.length === 0 && <p className="muted">还没写过</p>}
+            {shownDrafts.length === 0 && <p className="muted">这个大纲还没写过章节</p>}
             <div style={{ display: "grid", gap: 6 }}>
-              {drafts.map((d) => (
+              {shownDrafts.map((d) => (
                 <button key={d.id} onClick={async () => setSelected(await api.draftGet(d.id))}
                   className="ghost"
                   style={{

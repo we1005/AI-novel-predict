@@ -141,14 +141,18 @@ def _build_one(entity_id: int, max_chapter: int | None) -> tuple[bool, float]:
         + "\n调用 build_character_profile。"
     )
 
+    # JSON-in-text, not forced tool_choice: profile.build runs on doubao-lite
+    # (volc reasoning) which silently drops forced-tool output → profile fails.
+    # Embed the schema; parse from content (改进记录 #14/#18 pattern).
+    _hint = ("\n\n# 输出格式（严格 · 覆盖前述任何「调用工具」指示）\n"
+             "只输出一个 JSON 对象，不要任何其它文字、不要 markdown 围栏。必须严格符合此 JSON Schema：\n"
+             + json.dumps(PROFILE_TOOL["input_schema"], ensure_ascii=False))
     try:
         resp = llm.call(
             agent="profile.build",
             model=MODEL_FAST,
-            system=[{"type": "text", "text": PROFILE_SYSTEM}, *blocks],
+            system=[{"type": "text", "text": PROFILE_SYSTEM + _hint}, *blocks],
             messages=[{"role": "user", "content": user}],
-            tools=[PROFILE_TOOL],
-            tool_choice={"type": "tool", "name": PROFILE_TOOL["name"]},
             max_tokens=4000,
             temperature=0.3,
         )
@@ -159,7 +163,8 @@ def _build_one(entity_id: int, max_chapter: int | None) -> tuple[bool, float]:
     if not out and resp.text:
         try:
             from json_repair import repair_json
-            out = json.loads(repair_json(resp.text)) or {}
+            import re as _re
+            out = json.loads(repair_json(_re.sub(r"```json|```", "", resp.text))) or {}
         except Exception:
             out = {}
 

@@ -247,14 +247,18 @@ def _decide_one(
         f"你（{character.name}）现在做什么？调用 take_action。"
     )
 
+    # JSON-in-text, not forced tool_choice: sim.decide runs on doubao-lite (volc
+    # reasoning) which silently drops forced-tool output → character's action
+    # vanishes from the round. Embed the schema; parse from content.
+    _hint = ("\n\n# 输出格式（严格 · 覆盖前述任何「调用工具」指示）\n"
+             "只输出一个 JSON 对象，不要任何其它文字、不要 markdown 围栏。必须严格符合此 JSON Schema：\n"
+             + json.dumps(DECISION_TOOL["input_schema"], ensure_ascii=False))
     try:
         resp = llm.call(
             agent="sim.decide",
             model=MODEL_FAST,
-            system=[{"type": "text", "text": DECISION_SYSTEM}, *blocks],
+            system=[{"type": "text", "text": DECISION_SYSTEM + _hint}, *blocks],
             messages=[{"role": "user", "content": user}],
-            tools=[DECISION_TOOL],
-            tool_choice={"type": "tool", "name": DECISION_TOOL["name"]},
             max_tokens=2000,
             temperature=0.85,
             top_p=0.95,
@@ -263,6 +267,13 @@ def _decide_one(
         return None, 0.0
 
     out = (resp.tool_use or {}).get("input", {}) or {}
+    if not out and resp.text:
+        try:
+            from json_repair import repair_json
+            import re as _re
+            out = json.loads(repair_json(_re.sub(r"```json|```", "", resp.text))) or {}
+        except Exception:
+            out = {}
     if not isinstance(out, dict) or not out.get("kind") or not out.get("content"):
         return None, resp.cost_usd
 

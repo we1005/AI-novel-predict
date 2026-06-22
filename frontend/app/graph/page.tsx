@@ -71,6 +71,8 @@ function ForeshadowGantt({ upTo }: { upTo?: number }) {
   const [data, setData] = useState<{ items: any[]; max_chapter: number } | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "resolved">("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [ganttOpen, setGanttOpen] = useState(false);   // 甘特图默认折叠
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     api.graphForeshadowings(upTo).then((r: any) => setData(r));
@@ -78,15 +80,20 @@ function ForeshadowGantt({ upTo }: { upTo?: number }) {
 
   const filtered = useMemo(() => {
     if (!data) return [];
+    const q = query.trim().toLowerCase();
     return data.items.filter((it: any) => {
       if (filter !== "all" && it.status !== filter) return false;
       if (typeFilter !== "all" && it.type !== typeFilter) return false;
+      if (q) {
+        const hay = `#${it.id} ${it.type} ${it.description || ""} ${it.resolved_description || ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       return true;
     });
-  }, [data, filter, typeFilter]);
+  }, [data, filter, typeFilter, query]);
 
   useEffect(() => {
-    if (!ref.current || !data) return;
+    if (!ganttOpen || !ref.current || !data) return;  // only init when expanded
     let chart: any;
     const max = data.max_chapter || 1472;
 
@@ -187,7 +194,7 @@ function ForeshadowGantt({ upTo }: { upTo?: number }) {
       });
     })();
     return () => { chart?.dispose(); };
-  }, [filtered, data, colorScheme]);
+  }, [filtered, data, colorScheme, ganttOpen]);
 
   if (!data) return <div className="card">加载中…</div>;
   const total = data.items.length;
@@ -196,11 +203,10 @@ function ForeshadowGantt({ upTo }: { upTo?: number }) {
 
   return (
     <div className="card">
-      <h2>伏笔甘特图 — {total} 条 ({open} 未收束)</h2>
-      <p className="muted">
-        每行一条伏笔。从"埋下"章节到"收束"章节为一条带；未收束的延伸到末尾，描边为虚线。鼠标悬停看详情。
-      </p>
-      <div className="row" style={{ alignItems: "center", marginBottom: 8 }}>
+      <h2>伏笔 — {total} 条 ({open} 未收束)</h2>
+
+      {/* filters: apply to both gantt + card list */}
+      <div className="row" style={{ alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
         <span className="muted">状态</span>
         {(["all", "open", "resolved"] as const).map((s) => (
           <button key={s} className={filter === s ? "" : "ghost"} onClick={() => setFilter(s)} style={{ padding: "4px 10px", fontSize: 12 }}>
@@ -222,8 +228,61 @@ function ForeshadowGantt({ upTo }: { upTo?: number }) {
             {t}
           </button>
         ))}
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="搜索伏笔内容…"
+          style={{ marginLeft: "auto", minWidth: 180, padding: "5px 10px", fontSize: 12, borderRadius: 6,
+                   border: "1px solid var(--border)", background: "var(--panel)", color: "inherit" }}
+        />
       </div>
-      <div ref={ref} style={{ width: "100%", height: Math.min(Math.max(filtered.length * 14 + 80, 320), 900), background: "var(--panel-2)", borderRadius: 8 }} />
+
+      {/* gantt — collapsed by default */}
+      <button className="ghost" onClick={() => setGanttOpen((v) => !v)}
+        style={{ padding: "5px 12px", fontSize: 12, marginBottom: ganttOpen ? 8 : 0 }}>
+        {ganttOpen ? "▾ 收起甘特图" : "▸ 展开甘特图（时间线视图）"}
+      </button>
+      {ganttOpen && (
+        <>
+          <p className="muted" style={{ marginTop: 8 }}>
+            每行一条伏笔。从"埋下"到"收束"为一条带；未收束的延伸到末尾、描边为虚线。鼠标悬停看详情。
+          </p>
+          <div ref={ref} style={{ width: "100%", height: Math.min(Math.max(filtered.length * 14 + 80, 320), 900), background: "var(--panel-2)", borderRadius: 8 }} />
+        </>
+      )}
+
+      {/* readable card list (default view) */}
+      <div className="muted" style={{ fontSize: 12, margin: "12px 0 8px" }}>显示 {filtered.length} 条</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(330px, 1fr))", gap: 10 }}>
+        {[...filtered].sort((a, b) => (a.planted_chapter - b.planted_chapter)).map((it: any) => {
+          const isOpen = it.status === "open";
+          const span = it.resolved_chapter && !isOpen
+            ? `第 ${it.planted_chapter} → ${it.resolved_chapter} 章`
+            : `第 ${it.planted_chapter} 章 → 至今`;
+          return (
+            <div key={it.id} style={{
+              border: "1px solid var(--border)", borderLeft: `3px solid ${TYPE_COLORS[it.type] || "var(--border)"}`,
+              borderRadius: 8, padding: "10px 12px", background: "var(--panel-2)",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                <span className="muted" style={{ fontSize: 11 }}>#{it.id}</span>
+                <span style={{ fontSize: 11, padding: "1px 7px", borderRadius: 10, background: TYPE_COLORS[it.type] || "#888", color: "#0e1015", fontWeight: 600 }}>{it.type}</span>
+                <span style={{ fontSize: 11, padding: "1px 7px", borderRadius: 10, fontWeight: 600,
+                  color: isOpen ? "var(--warn)" : "var(--good)",
+                  border: `1px solid ${isOpen ? "var(--warn)" : "var(--good)"}` }}>
+                  {isOpen ? "未收束" : "已收束"}
+                </span>
+                <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>{span}</span>
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.6 }}>{it.description}</div>
+              {it.resolved_description && (
+                <div style={{ fontSize: 12.5, lineHeight: 1.55, marginTop: 6, color: "var(--good)" }}>→ 收束：{it.resolved_description}</div>
+              )}
+            </div>
+          );
+        })}
+        {filtered.length === 0 && <div className="muted">没有符合条件的伏笔。</div>}
+      </div>
     </div>
   );
 }
