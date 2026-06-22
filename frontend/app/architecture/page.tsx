@@ -12,6 +12,7 @@ import {
   EditOutlined,
   TeamOutlined,
   RobotOutlined,
+  DeploymentUnitOutlined,
 } from "@ant-design/icons";
 import PageTitle from "@/components/PageTitle";
 
@@ -25,6 +26,7 @@ const DOC_META: Record<string, { label: string; icon: React.ReactNode; tag: stri
   "04-写作链路.md":          { label: "写作链路",     icon: <EditOutlined />,        tag: "Draft",     tagColor: "green" },
   "05-角色仿真链路.md":       { label: "角色仿真",     icon: <TeamOutlined />,        tag: "Sim",       tagColor: "magenta" },
   "06-Agent与Prompt设计.md": { label: "Agent & Prompt", icon: <RobotOutlined />,    tag: "Agents",    tagColor: "volcano" },
+  "07-整本故事弧推演链路.md": { label: "整本故事弧推演", icon: <DeploymentUnitOutlined />, tag: "Whole-Book", tagColor: "cyan" },
 };
 
 export default function ArchitecturePage() {
