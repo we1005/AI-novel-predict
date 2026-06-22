@@ -1,6 +1,21 @@
 # 06 · Agent 与 Prompt 设计
 
-> 全系统 **17 个 LLM agent**，按职责分层，温度与模型有规律地配置。本页是横切对照表。
+> 全系统 LLM agent，按职责分层，温度与模型有规律地配置。本页是横切对照表。
+
+> **🔄 实现现状（2026-06 更新）——下表的 model 列与"输出方式"列已过时，以当前为准：**
+>
+> **(A) 多服务商 + 模型路由**（`FAST`/`STRONG` 是抽象 lane，实际经路由落到具体模型）：
+> | 任务类型 | 实际模型 | 服务商 |
+> |---|---|---|
+> | 结构化/工具 JSON（抽取、评分、骨架、去重、文风分析、预测候选、大纲、完整性裁决） | `doubao-seed-2.0-code` | 火山 |
+> | 散文（成稿、双语、重写、翻译、仿真旁白） | `minimax-m3` | 火山 |
+> | 快审/抽取/仿真决策（量大便宜） | `doubao-seed-2.0-lite` / `qwen3.5-flash` | 火山 / 阿里 |
+>
+> **(B) "输出方式"列基本作废**：除少数小上下文外，**所有结构化 agent 已从 forced tool_choice 改 JSON-in-text**（贴 schema + `json_repair` 解析正文）——doubao 系在大上下文下强制工具调用会静默吞输出。抽取 agent 保留"先 tool、空则回退 JSON-in-text"。
+>
+> **(C) 新增 agent**（原表未列）：`style.analyze`（文风画像）、`translate.zh2en/en2zh`、`bilingual.en_writer`、`bilingual.merge`（双语）、`revoice.skeleton` + `revoice.write.{wangwen,mimic,english}`（重写文笔）、`arc.project.judge`（整本推演完整性裁决）。每个 agent 的模型/温度/max_tokens 可在 `/settings` 按需覆盖（`AGENT_REGISTRY` + settings.json）。
+>
+> **(D) 通用保险**：客户端层**空输出自动重试**（无正文且无工具调用即重试，最多 3 次）。
 
 ## 1 · Agent 总名单
 
