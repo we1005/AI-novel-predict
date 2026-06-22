@@ -247,4 +247,9 @@ export const api = {
     }),
   arcList: () => j<any[]>("/predict/arc/runs"),
   arcGet: (id: number) => j<any>(`/predict/arc/runs/${id}`),
+  // 整本故事弧推演 (whole-book projection)
+  arcProject: (runId: number, chosenIndex: number) =>
+    j<any>(`/predict/arc/runs/${runId}/project`, { method: "POST", body: JSON.stringify({ chosen_index: chosenIndex }) }),
+  projectionList: () => j<any[]>("/predict/projections"),
+  projectionGet: (id: number) => j<any>(`/predict/projections/${id}`),
 };

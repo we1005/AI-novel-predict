@@ -380,3 +380,28 @@ class RevoiceJob(Base):
     cost_usd = Column(Float, default=0.0)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class StoryProjection(Base):
+    """A whole-book story projection: expand every phase of a chosen story arc
+    into a continuous chapter-level outline covering current+1 → estimated end,
+    plus a completeness verdict (are all core_truths revealed / foreshadowings
+    resolved). Append-only."""
+
+    __tablename__ = "story_projection"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    arc_run_id = Column(Integer)
+    chosen_index = Column(Integer)
+    after_chapter = Column(Integer)
+    end_chapter = Column(Integer)
+    total_chapters = Column(Integer)   # projected chapters generated
+    status = Column(String, default="projecting")  # projecting / done / failed
+    stage = Column(String, default="")             # granular progress
+    arc_title = Column(String)
+    phases_json = Column(JSON)          # sanitized phase plan
+    chapters_json = Column(JSON)        # aggregated, re-anchored full outline
+    verdict_json = Column(JSON)         # completeness 裁决
+    error = Column(Text)
+    cost_usd = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)

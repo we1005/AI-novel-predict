@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import desc, select
@@ -9,6 +9,7 @@ from ..config import DEFAULT_CANDIDATES
 from ..db import session_scope
 from ..memory.models import PredictionRun
 from . import arc as arc_pipeline
+from ..arc import project as projection
 from .pipeline import _gather_context, run_predict, stage_c_stream
 
 router = APIRouter()
@@ -44,6 +45,37 @@ def arc_runs(limit: int = 30):
 @router.get("/arc/runs/{run_id}")
 def arc_get_run(run_id: int):
     r = arc_pipeline.get_run(run_id)
+    if not r:
+        raise HTTPException(404)
+    return r
+
+
+# ---------------------------------------------------------------------------
+# Whole-book story projection (整本故事弧推演)
+# ---------------------------------------------------------------------------
+
+
+class ProjectRequest(BaseModel):
+    chosen_index: int = 0
+
+
+@router.post("/arc/runs/{run_id}/project")
+def arc_project(run_id: int, body: ProjectRequest, background: BackgroundTasks):
+    """Expand the chosen arc's phases into a continuous whole-book outline.
+    Background — poll /predict/projections/{id}."""
+    jid = projection.create_job(run_id, body.chosen_index)
+    background.add_task(projection.run_and_store, jid, run_id, body.chosen_index)
+    return {"id": jid, "status": "projecting"}
+
+
+@router.get("/projections")
+def projections_list(limit: int = 20):
+    return projection.list_jobs(limit=limit)
+
+
+@router.get("/projections/{job_id}")
+def projection_get(job_id: int):
+    r = projection.get_job(job_id)
     if not r:
         raise HTTPException(404)
     return r

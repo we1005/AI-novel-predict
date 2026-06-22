@@ -232,6 +232,10 @@ function ArcPageInner() {
         )}
       </div>
 
+      {run && Array.isArray(run.candidates) && run.candidates.length > 0 && (
+        <WholeBookPanel runId={run.id} candidates={run.candidates} defaultIndex={winnerIdx ?? 0} />
+      )}
+
       {run && (
         <div style={{ display: "grid", gap: 14 }}>
           {(Array.isArray(run.candidates) ? run.candidates : []).map((arc: any, i: number) => (
@@ -648,4 +652,109 @@ function PhaseGantt({ phases, startChapter }: { phases: any[]; startChapter: num
   }, [phases, lastEnd, startChapter, colorScheme]);
 
   return <div ref={ref} style={{ width: "100%", height: Math.max(phases.length * 30 + 50, 100), background: "var(--panel-2)", borderRadius: 6 }} />;
+}
+
+// ---------------------------------------------------------------------------
+// 整本故事弧推演: expand the chosen arc's phases into a whole-book outline.
+// ---------------------------------------------------------------------------
+function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; candidates: any[]; defaultIndex: number }) {
+  const [idx, setIdx] = useState(defaultIndex);
+  const [job, setJob] = useState<any | null>(null);
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => { setIdx(defaultIndex); }, [defaultIndex]);
+
+  const project = async () => {
+    setRunning(true); setJob(null);
+    try {
+      const r = await api.arcProject(runId, idx);
+      let attempts = 0;
+      const t = setInterval(async () => {
+        attempts += 1;
+        try {
+          const d = await api.projectionGet(r.id);
+          setJob(d);
+          if (d.status !== "projecting") { setRunning(false); clearInterval(t); return; }
+        } catch { /* transient */ }
+        if (attempts >= 240) { clearInterval(t); setRunning(false); }  // ~20 min cap
+      }, 5000);
+    } catch { setRunning(false); }
+  };
+
+  const v = job?.verdict || {};
+  const chapters: any[] = job?.chapters || [];
+  // group chapters by phase_name preserving order
+  const groups: { name: string; chs: any[] }[] = [];
+  for (const c of chapters) {
+    const nm = c.phase_name || "—";
+    let g = groups[groups.length - 1];
+    if (!g || g.name !== nm) { g = { name: nm, chs: [] }; groups.push(g); }
+    g.chs.push(c);
+  }
+
+  return (
+    <div className="card" style={{ borderLeft: "4px solid var(--accent-2)" }}>
+      <h2 style={{ marginTop: 0 }}>🌌 整本故事弧推演</h2>
+      <p className="muted" style={{ marginTop: -4 }}>
+        把选中的故事弧逐阶段展开成「从下一章到结局」的连续逐章大纲。骨架定全局、逐阶段重锚定、最后做完整性裁决。
+      </p>
+      <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span className="muted">基于候选</span>
+        <select value={idx} onChange={(e) => setIdx(Number(e.target.value))}
+          style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--panel)", color: "inherit", fontSize: 13 }}>
+          {candidates.map((a: any, i: number) => (
+            <option key={i} value={i}>#{i} {a.title || `候选${i}`}（{(a.phases || []).length} 阶段 · 估 {a.total_chapters_estimated ?? "?"} 章）</option>
+          ))}
+        </select>
+        <button onClick={project} disabled={running} style={{ padding: "6px 16px" }}>
+          {running ? `推演中…${job?.stage ? `（${job.stage}）` : ""}` : "🌌 推演整本书"}
+        </button>
+        {job?.status === "failed" && <span style={{ color: "var(--bad)" }}>失败：{job.error}</span>}
+      </div>
+
+      {job?.status === "done" && (
+        <div style={{ marginTop: 14 }}>
+          <div className="row" style={{ gap: 16, flexWrap: "wrap", marginBottom: 10 }}>
+            <span><strong style={{ color: "var(--accent-2)" }}>{job.arc_title}</strong></span>
+            <span className="muted">体量：第 {job.after_chapter + 1}–{job.end_chapter} 章 · 共 {job.total_chapters} 章</span>
+            <span className="tag" style={{ background: v.verdict === "pass" ? "var(--good)" : "var(--warn)", color: "#0e1015" }}>
+              裁决：{v.verdict === "pass" ? "通过" : v.verdict || "—"}
+            </span>
+          </div>
+          {/* completeness verdict */}
+          <div className="card" style={{ background: "var(--panel-2)", marginBottom: 12 }}>
+            {v.coverage_note && <p style={{ marginTop: 0, fontSize: 13 }}>{v.coverage_note}</p>}
+            {(v.unresolved_truths || []).length > 0 && (
+              <p style={{ fontSize: 12, color: "var(--warn)" }}>⚠ 未交代的关键问题：{v.unresolved_truths.join("；")}</p>
+            )}
+            {(v.coherence_issues || []).length > 0 && (
+              <p style={{ fontSize: 12, color: "var(--warn)" }}>⚠ 连贯性问题：{v.coherence_issues.join("；")}</p>
+            )}
+            {(v.still_open_foreshadow_ids || []).length > 0 && (
+              <p className="muted" style={{ fontSize: 12 }}>仍未收束伏笔 id：{v.still_open_foreshadow_ids.join(", ")}</p>
+            )}
+          </div>
+          {/* full outline grouped by phase */}
+          {groups.map((g, gi) => (
+            <div key={gi} style={{ marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, margin: "6px 0", color: "var(--accent-2)" }}>
+                {g.name} · 第 {g.chs[0]?.chapter_index}–{g.chs[g.chs.length - 1]?.chapter_index} 章
+              </div>
+              <div style={{ display: "grid", gap: 6 }}>
+                {g.chs.map((c: any) => (
+                  <div key={c.chapter_index} style={{ padding: "8px 10px", background: "var(--panel-2)", borderRadius: 6, fontSize: 13 }}>
+                    <strong>第 {c.chapter_index} 章 · {c.title}</strong>
+                    {(c.must_include || []).length > 0 && (
+                      <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>必含：{(c.must_include || []).join("；")}</div>
+                    )}
+                    {c.ending_hook && <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>钩子：{c.ending_hook}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

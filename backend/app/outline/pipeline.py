@@ -111,12 +111,20 @@ def _resolve_source(source_kind: str, source_run_id: int, chosen_index: int,
 
 def refine(*, source_kind: str, source_run_id: int, chosen_index: int,
            phase_index: int | None = None,
-           user_hints: str = "") -> dict[str, Any]:
+           user_hints: str = "",
+           chapter_start_override: int | None = None,
+           chapter_end_override: int | None = None,
+           continuity_hint: str | None = None,
+           persist: bool = True) -> dict[str, Any]:
     src = _resolve_source(source_kind, source_run_id, chosen_index, phase_index)
 
     after_chapter = src["after_chapter"]
-    chapter_start = src["chapter_start"]
-    chapter_end = src["chapter_end"]
+    # Whole-book projection drives clean, re-anchored ranges so the arc's
+    # garbled-tail phase ranges (end<start, gaps) never reach the model.
+    chapter_start = chapter_start_override if chapter_start_override is not None else src["chapter_start"]
+    chapter_end = chapter_end_override if chapter_end_override is not None else src["chapter_end"]
+    if continuity_hint:
+        user_hints = (user_hints + "\n\n【承接上一阶段结尾】\n" + continuity_hint).strip()
     if chapter_start is None or chapter_end is None:
         raise ValueError("source did not provide a chapter range")
 
@@ -183,6 +191,16 @@ def refine(*, source_kind: str, source_run_id: int, chosen_index: int,
         and c.get("title") and c.get("must_include")
     ]
     chapters.sort(key=lambda c: c["chapter_index"])
+
+    if not persist:
+        # Whole-book projection aggregates phases itself; don't spam OutlineRun list.
+        return {
+            "id": None, "source_kind": source_kind, "source_run_id": source_run_id,
+            "source_chosen_index": chosen_index, "phase_index": phase_index or 0,
+            "phase_name": src.get("phase_name"), "chapter_start": chapter_start,
+            "chapter_end": chapter_end, "chapters": chapters,
+            "cost_usd": resp.cost_usd, "elapsed_ms": resp.elapsed_ms,
+        }
 
     with session_scope() as s:
         row = OutlineRun(
