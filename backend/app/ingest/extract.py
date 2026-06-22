@@ -634,10 +634,23 @@ def extract_one_chapter(chapter_index: int, text: str) -> dict[str, Any]:
     user_text = (f"以下是第 {chapter_index} 章的正文（新续写出的章节）。"
                  f"请按你的职责从中抽取结构化信息。\n\n{text}")
     agents = all_agents()
+    # Idempotent: reuse the batch row if this chapter was extracted before
+    # (re-runs / resume / re-write) — the UNIQUE(chapter_start,chapter_end) would
+    # otherwise blow up on a fresh insert. Entity/world persists already upsert.
     with session_scope() as s:
-        batch = ExtractionBatch(chapter_start=chapter_index, chapter_end=chapter_index + 1,
-                                status="running")
-        s.add(batch); s.flush(); batch_id = batch.id
+        batch = s.execute(
+            select(ExtractionBatch).where(
+                ExtractionBatch.chapter_start == chapter_index,
+                ExtractionBatch.chapter_end == chapter_index + 1,
+            ).limit(1)
+        ).scalar_one_or_none()
+        if batch is None:
+            batch = ExtractionBatch(chapter_start=chapter_index, chapter_end=chapter_index + 1,
+                                    status="running")
+            s.add(batch); s.flush()
+        else:
+            batch.status = "running"; batch.error = None; batch.finished_at = None
+        batch_id = batch.id
     chapter_range = (chapter_index, chapter_index)
     total_cost = 0.0
     try:
