@@ -41,6 +41,7 @@ def init_schema(engine: Engine | None = None) -> None:
         _ensure_column(conn, "entities", "role", "TEXT")
         _ensure_column(conn, "bilingual_draft", "stage", "TEXT DEFAULT ''")
         _ensure_column(conn, "story_projection", "outline_run_ids", "TEXT")
+        _ensure_column(conn, "book_write", "phase_reviews_json", "TEXT")
 
 
 def _ensure_column(conn, table: str, col: str, decl: str) -> None:

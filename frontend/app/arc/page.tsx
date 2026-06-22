@@ -664,15 +664,17 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
   const [bookJob, setBookJob] = useState<any | null>(null);
   const [bookRunning, setBookRunning] = useState(false);
   const [batch, setBatch] = useState(3);
+  const [phaseGate, setPhaseGate] = useState(true);  // C · 每写完1阶段暂停复审
 
   useEffect(() => { setIdx(defaultIndex); }, [defaultIndex]);
 
-  // B · 启动/续写整本书（按 projection 的逐-phase OutlineRun 顺序）
+  // B+C · 启动/续写整本书（阶段 gate 模式：写完 1 阶段→复审→人审通过再续）
   const startWriteBook = async () => {
     if (!job?.id) return;
     setBookRunning(true);
     try {
-      const r = await api.writeBook(job.id, { max_chapters: batch || null });
+      const opts = phaseGate ? { max_phases: 1 } : { max_chapters: batch || null };
+      const r = await api.writeBook(job.id, opts);
       let attempts = 0;
       const t = setInterval(async () => {
         attempts += 1;
@@ -756,30 +758,54 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
               <p className="muted" style={{ fontSize: 12 }}>仍未收束伏笔 id：{v.still_open_foreshadow_ids.join(", ")}</p>
             )}
           </div>
-          {/* B · 滚动地平线整本书写作 */}
+          {/* B+C · 滚动地平线整本书写作 + 阶段 gate */}
           <div className="card" style={{ background: "var(--panel-2)", marginBottom: 12, borderLeft: "3px solid var(--good)" }}>
             <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <strong style={{ fontSize: 13 }}>✍️ 写整本书</strong>
-              <span className="muted" style={{ fontSize: 12 }}>按大纲逐章成稿 → 每章写完回灌记忆 → 下一章读得到。可分批/续写。</span>
-              <label style={{ fontSize: 12, marginLeft: "auto" }}>一次写
-                <input type="number" value={batch} min={0} max={71}
-                  onChange={(e) => setBatch(Math.max(0, +e.target.value || 0))}
-                  style={{ width: 56, margin: "0 4px", padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--panel)", color: "inherit" }} />
-                章（0=全部）
+              <span className="muted" style={{ fontSize: 12 }}>逐章成稿 → 回灌记忆 → 下一章。每写完 1 阶段做跨章复审（连贯/伏笔燃尽/体量）并暂停待你审。</span>
+              <label style={{ fontSize: 12, marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <input type="checkbox" checked={phaseGate} onChange={(e) => setPhaseGate(e.target.checked)} />
+                阶段 gate（每阶段暂停）
               </label>
+              {!phaseGate && (
+                <label style={{ fontSize: 12 }}>一次写
+                  <input type="number" value={batch} min={0} max={120}
+                    onChange={(e) => setBatch(Math.max(0, +e.target.value || 0))}
+                    style={{ width: 52, margin: "0 4px", padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--panel)", color: "inherit" }} />
+                  章
+                </label>
+              )}
               <button onClick={startWriteBook} disabled={bookRunning} style={{ padding: "5px 14px" }}>
-                {bookRunning ? `写作中…${bookJob ? `（${bookJob.chapters_done}/${bookJob.chapters_total} · ${bookJob.stage || ""}）` : ""}`
-                  : (bookJob && bookJob.chapters_done > 0 ? "接着写" : "开始写整本书")}
+                {bookRunning ? `写作中…${bookJob ? `（${bookJob.chapters_done}/${bookJob.chapters_total}·${bookJob.stage || ""}）` : ""}`
+                  : (bookJob && bookJob.status === "paused" ? "✓ 审核通过，继续下一阶段"
+                    : bookJob && bookJob.chapters_done > 0 ? "接着写" : "开始写整本书")}
               </button>
             </div>
             {bookJob && (
               <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
                 进度 {bookJob.chapters_done}/{bookJob.chapters_total} · 状态 {bookJob.status}
                 {(bookJob.log || []).length > 0 && (
-                  <span> · 最近：{(bookJob.log || []).slice(-3).map((l: any) => `第${l.chapter}章(${l.status}${l.reingest ? "·回灌✓" : ""})`).join(" ")}</span>
+                  <span> · 最近：{(bookJob.log || []).slice(-3).map((l: any) => `第${l.chapter}章(${l.status}${l.reingest === "done" ? "·回灌✓" : ""})`).join(" ")}</span>
                 )}
               </div>
             )}
+            {/* C · 阶段复审报告（人审 gate） */}
+            {(bookJob?.phase_reviews || []).map((rv: any, ri: number) => (
+              <div key={ri} style={{ marginTop: 10, padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)",
+                background: "var(--panel)", borderLeft: `3px solid ${rv.verdict === "pass" ? "var(--good)" : "var(--warn)"}` }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+                  阶段复审：{rv.phase_name || `OutlineRun ${rv.outline_run_id}`} ·
+                  <span style={{ color: rv.verdict === "pass" ? "var(--good)" : "var(--warn)" }}> {rv.verdict}</span>
+                </div>
+                {(rv.continuity_issues || []).length > 0 && <div style={{ fontSize: 12, color: "var(--warn)", marginTop: 4 }}>⚠ 连贯：{rv.continuity_issues.join("；")}</div>}
+                {(rv.repetition || []).length > 0 && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>重复：{rv.repetition.join("；")}</div>}
+                {rv.pacing_note && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>节奏/体量：{rv.pacing_note}</div>}
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
+                  伏笔燃尽：收束 {(rv.foreshadow_resolved || []).length} · 计划未收 {(rv.foreshadow_missed || []).length}
+                </div>
+                {(rv.callback_suggestions || []).length > 0 && <div style={{ fontSize: 12, color: "var(--accent-2)", marginTop: 2 }}>💡 {rv.callback_suggestions.join("；")}</div>}
+              </div>
+            ))}
           </div>
 
           {/* full outline grouped by phase */}

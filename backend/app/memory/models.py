@@ -421,6 +421,7 @@ class BookWrite(Base):
     chapters_done = Column(Integer, default=0)
     current_chapter = Column(Integer)
     log_json = Column(JSON)                       # [{chapter, status, attempts, reingest}]
+    phase_reviews_json = Column(JSON)             # 阶段末跨章 holistic 复审 + 伏笔燃尽 + 体量
     error = Column(Text)
     cost_usd = Column(Float, default=0.0)
     created_at = Column(DateTime, default=datetime.utcnow)

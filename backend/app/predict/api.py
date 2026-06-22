@@ -89,16 +89,17 @@ def projection_get(job_id: int):
 
 class WriteBookRequest(BaseModel):
     max_chapters: int | None = None   # 分批：一次写几章（None=全部）
+    max_phases: int | None = None     # 阶段 gate：写满 N 个阶段即暂停待人审（None=不限）
     skip_reviews: bool = False
     reingest: bool = True             # 每章写完同步回灌记忆（A）
 
 
 @router.post("/projections/{projection_id}/write-book")
 def write_book(projection_id: int, body: WriteBookRequest, background: BackgroundTasks):
-    """按 projection 的逐-phase OutlineRun 顺序逐章成稿 + 同步回灌；可续写/分批。"""
+    """按 projection 的逐-phase OutlineRun 顺序逐章成稿 + 同步回灌；可续写/分批/阶段 gate。"""
     jid = bookwriter.create_job(projection_id)
     background.add_task(bookwriter.run_and_store, jid, projection_id,
-                        body.max_chapters, body.skip_reviews, body.reingest)
+                        body.max_chapters, body.skip_reviews, body.reingest, body.max_phases)
     return {"id": jid, "status": "writing"}
 
 
