@@ -448,6 +448,7 @@ def get_settings() -> dict[str, Any]:
     )
     safe_settings["base_url"] = def_ov.get("base_url") or ""
     safe_settings["effective_base_url"] = def_url
+    safe_settings["extract_max_tokens"] = get_extract_max_tokens()
     # Mask any per-provider keys carried in the raw settings dict.
     safe_settings["providers"] = {
         pid: {"api_key": _mask_key((v or {}).get("api_key") or ""),
@@ -467,6 +468,15 @@ def get_settings() -> dict[str, Any]:
              "current": cur["default_model_strong"]},
         ],
     }
+
+
+def get_extract_max_tokens(default: int = 8000) -> int:
+    """抽取 agent 的输出 token 上限(设置页可配)。长章/超长章可调高以免漏抽。"""
+    try:
+        v = int(_settings_cached().get("extract_max_tokens") or default)
+        return max(2000, min(32000, v))
+    except (TypeError, ValueError):
+        return default
 
 
 def get_credentials(model_id: str | None = None) -> tuple[str, str]:
@@ -492,6 +502,12 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
             cur["default_model_fast"] = payload["default_model_fast"].strip() or MODEL_FAST
         if "default_model_strong" in payload and isinstance(payload["default_model_strong"], str):
             cur["default_model_strong"] = payload["default_model_strong"].strip() or MODEL_STRONG
+
+        if "extract_max_tokens" in payload:
+            try:
+                cur["extract_max_tokens"] = max(2000, min(32000, int(payload["extract_max_tokens"])))
+            except (TypeError, ValueError):
+                pass
 
         def _is_masked(v: str) -> bool:
             # Treat the masked placeholder ("****...****") as "no change".

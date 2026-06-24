@@ -24,6 +24,7 @@ class UpdatePayload(BaseModel):
     base_url: str | None = None
     providers: dict[str, dict[str, Any]] | None = None
     agents: dict[str, dict[str, Any]] | None = None
+    extract_max_tokens: int | None = None
 
 
 @router.put("")

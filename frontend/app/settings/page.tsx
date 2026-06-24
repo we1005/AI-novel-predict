@@ -78,6 +78,7 @@ type SettingsBundle = {
   settings: {
     default_model_fast: string;
     default_model_strong: string;
+    extract_max_tokens?: number;
     providers: Record<string, ProviderCred>;   // masked api_key
     agents: Record<string, Override>;
   };
@@ -111,6 +112,7 @@ export default function SettingsPage() {
   const [draft, setDraft] = useState<{
     default_model_fast: string;
     default_model_strong: string;
+    extract_max_tokens: number;
     // Per-provider creds. api_key="" means "no change"; a full new key updates it.
     providers: Record<string, ProviderCred>;
     agents: Record<string, Override>;
@@ -136,6 +138,7 @@ export default function SettingsPage() {
       setDraft({
         default_model_fast: b.settings.default_model_fast,
         default_model_strong: b.settings.default_model_strong,
+        extract_max_tokens: b.settings.extract_max_tokens ?? 8000,
         providers: emptyProviderDraft(b.providers),
         agents: { ...b.settings.agents },
       });
@@ -152,6 +155,7 @@ export default function SettingsPage() {
     if (!bundle || !draft) return false;
     if (draft.default_model_fast !== bundle.settings.default_model_fast) return true;
     if (draft.default_model_strong !== bundle.settings.default_model_strong) return true;
+    if (draft.extract_max_tokens !== (bundle.settings.extract_max_tokens ?? 8000)) return true;
     for (const p of bundle.providers) {
       const d = draft.providers[p.id];
       if (!d) continue;
@@ -185,6 +189,7 @@ export default function SettingsPage() {
       const payload: any = {
         default_model_fast: draft.default_model_fast,
         default_model_strong: draft.default_model_strong,
+        extract_max_tokens: draft.extract_max_tokens,
         agents: draft.agents,
       };
       if (Object.keys(providers).length) payload.providers = providers;
@@ -193,6 +198,7 @@ export default function SettingsPage() {
       setDraft({
         default_model_fast: updated.settings.default_model_fast,
         default_model_strong: updated.settings.default_model_strong,
+        extract_max_tokens: updated.settings.extract_max_tokens ?? 8000,
         providers: emptyProviderDraft(updated.providers),
         agents: { ...updated.settings.agents },
       });
@@ -240,6 +246,7 @@ export default function SettingsPage() {
           setDraft({
             default_model_fast: updated.settings.default_model_fast,
             default_model_strong: updated.settings.default_model_strong,
+            extract_max_tokens: updated.settings.extract_max_tokens ?? 8000,
             providers: emptyProviderDraft(updated.providers),
             agents: { ...updated.settings.agents },
           });
@@ -378,6 +385,16 @@ export default function SettingsPage() {
             providers={bundle.providers}
             onChange={(id) => setLaneDefault("strong", id)}
           />
+        </div>
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <ExperimentOutlined />
+          <span style={{ fontSize: 14, fontWeight: 600 }}>抽取输出上限 (max_tokens)</span>
+          <InputNumber min={2000} max={32000} step={1000}
+            value={draft.extract_max_tokens}
+            onChange={(v) => setDraft((d) => d ? { ...d, extract_max_tokens: Number(v) || 8000 } : d)} />
+          <span className="muted" style={{ fontSize: 12 }}>
+            6 个抽取 agent 单次输出的 token 上限。章节越长越要调高,否则伏笔/情节会被截断漏抽(超长章建议 16000–20000)。
+          </span>
         </div>
       </div>
 

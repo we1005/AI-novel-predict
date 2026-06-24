@@ -462,6 +462,12 @@ def _extract_loads_json(s: str) -> dict[str, Any]:
 def _agent_call(*, name: str, system_blocks: list[dict[str, Any]], user_text: str,
                 tool: dict[str, Any], system_text: str) -> tuple[dict[str, Any], float]:
     sys_blocks = [{"type": "text", "text": system_text}, *system_blocks]
+    # 抽取输出上限：设置页可配(extract_max_tokens)。长章/超长章调高以免漏抽。
+    try:
+        from ..settings.store import get_extract_max_tokens
+        _max_tok = get_extract_max_tokens(8000)
+    except Exception:  # noqa: BLE001
+        _max_tok = 8000
     # Happy path: forced tool_choice. Works first-try on small/medium context.
     try:
         resp = llm.call(
@@ -471,8 +477,7 @@ def _agent_call(*, name: str, system_blocks: list[dict[str, Any]], user_text: st
             messages=[{"role": "user", "content": user_text}],
             tools=[tool],
             tool_choice={"type": "tool", "name": tool["name"]},
-            # 8000：4096 对一批多章会截断抽取（列不全实体/伏笔）。
-            max_tokens=8000,
+            max_tokens=_max_tok,
             temperature=0.2,
         )
         if resp.tool_use:
@@ -498,7 +503,7 @@ def _agent_call(*, name: str, system_blocks: list[dict[str, Any]], user_text: st
         model=MODEL_FAST,
         system=[{"type": "text", "text": system_text + hint}, *system_blocks],
         messages=[{"role": "user", "content": user_text}],
-        max_tokens=8000,
+        max_tokens=_max_tok,
         temperature=0.2,
     )
     return _extract_loads_json(resp2.text), resp2.cost_usd
