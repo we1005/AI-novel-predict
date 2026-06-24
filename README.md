@@ -19,6 +19,9 @@
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-0.5-FF6B6B?logo=databricks&logoColor=white)](https://www.trychroma.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
+[![在线阅读](https://img.shields.io/badge/在线阅读-墨笔书阁_·_天之炽-9a2d1f?logo=netlify&logoColor=white)](https://mobi-ai-novel.netlify.app/)
+
+[**📖 在线 Demo**](https://mobi-ai-novel.netlify.app/) ·
 [**架构文档**](墨笔-agent架构设计docs/00-总览.md) ·
 [快速开始](#-快速开始) ·
 [特性](#-核心特性) ·
@@ -26,6 +29,14 @@
 [技术栈](#-技术栈)
 
 </div>
+
+---
+
+## 📖 在线 Demo · 墨笔书阁
+
+**<https://mobi-ai-novel.netlify.app/>** —— 用墨笔把江南《天之炽》从第 157 章一路续写到结局（至第 260 章，约 58.5 万字）的成品阅读站：书架首页 → 书籍简介与大纲（清晰区分原著 1–156 章与 AI 续写 157–260 章）→ 左目录右正文的纯中文阅读体验。
+
+> 续写部分由「写 → 真三审(剧情/一致性/文风) → 回灌记忆」滚动地平线流程生成，仿写原作者文风、对齐原著单章体量，逐章进 git 可追溯。站点源码与数据见 [`结果/`](结果/)。
 
 ---
 
