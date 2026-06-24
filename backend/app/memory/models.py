@@ -338,8 +338,39 @@ class StyleProfile(Base):
     sampled_chapters = Column(JSON, default=list)
     mimic_enabled = Column(Integer, default=0)   # 0/1 — mimic author voice in续写
     bilingual = Column(Integer, default=0)       # 0/1 — dual ZH/EN continuation
+    # 本书原著单章中位字数（从 corpus 统计得出，按书而异）——续写 word_target 的书本级默认值。
+    median_chapter_chars = Column(Integer)
+    # 各场景类型的原著真实范例段落 {combat:[...], dialogue:[...], scenery:[...], psychology:[...]}
+    # ——写某类场景时作为 few-shot 范文注入 writer，让它照着原作语感写（"给范文"而非只"讲道理"）。
+    scene_exemplars_json = Column(JSON)
+    # 世界观语域卡：技术/年代基准 + 各阵营文化语域，供「时代语域」第4审逐元素归属判定。
+    register_card_json = Column(JSON)
+    era_check_enabled = Column(Integer, default=0)      # 时代错置层（universal，对所有阵营一视同仁）
+    culture_check_enabled = Column(Integer, default=0)  # 阵营文化语域层（按词的归属角色判）
     model = Column(String)
     cost_usd = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class EditSuggestion(Base):
+    """一条润色建议（局部就地替换）。落库以便刷新后仍在 + 审计 + 纳入版本控制。
+
+    锚点失效检测：base_hash 记录生成时中文定稿的哈希；展示/应用时若 quote 在**当前**
+    正文里找不到（原文被改过），该条标 stale、禁止应用——避免错位乱改。
+    """
+    __tablename__ = "edit_suggestions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    draft_id = Column(Integer, index=True)
+    chapter_index = Column(Integer, index=True)
+    batch_id = Column(String, index=True)      # 一次生成run分组
+    base_hash = Column(String)                 # 生成时 final_text 的哈希
+    quote = Column(Text)
+    replacement = Column(Text)
+    category = Column(String)
+    reason = Column(String)
+    # pending | accepted | applied | rejected | stale | superseded
+    status = Column(String, default="pending", index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
 

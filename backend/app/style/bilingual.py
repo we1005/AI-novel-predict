@@ -115,6 +115,48 @@ def _merge_zh(zh_orig: str, zh_from_en: str) -> tuple[str, float]:
     return (r.text or "").strip(), r.cost_usd
 
 
+def bilingual_from_zh(zh_text: str, chapter_n: int, *, persist: bool = True) -> dict[str, Any]:
+    """把**已过审的中文定稿**交织出英文版（中英对照）。
+
+    与 `bilingual_write` 的区别：不重新创作中文、不 merge——已过审的中文是唯一事实源，
+    保持不动作为 `final_zh`；只用 `_en_draft` 锚定它再创作出地道英文 `final_en`
+    （非直译，保留原作者笔法、把中文音译西名还原成西文）。这是接入主流程的
+    "每章自动出中英对照"的核心：中文先真三审通过，再交织英文，两边绝不跑偏。
+    """
+    setting = None
+    try:
+        setting = continuation_setting()
+    except Exception:  # noqa: BLE001
+        setting = None
+    en, cost = _en_draft(zh_text, setting, chapter_n)
+    res = {"final_zh": zh_text, "final_en": en, "cost_usd": cost,
+           "drafts": {"en_recreate": en}}
+    if persist and en:
+        from datetime import datetime
+        from sqlalchemy import select, desc
+        from ..db import session_scope
+        from ..memory.models import BilingualDraft
+        with session_scope() as s:
+            # upsert：同章已有 done 行就覆盖，避免重复
+            row = s.execute(select(BilingualDraft).where(
+                BilingualDraft.chapter == chapter_n).order_by(desc(BilingualDraft.id))
+            ).scalars().first()
+            if row is None:
+                row = BilingualDraft(chapter=chapter_n)
+                s.add(row)
+            row.brief = f"从第{chapter_n}章已过审中文定稿交织英文"
+            row.final_zh = zh_text
+            row.final_en = en
+            row.drafts_json = res["drafts"]
+            row.cost_usd = cost
+            row.status = "done"
+            row.stage = "done"
+            row.updated_at = datetime.utcnow()
+            s.flush()
+            res["id"] = row.id
+    return res
+
+
 def create_job(brief: str, after_chapter: int, chapter_n: int | None) -> int:
     """Insert a 'writing' BilingualDraft row, return its id (for polling)."""
     from datetime import datetime

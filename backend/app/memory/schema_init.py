@@ -42,6 +42,11 @@ def init_schema(engine: Engine | None = None) -> None:
         _ensure_column(conn, "bilingual_draft", "stage", "TEXT DEFAULT ''")
         _ensure_column(conn, "story_projection", "outline_run_ids", "TEXT")
         _ensure_column(conn, "book_write", "phase_reviews_json", "TEXT")
+        _ensure_column(conn, "style_profile", "median_chapter_chars", "INTEGER")
+        _ensure_column(conn, "style_profile", "scene_exemplars_json", "TEXT")
+        _ensure_column(conn, "style_profile", "register_card_json", "TEXT")
+        _ensure_column(conn, "style_profile", "era_check_enabled", "INTEGER DEFAULT 0")
+        _ensure_column(conn, "style_profile", "culture_check_enabled", "INTEGER DEFAULT 0")
 
 
 def _ensure_column(conn, table: str, col: str, decl: str) -> None:

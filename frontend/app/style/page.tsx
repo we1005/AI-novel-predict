@@ -29,6 +29,9 @@ type StyleData = {
   mimic_enabled?: boolean;
   bilingual?: boolean;
   is_western_setting?: boolean;
+  era_check_enabled?: boolean;
+  culture_check_enabled?: boolean;
+  has_register_card?: boolean;
   model?: string;
   cost_usd?: number;
   updated_at?: string;
@@ -79,13 +82,21 @@ export default function StylePage() {
     }
   };
 
-  const toggle = async (field: "mimic_enabled" | "bilingual", val: boolean) => {
+  const toggle = async (field: "mimic_enabled" | "bilingual" | "era_check_enabled" | "culture_check_enabled", val: boolean) => {
     try {
       const d = await api.styleToggle({ [field]: val });
       setData(d);
     } catch (e) {
       message.error("切换失败：" + String(e));
     }
+  };
+
+  const [cardBusy, setCardBusy] = useState(false);
+  const extractCard = async () => {
+    setCardBusy(true);
+    try { const r = await api.styleRegisterCard(8); message.success("语域卡已抽取：" + (r.factions || []).join("、")); load(); }
+    catch (e) { message.error("抽取失败：" + String(e)); }
+    finally { setCardBusy(false); }
   };
 
   // 续写模式预设：一键设定 mimic / bilingual 开关组合（一套可组合引擎 + 命名预设，
@@ -161,6 +172,38 @@ export default function StylePage() {
                 <span className="muted" style={{ fontSize: 11, cursor: "help" }}>(?)</span>
               </Tooltip>
             </div>
+          </div>
+        )}
+
+        {/* 时代语域审查（第4审 · 默认关 · 每本书可配）*/}
+        {p && (
+          <div style={{ marginTop: 16, padding: "12px 14px", background: "var(--panel-2)", borderRadius: 8, borderLeft: "3px solid #f7768e" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+              <strong style={{ fontSize: 13 }}>🏛 时代语域审查（第4审 · 默认关）</strong>
+              <button onClick={extractCard} disabled={cardBusy} style={{ padding: "2px 10px", fontSize: 12 }}>
+                {cardBusy ? "抽取中…" : data?.has_register_card ? "🔄 重抽世界观语域卡" : "📜 抽取世界观语域卡"}
+              </button>
+              {data?.has_register_card ? <Tag color="green" style={{ fontSize: 10 }}>已有语域卡</Tag> : <Tag style={{ fontSize: 10 }}>无语域卡（需先抽取）</Tag>}
+            </div>
+            <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Switch checked={!!data?.era_check_enabled} disabled={!data?.has_register_card} onChange={(v) => toggle("era_check_enabled", v)} />
+                <span style={{ fontSize: 13 }}>时代错置层</span>
+                <Tooltip title="与阵营无关的硬基线：蒸汽朋克世界里谁都不能冒出现代物/词/网络语（手机、塑料、OK…）。命中硬伤触发返工。">
+                  <span className="muted" style={{ fontSize: 11, cursor: "help" }}>(?)</span>
+                </Tooltip>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Switch checked={!!data?.culture_check_enabled} disabled={!data?.has_register_card} onChange={(v) => toggle("culture_check_enabled", v)} />
+                <span style={{ fontSize: 13 }}>阵营文化语域层</span>
+                <Tooltip title="按词的归属角色判：太监属东方阵营在西方场景也对；西方角色说东亚黑话才算错。东西方同台逐元素各判各的。">
+                  <span className="muted" style={{ fontSize: 11, cursor: "help" }}>(?)</span>
+                </Tooltip>
+              </div>
+            </div>
+            <p className="muted" style={{ fontSize: 11, marginTop: 8, marginBottom: 0 }}>
+              纯单一文化的书（纯西方蒸汽朋克 / 纯南宋仙侠）建议开；东西方混合的书（如天之炽）语域卡需覆盖到各阵营再开，否则可能漏判东方阵营。
+            </p>
           </div>
         )}
 

@@ -133,6 +133,108 @@ def analyze(sample_n: int = 8) -> dict[str, Any]:
     return get_profile()
 
 
+def extract_scene_exemplars(sample_n: int = 6) -> dict[str, Any]:
+    """从原著采样章节里抽取**各场景类型的真实范例段落**（verbatim），存进
+    style_profile.scene_exemplars_json。写作时按本章场景类型注入同类范文当 few-shot，
+    让 writer 照着原作语感写——比只给"分场景笔法"的文字描述有效得多。
+    """
+    samples = _sample_chapters(sample_n, per_chars=5000)
+    if not samples:
+        raise RuntimeError("no chapters — split + ingest first")
+    corpus_text = "\n\n".join(f"【第{s['chapter']}章片段】\n{s['text']}" for s in samples)
+    schema = {"type": "object", "properties": {k: {"type": "array", "items": {"type": "string"}}
+              for k in ("combat", "dialogue", "scenery", "psychology")}}
+    sys = (
+        "你在为'模仿原作者文风'挑选范文。从下面原著片段中，为每个场景类型各摘出 1-2 段"
+        "**最能代表该作者笔法的连续原文**（逐字摘录，每段 150-400 字，不要改写、不要拼接）：\n"
+        "- combat 打斗/动作场面\n- dialogue 对话场面\n- scenery 景物/环境描写\n- psychology 心理/情绪刻画\n"
+        "找不到某类就给空数组。只输出 JSON，键为上述四类，值为原文段落字符串数组。\n"
+        "# 输出格式（严格）\n只输出一个 JSON 对象，无其它文字、无 markdown 围栏，符合此 schema：\n"
+        + json.dumps(schema, ensure_ascii=False)
+    )
+    resp = llm.call(agent="style.exemplars", model=MODEL_STRONG, system=sys,
+                    messages=[{"role": "user", "content": corpus_text}],
+                    max_tokens=8000, temperature=0.2)
+    def _loads(t: str) -> dict:
+        t = re.sub(r"```json|```", "", t or "").strip()
+        try:
+            return json.loads(t)
+        except Exception:
+            try:
+                from json_repair import repair_json
+                d = json.loads(repair_json(t)); return d if isinstance(d, dict) else {}
+            except Exception:
+                return {}
+    ex = _loads(resp.text or "")
+    # 规整：每类最多 2 段、每段截到 500 字
+    clean = {}
+    for k in ("combat", "dialogue", "scenery", "psychology"):
+        vals = ex.get(k) or []
+        if isinstance(vals, str):
+            vals = [vals]
+        clean[k] = [str(v).strip()[:500] for v in vals if str(v).strip()][:2]
+    with session_scope() as s:
+        row = s.execute(select(StyleProfile).limit(1)).scalar_one_or_none()
+        if row is None:
+            row = StyleProfile(); s.add(row)
+        row.scene_exemplars_json = clean
+        row.updated_at = datetime.utcnow()
+    return {"counts": {k: len(v) for k, v in clean.items()}, "cost_usd": resp.cost_usd}
+
+
+def extract_register_card(sample_n: int = 8) -> dict[str, Any]:
+    """抽取「世界观语域卡」：技术/年代基准 + 各阵营文化语域，供「时代语域」第4审逐元素判定。
+    存进 style_profile.register_card_json。"""
+    samples = _sample_chapters(sample_n, per_chars=4000)
+    if not samples:
+        raise RuntimeError("no chapters — split + ingest first")
+    corpus_text = "\n\n".join(f"【第{s['chapter']}章】\n{s['text']}" for s in samples)
+    schema = {
+        "type": "object",
+        "properties": {
+            "era_tech_level": {"type": "string", "description": "技术/年代基准，如'蒸汽朋克·类第一次工业革命，无电力/塑料/抗生素/现代通讯'"},
+            "baseline_register": {"type": "string", "description": "世界整体/旁白基准语域(书面化程度、雅俗)"},
+            "forbidden_universal": {"type": "array", "items": {"type": "string"}, "description": "对所有阵营都禁的词类(现代科技/网络流行语/现代口语腔等)，给具体例子"},
+            "factions": {"type": "array", "items": {"type": "object", "properties": {
+                "name": {"type": "string"},
+                "culture": {"type": "string", "description": "如'西欧贵族/教廷''东亚朝廷'"},
+                "register_notes": {"type": "string", "description": "该阵营该有的用词/称谓/礼仪特征"},
+                "signature_terms": {"type": "array", "items": {"type": "string"}, "description": "该阵营专属词/称谓示例"},
+            }}},
+        },
+    }
+    sys = (
+        "你在为一本架空小说建立『世界观语域卡』，用于审查续写是否有时代错置或文化语域错置。\n"
+        "请从原著片段中提炼：① 世界的技术/年代基准(决定哪些现代物品/概念绝不能出现)；"
+        "② 世界整体/旁白的基准语域；③ 对所有阵营都禁的词类(现代科技、网络流行语、现代口语腔)；"
+        "④ 各**阵营/文化**及其各自的语域特征与专属词(如有东西方/多文化并存，逐个列出)。\n"
+        "# 输出格式（严格）\n只输出一个 JSON 对象，无其它文字、无 markdown 围栏，符合此 schema：\n"
+        + json.dumps(schema, ensure_ascii=False)
+    )
+    resp = llm.call(agent="style.register_card", model=MODEL_STRONG, system=sys,
+                    messages=[{"role": "user", "content": corpus_text}],
+                    max_tokens=6000, temperature=0.2)
+    def _loads(t: str) -> dict:
+        t = re.sub(r"```json|```", "", t or "").strip()
+        try:
+            return json.loads(t)
+        except Exception:
+            try:
+                from json_repair import repair_json
+                d = json.loads(repair_json(t)); return d if isinstance(d, dict) else {}
+            except Exception:
+                return {}
+    card = _loads(resp.text or "")
+    with session_scope() as s:
+        row = s.execute(select(StyleProfile).limit(1)).scalar_one_or_none()
+        if row is None:
+            row = StyleProfile(); s.add(row)
+        row.register_card_json = card
+        row.updated_at = datetime.utcnow()
+    return {"factions": [f.get("name") for f in (card.get("factions") or [])],
+            "era": card.get("era_tech_level", "")[:80], "cost_usd": resp.cost_usd}
+
+
 def get_profile() -> dict[str, Any] | None:
     with session_scope() as s:
         row = s.execute(select(StyleProfile).order_by(StyleProfile.id.desc()).limit(1)).scalar_one_or_none()
@@ -146,13 +248,19 @@ def get_profile() -> dict[str, Any] | None:
             "mimic_enabled": bool(row.mimic_enabled),
             "bilingual": bool(row.bilingual),
             "is_western_setting": bool((row.profile_json or {}).get("is_western_setting")),
+            "register_card": row.register_card_json or None,
+            "has_register_card": bool(row.register_card_json),
+            "era_check_enabled": bool(row.era_check_enabled),
+            "culture_check_enabled": bool(row.culture_check_enabled),
             "model": row.model,
             "cost_usd": row.cost_usd,
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
         }
 
 
-def set_toggles(mimic_enabled: bool | None = None, bilingual: bool | None = None) -> dict[str, Any] | None:
+def set_toggles(mimic_enabled: bool | None = None, bilingual: bool | None = None,
+                era_check_enabled: bool | None = None,
+                culture_check_enabled: bool | None = None) -> dict[str, Any] | None:
     with session_scope() as s:
         row = s.execute(select(StyleProfile).order_by(StyleProfile.id.desc()).limit(1)).scalar_one_or_none()
         if row is None:
@@ -161,6 +269,10 @@ def set_toggles(mimic_enabled: bool | None = None, bilingual: bool | None = None
             row.mimic_enabled = 1 if mimic_enabled else 0
         if bilingual is not None:
             row.bilingual = 1 if bilingual else 0
+        if era_check_enabled is not None:
+            row.era_check_enabled = 1 if era_check_enabled else 0
+        if culture_check_enabled is not None:
+            row.culture_check_enabled = 1 if culture_check_enabled else 0
         row.updated_at = datetime.utcnow()
     return get_profile()
 

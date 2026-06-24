@@ -76,7 +76,10 @@ def build_writer_system(mimic_guide: str | None = None) -> str:
         "请严格据此行文（用词、句式、节奏、分场景笔法、视角与悬念处理都向它看齐）：\n\n"
         + mimic_guide
         + "\n\n# 情节要点\n- outline.must_include 的每条都要在本章自然发生（融进剧情，不要生硬罗列）。\n"
-        + "- 按 outline.pacing 与上述叙事节奏指导推进；章末按原书习惯留钩子。\n\n"
+        + "- 按 outline.pacing 与上述叙事节奏指导推进；章末按原书习惯留钩子。\n"
+        + "- **叙事密度与篇幅对齐原著**：原作单章靠场景的完整展开（环境、对话、动作、心理"
+        "层层铺陈）撑起厚度。续写向这个密度看齐（目标字数见正文要求），既不要把该铺开的"
+        "场景压成概述，也不要为凑长度而注水拖沓。\n\n"
         + _WRITER_HARD_RULES
         + "\n\n# 返工时：优先修复点名的设定/剧情硬伤；文风只在反馈明确指出时调整，保持对原作者风格的模仿，别整篇推翻。"
     )
@@ -90,11 +93,13 @@ def build_writer_user_message(
     previous_attempt: dict | None,
     chapter_index: int,
     prev_chapter_tail: str | None = None,
+    scene_exemplars: str = "",
 ) -> str:
     """Build the per-call user message. style_refs is a list of FTS hits with
     keys ``chapter`` ``title`` ``snip``. previous_attempt has the prior prose
     and editor feedback when revising. prev_chapter_tail is the ending of the
-    immediately-preceding generated chapter (serial continuity)."""
+    immediately-preceding generated chapter (serial continuity). scene_exemplars
+    is a few-shot block of real same-scene-type passages from the original."""
 
     import json
 
@@ -117,6 +122,9 @@ def build_writer_user_message(
     else:
         parts.append("（暂无可用参考片段，按原作文风感觉自由发挥）")
 
+    if scene_exemplars:
+        parts.append(scene_exemplars)
+
     if is_revision and previous_attempt:
         parts.append("\n\n# 上一稿（需返工）\n")
         parts.append(previous_attempt.get("prose") or "")
@@ -133,8 +141,26 @@ def build_writer_user_message(
                 sug = it.get("suggestion") or ""
                 parts.append(f"- 问题处「{quote[:80]}」 → {sug[:80]}")
 
+    _wt = chapter_outline.get("word_target")  # 书本级中位字数已在 pipeline 兜底注入
     parts.append(
-        "\n\n请按上述大纲与风格参考，写出本章正文。"
-        f"目标字数 {chapter_outline.get('word_target', 3000)}。"
+        "\n\n请按上述大纲与风格参考，写出本章正文。\n"
+        "# 篇幅与叙事密度\n"
+        + (f"- 目标字数 **约 {_wt} 字**（该书原著单章的中位字数），以它为重心来安排本章的场景容量；"
+           "正常落在该值上下即可，不必刻意冲长。\n" if _wt else "")
+        + "- 叙事密度向原著看齐：场景、对话、动作、环境细节按原著的展开程度来写——"
+        "**既不要为压字数而跳写、概述，也不要为凑长度而注水、拖沓**。写到该写的厚度，"
+        "自然收尾、留钩子。"
+    )
+    # 硬禁用套路词：放在最末（最显著）。这些是中文网文写人物反应的口水套路，
+    # 反复出现就露怯、且与原作者克制笔法相悖。强约束 + 给替代方向。
+    parts.append(
+        "\n\n# 禁用套路词（硬约束 · 出稿前自查一遍，命中就换掉）\n"
+        "写人物的震惊/紧张/痛苦/警觉，**禁止**使用下列烂大街的套路短语：\n"
+        "瞳孔骤然收缩 / 瞳孔猛地一缩 / 瞳孔收缩 / 呼吸一滞 / 呼吸停了一拍 / 后颈一凉 / "
+        "心头一震 / 心头一紧 / 倒吸一口凉气 / 头皮发麻 / 血液仿佛凝固 / 后背发凉 / "
+        "嘴角勾起一抹（弧度/冷笑）/ 空气仿佛凝固 / 死寂 / 不寒而栗 / 冷汗直冒。\n"
+        "改用**属于此情此景的具体动作或感官细节**来写反应——例如：手指无声扣紧了舟沿、"
+        "喉头动了动却没出声、目光钉在某处挪不开、下意识屏住半口气、指节抵着桌面慢慢收拢。"
+        "同一章内、相邻几章间，有意识地避开刚用过的那个反应写法。"
     )
     return "\n".join(parts)

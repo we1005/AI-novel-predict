@@ -286,7 +286,8 @@ EDITOR_SYSTEM = """你是编辑总负责人。三位审查员（文风/剧情/�
 # Lanes whose issues count as "hard" — only these can force a revision.
 # Style is deliberately excluded: it's advisory, never a gate (this is the fix
 # for the style-reviewer oscillation that used to thrash the writer).
-HARD_LANES = {"plot", "consistency"}
+# era_register：时代语域审查（默认关；开启才会产出 issue，故加进硬伤 lane 不影响未开启的书）。
+HARD_LANES = {"plot", "consistency", "era_register"}
 
 
 def _collect_issues(reviews: dict[str, dict]) -> list[dict]:
@@ -303,14 +304,51 @@ def _must_include_misses(reviews: dict[str, dict]) -> list[dict]:
     return [c for c in cov if isinstance(c, dict) and c.get("covered") is False]
 
 
+# 报错痕迹：reviewer 调用失败（多为限流 429）时 overall 里会带这些标记。
+_REVIEWER_ERROR_MARKERS = ("reviewer error", "429", "ratelimit", "toomanyrequests", "quota")
+
+
+def hard_reviewer_errored(reviews: dict[str, dict]) -> bool:
+    """硬审（剧情/一致性）是否因报错而**无有效结论**。
+
+    这是修复"假过审"的核心判据：reviewer 撞 429 时输出 `{"issues": [], ...}`，
+    若只数 issue 会被当成"零问题=干净放行"。所以必须显式识别"硬审报错/缺失"，
+    据此**绝不 approve**。文风（style）报错不算——它本就不阻断返工。
+    """
+    # plot/consistency 是**必跑**的硬审：缺失或报错都算"无有效结论"。
+    for dim in ("plot", "consistency"):
+        d = reviews.get(dim)
+        if not d:  # 完全缺失 = 没审 = 不可用
+            return True
+        overall = str(d.get("overall", "")).lower()
+        if any(m in overall for m in _REVIEWER_ERROR_MARKERS):
+            return True
+    # era_register 是**可选**第4审(默认关)：只有当它确实运行了、且报错时才算不可用；
+    # 没运行(reviews 里没有它)是正常的，绝不能当成"报错"——否则每章都会被误杀。
+    er = reviews.get("era_register")
+    if er:
+        overall = str(er.get("overall", "")).lower()
+        if any(m in overall for m in _REVIEWER_ERROR_MARKERS):
+            return True
+    return False
+
+
 def gate_decision(reviews: dict[str, dict], attempt: int, max_attempts: int) -> str:
-    """Authoritative, deterministic approve/revise/ship decision.
+    """Authoritative, deterministic approve/revise/ship/blocked decision.
 
     Only plot+consistency blockers, must_include misses, or ≥3 plot+consistency
     majors force a revision. Style issues never gate. This is applied on top of
     the (LLM) editor's decision so behaviour is predictable regardless of how
     the editor model feels about prose on any given run.
+
+    新增："blocked" —— 当硬审（剧情/一致性）因报错（多为 429 限流）无有效结论时，
+    我们**没有依据判定本章干净**，于是绝不放行：未到上限就 revise（重审），
+    到上限就 blocked（非通过，交上层退避重试，而不是假盖章 approve）。
     """
+    # 硬审无有效结论 → 不能放行（修复"429 被当成零问题"的假过审根因）。
+    if hard_reviewer_errored(reviews):
+        return "blocked" if attempt >= max_attempts else "revise"
+
     issues = _collect_issues(reviews)
     hard = [i for i in issues if i.get("lane") in HARD_LANES]
     blockers = [i for i in hard if i.get("severity") == "blocker"]
@@ -356,3 +394,56 @@ def heuristic_decision(reviews: dict[str, dict], attempt: int, max_attempts: int
         "revision_brief": brief,
         "rationale": f"启发式 fallback（仅硬伤触发返工）: decision={decision} attempt={attempt}",
     }
+
+
+# --------------------------------------------------------------------------- 时代语域审查（第4审 · 默认关）
+ERA_REGISTER_REVIEWER_TOOL = {
+    "name": "report_era_register_issues",
+    "description": "Flag anachronisms and cultural-register mismatches against the world's era/factions.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "issues": {"type": "array", "items": ISSUE_ITEM},
+            "overall": {"type": "string", "description": "≤60 字总评——本章时代/语域整体如何"},
+        },
+        "required": ["issues", "overall"],
+    },
+}
+
+
+def build_era_register_system(register_card: dict, era_on: bool, culture_on: bool) -> str:
+    """构建「时代语域」审查员 system。核心原则：**按词的归属角色判，不按场景分阵营**。
+
+    两层（按开关启用）：
+    - 时代错置(era)：与阵营无关的硬基线——蒸汽朋克世界里谁都不能出现现代物/词/网络语。
+    - 文化语域(culture)：按**说话人/物品所属文化**判（太监属通天宫→处处可；西方骑士说东亚黑话→错）。
+    旁白(第三人称叙述)用世界整体基准语域，不归任何单一阵营。
+    """
+    import json as _json
+    layers = []
+    if era_on:
+        layers.append(
+            "【层1·时代错置（与阵营无关的硬基线，谁说都不行）】\n"
+            "本世界的技术/年代基准见语域卡。任何超出该基准的物品/概念/词汇都算硬伤："
+            "现代科技(手机/塑料/抗生素/电子/网络)、现代制度名词、现代网络流行语、"
+            "明显现代的口语腔（如'OK''没问题''搞定''拜拜'）。旁白与对话同此标准。"
+        )
+    if culture_on:
+        layers.append(
+            "【层2·文化语域（按归属角色判，不按场景）】\n"
+            "每个可疑词/物/礼仪，判断它**属于哪个角色/阵营的文化**，再对照语域卡那个阵营的语域："
+            "属于该文化的词在任何场景都对（如通天宫太监在西方大殿里也对）；"
+            "**跨文化错置**才是问题（西方角色嘴里冒出东亚专属词/成语，或反之）。"
+            "对话/角色 POV 用说话人所属阵营语域；旁白用世界整体基准语域。"
+            "一章里东西方同台时，逐元素归属各判各的，不要因为'这一场在西方'就否定东方角色的用词。"
+        )
+    return (
+        "你是「时代语域」审查员。只判**时代错置**与**文化语域错置**，不评剧情、不评文风优劣。\n\n"
+        "# 世界观语域卡（判定基准）\n" + _json.dumps(register_card or {}, ensure_ascii=False) + "\n\n"
+        + "\n\n".join(layers) + "\n\n"
+        "# 判定与严重度\n"
+        "- 明确的时代错置/跨文化硬错 → severity=blocker 或 major（会触发返工）。\n"
+        "- 拿不准、偏主观的'是否略现代' → severity=minor（仅提示，不返工）。\n"
+        "- 没问题就返回空 issues。每条 issue 的 quote 必须逐字摘自正文，suggestion 给出符合该角色文化/时代的替换。\n"
+        "宁可漏报也不要误报：属于某阵营文化的正确用词，绝不要因为它'像中国词/像西方词'就标成问题。"
+    )

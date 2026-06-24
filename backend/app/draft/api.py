@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from . import pipeline
+from . import suggest as _suggest
 
 router = APIRouter()
 
@@ -29,8 +30,41 @@ def write(req: WriteRequest):
 
 
 @router.get("/drafts")
-def list_drafts(limit: int = 50):
+def list_drafts(limit: int = 800):
     return pipeline.list_drafts(limit=limit)
+
+
+class SuggestReq(BaseModel):
+    draft_id: int
+
+
+@router.post("/suggest-edits")
+def suggest_edits(req: SuggestReq):
+    """扫描中文定稿出"就地替换"建议(不改原文) → 落库 → 返回(含实时锚点状态)。"""
+    try:
+        return _suggest.suggest_edits(req.draft_id)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, str(e)[:240])
+
+
+@router.get("/suggestions")
+def get_suggestions(draft_id: int):
+    """读已存的最近一批建议 + 实时重算锚点状态(对照当前定稿)。刷新后仍在。"""
+    return _suggest.list_suggestions(draft_id)
+
+
+class ApplyEditsReq(BaseModel):
+    draft_id: int
+    accepted_ids: list[int]   # 用户勾选采纳的建议 id
+
+
+@router.post("/apply-edits")
+def apply_edits(req: ApplyEditsReq):
+    """把采纳的建议(按 id)替换进中文定稿；应用时再校验锚点，失效的计入 failed。落库 + commit。"""
+    try:
+        return _suggest.apply_edits(req.draft_id, req.accepted_ids)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, str(e)[:240])
 
 
 @router.get("/drafts/{draft_id}")

@@ -1,0 +1,10 @@
+# Netlify：纯静态站，无需构建。发布目录就是本文件夹。
+[build]
+  publish = "."
+  command = ""
+
+# 安全/缓存(可选)
+[[headers]]
+  for = "/data/*"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"

@@ -31,14 +31,38 @@ def analyze(body: AnalyzeReq | None = None):
 class ToggleReq(BaseModel):
     mimic_enabled: bool | None = None
     bilingual: bool | None = None
+    era_check_enabled: bool | None = None
+    culture_check_enabled: bool | None = None
 
 
 @router.put("/toggle")
 def toggle(body: ToggleReq):
-    out = pipeline.set_toggles(mimic_enabled=body.mimic_enabled, bilingual=body.bilingual)
+    out = pipeline.set_toggles(mimic_enabled=body.mimic_enabled, bilingual=body.bilingual,
+                               era_check_enabled=body.era_check_enabled,
+                               culture_check_enabled=body.culture_check_enabled)
     if out is None:
         raise HTTPException(404, "no style profile yet — analyze first")
     return out
+
+
+@router.post("/register-card")
+def register_card(body: AnalyzeReq | None = None):
+    """抽取「世界观语域卡」(技术/年代基准 + 各阵营文化语域)，供「时代语域」第4审使用。"""
+    n = body.sample_n if body else 8
+    try:
+        return pipeline.extract_register_card(sample_n=max(3, min(20, n)))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, str(e)[:240])
+
+
+@router.post("/scene-exemplars")
+def scene_exemplars(body: AnalyzeReq | None = None):
+    """抽取各场景类型的原著真实范文，供 writer few-shot。"""
+    n = body.sample_n if body else 6
+    try:
+        return pipeline.extract_scene_exemplars(sample_n=max(3, min(12, n)))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, str(e)[:240])
 
 
 # ---- Bilingual cross-translation continuation ----

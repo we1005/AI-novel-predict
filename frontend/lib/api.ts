@@ -216,8 +216,12 @@ export const api = {
   styleGet: () => j<any>("/style"),
   styleAnalyze: (sampleN: number = 8) =>
     j<any>("/style/analyze", { method: "POST", body: JSON.stringify({ sample_n: sampleN }) }),
-  styleToggle: (payload: { mimic_enabled?: boolean; bilingual?: boolean }) =>
+  styleToggle: (payload: { mimic_enabled?: boolean; bilingual?: boolean; era_check_enabled?: boolean; culture_check_enabled?: boolean }) =>
     j<any>("/style/toggle", { method: "PUT", body: JSON.stringify(payload) }),
+  styleRegisterCard: (sampleN: number = 8) =>
+    j<any>("/style/register-card", { method: "POST", body: JSON.stringify({ sample_n: sampleN }) }),
+  styleSceneExemplars: (sampleN: number = 6) =>
+    j<any>("/style/scene-exemplars", { method: "POST", body: JSON.stringify({ sample_n: sampleN }) }),
   bilingualStart: (payload: { brief: string; after_chapter: number; chapter_n?: number }) =>
     j<any>("/style/bilingual", { method: "POST", body: JSON.stringify(payload) }),
   bilingualList: () => j<any[]>("/style/bilingual"),
@@ -257,4 +261,19 @@ export const api = {
     j<any>(`/predict/projections/${projectionId}/write-book`, { method: "POST", body: JSON.stringify(opts) }),
   bookWriteGet: (id: number) => j<any>(`/predict/book-writes/${id}`),
   bookWriteList: () => j<any[]>("/predict/book-writes"),
+  // B · 书稿版本控制（git）
+  repoStatus: () => j<any>("/repo/status"),
+  repoHistory: (path?: string) => j<any>(`/repo/history${path ? `?path=${encodeURIComponent(path)}` : ""}`),
+  repoMaterialize: () => j<any>("/repo/materialize", { method: "POST" }),
+  repoBaseline: () => j<any>("/repo/baseline", { method: "POST" }),
+  repoRevertChapter: (chapter: number) =>
+    j<any>("/repo/revert-chapter", { method: "POST", body: JSON.stringify({ chapter }) }),
+  repoBranch: (name: string) =>
+    j<any>("/repo/branch", { method: "POST", body: JSON.stringify({ name }) }),
+  // 顾虑2 · 润色建议(局部采纳)
+  suggestEdits: (draftId: number) =>
+    j<any>("/draft/suggest-edits", { method: "POST", body: JSON.stringify({ draft_id: draftId }) }),
+  getSuggestions: (draftId: number) => j<any>(`/draft/suggestions?draft_id=${draftId}`),
+  applyEdits: (draftId: number, acceptedIds: number[]) =>
+    j<any>("/draft/apply-edits", { method: "POST", body: JSON.stringify({ draft_id: draftId, accepted_ids: acceptedIds }) }),
 };

@@ -145,14 +145,16 @@ def _name_to_entity_id(session, names: list[str]) -> list[int]:
     return out
 
 
-def _persist_entities(session, items: list[dict[str, Any]]) -> None:
+def _persist_entities(session, items: list[dict[str, Any]], chapter_ceiling: int | None = None) -> None:
     max_chapter = session.execute(select(Chapter.number).order_by(Chapter.number.desc()).limit(1)).scalar_one_or_none()
+    # 上限 = max(corpus末章, 本批最大章)——续写章(157+)不再被截成 156。
+    cap = max(max_chapter or 0, chapter_ceiling or 0) or None
     for it in items:
         if not isinstance(it, dict) or "name" not in it or "type" not in it:
             continue
         fac = it.get("first_appear_chapter")
-        if isinstance(fac, int) and max_chapter is not None and fac > max_chapter:
-            it["first_appear_chapter"] = max_chapter
+        if isinstance(fac, int) and cap is not None and fac > cap:
+            it["first_appear_chapter"] = cap
         elif not isinstance(fac, int) or fac <= 0:
             it["first_appear_chapter"] = None
         existing_id = it.get("match_existing_id")
@@ -196,17 +198,20 @@ def _persist_entities(session, items: list[dict[str, Any]]) -> None:
 
 
 def _persist_foreshadowings(session, planted: list[dict[str, Any]],
-                             resolved: list[dict[str, Any]]) -> None:
+                             resolved: list[dict[str, Any]],
+                             chapter_ceiling: int | None = None) -> None:
     # Cap chapter values to what actually exists; the model occasionally
     # invents a chapter past the end of the book (e.g. 1473 for a 1472-chapter
     # novel) which would trip the chapters.number FK on planted/resolved.
+    # 续写章(157+)已在 extract_one_chapter 登记进 chapters 表，故上限放宽到本批最大章。
     max_chapter = session.execute(select(Chapter.number).order_by(Chapter.number.desc()).limit(1)).scalar_one_or_none()
+    cap = max(max_chapter or 0, chapter_ceiling or 0) or None
 
     def _valid_chapter(n: Any) -> int | None:
         if not isinstance(n, int) or n <= 0:
             return None
-        if max_chapter is not None and n > max_chapter:
-            return max_chapter  # clamp; the model meant "near the end"
+        if cap is not None and n > cap:
+            return cap  # clamp; the model meant "near the end"
         return n
 
     for p in planted:
@@ -466,7 +471,8 @@ def _agent_call(*, name: str, system_blocks: list[dict[str, Any]], user_text: st
             messages=[{"role": "user", "content": user_text}],
             tools=[tool],
             tool_choice={"type": "tool", "name": tool["name"]},
-            max_tokens=4096,
+            # 8000：4096 对一批多章会截断抽取（列不全实体/伏笔）。
+            max_tokens=8000,
             temperature=0.2,
         )
         if resp.tool_use:
@@ -606,10 +612,14 @@ def run_batch(start: int, end: int) -> dict[str, Any]:
 
 
 def _persist_dispatch(name: str, s, out: dict, *, batch_id: int, chapter_range) -> None:
+    # 章号上限：允许到本批最大章（续写章 157+），否则会被截到 corpus 末章(156)，
+    # 导致续写新增实体/伏笔全部被错标成原著章节、无法按章归属/清理。
+    ceiling = chapter_range[1] if chapter_range else None
     if name == "entity":
-        _persist_entities(s, out.get("entities", []))
+        _persist_entities(s, out.get("entities", []), chapter_ceiling=ceiling)
     elif name == "foreshadow":
-        _persist_foreshadowings(s, out.get("planted", []), out.get("resolved", []))
+        _persist_foreshadowings(s, out.get("planted", []), out.get("resolved", []),
+                                chapter_ceiling=ceiling)
     elif name == "state":
         _persist_states(s, out.get("states", []))
     elif name == "plot":
@@ -620,7 +630,7 @@ def _persist_dispatch(name: str, s, out: dict, *, batch_id: int, chapter_range) 
         _persist_mystery_actions(s, out.get("actions", []), batch_id=batch_id, chapter_range=chapter_range)
 
 
-def extract_one_chapter(chapter_index: int, text: str) -> dict[str, Any]:
+def extract_one_chapter(chapter_index: int, text: str, title: str | None = None) -> dict[str, Any]:
     """写→回灌记忆反馈环 (A)：增量抽取**单个已生成章节**的记忆，使后续章节的
     上下文能"读到"刚写出来的新章节（实体/伏笔/状态/世界规则/疑点）。
 
@@ -634,6 +644,15 @@ def extract_one_chapter(chapter_index: int, text: str) -> dict[str, Any]:
     user_text = (f"以下是第 {chapter_index} 章的正文（新续写出的章节）。"
                  f"请按你的职责从中抽取结构化信息。\n\n{text}")
     agents = all_agents()
+    # 登记续写章到 chapters 表：实体/伏笔/状态的章号字段都有 FK→chapters.number，
+    # 续写章(157+)不登记的话，回灌只能把章号截到 corpus 末章(156)、错标成原著，
+    # 无法按章归属/清理。登记后 first_appear/planted 才能正确落 157+。幂等。
+    with session_scope() as s:
+        ch = s.get(Chapter, chapter_index)
+        if ch is None:
+            s.add(Chapter(number=chapter_index, title=(title or f"第{chapter_index}章"),
+                          char_offset_start=0, char_offset_end=0))
+            s.flush()
     # Idempotent: reuse the batch row if this chapter was extracted before
     # (re-runs / resume / re-write) — the UNIQUE(chapter_start,chapter_end) would
     # otherwise blow up on a fresh insert. Entity/world persists already upsert.
@@ -653,6 +672,7 @@ def extract_one_chapter(chapter_index: int, text: str) -> dict[str, Any]:
         batch_id = batch.id
     chapter_range = (chapter_index, chapter_index)
     total_cost = 0.0
+    collected: dict[str, Any] = {}  # 6-agent 原始输出 → 落成 git 增量(可按章撤回/物化)
     try:
         for name in ["entity", "foreshadow", "state", "plot", "world", "mystery"]:
             with session_scope() as s:
@@ -660,8 +680,27 @@ def extract_one_chapter(chapter_index: int, text: str) -> dict[str, Any]:
             out, cost = _agent_call(name=name, system_blocks=sys_blocks, user_text=user_text,
                                     tool=agents[name]["tool"], system_text=agents[name]["system"])
             total_cost += cost
+            collected[name] = out
             with session_scope() as s:
                 _persist_dispatch(name, s, out, batch_id=batch_id, chapter_range=chapter_range)
+        # 落每章抽取增量到书稿仓（best-effort，失败不影响回灌主流程）
+        try:
+            from ..repo import store as _repo
+            _repo.dump_increment(chapter_index, collected)
+        except Exception:  # noqa: BLE001
+            pass
+        # 缺口① 修补：把新章节写进 chapter_fts，使 writer 的"原文/笔法召回"
+        # (fts_recall.search before_chapter) 能检索到刚写出来的章节——后续文字才能
+        # 在字面/措辞层面也与新章环环相扣（不仅是结构化记忆）。幂等：先删后插。
+        try:
+            from sqlalchemy import text as _sql
+            with get_engine().begin() as conn:
+                conn.execute(_sql("DELETE FROM chapter_fts WHERE chapter = :c"), {"c": chapter_index})
+                conn.execute(_sql("INSERT INTO chapter_fts (chapter, title, body) VALUES (:c, :t, :b)"),
+                             {"c": chapter_index, "t": title or f"第{chapter_index}章", "b": text})
+        except Exception:  # noqa: BLE001 — FTS 索引失败不影响主流程
+            pass
+
         with session_scope() as s:
             b = s.get(ExtractionBatch, batch_id)
             if b:

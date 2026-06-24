@@ -27,6 +27,7 @@ const DOC_META: Record<string, { label: string; icon: React.ReactNode; tag: stri
   "05-角色仿真链路.md":       { label: "角色仿真",     icon: <TeamOutlined />,        tag: "Sim",       tagColor: "magenta" },
   "06-Agent与Prompt设计.md": { label: "Agent & Prompt", icon: <RobotOutlined />,    tag: "Agents",    tagColor: "volcano" },
   "07-整本故事弧推演链路.md": { label: "整本故事弧推演", icon: <DeploymentUnitOutlined />, tag: "Whole-Book", tagColor: "cyan" },
+  "08-版本控制与可重建记忆.md": { label: "版本控制 / 可重建记忆", icon: <DatabaseOutlined />, tag: "Git/Repo", tagColor: "red" },
 };
 
 export default function ArchitecturePage() {

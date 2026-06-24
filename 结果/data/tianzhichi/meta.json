@@ -1,0 +1,1615 @@
+{
+ "id": "tianzhichi",
+ "title": "天之炽",
+ "author": "江南（续写：墨笔 AI）",
+ "blurb": "《天之炽》是江南继《龙族》后的蒸汽朋克奇幻巨作——在一个机甲与神怒交织、东西方文明对峙的架空大陆上，私生子少年西泽尔·博尔吉亚背负红龙的诅咒与守护家人的执念，在贵族的倾轧与权力的棋局中燃尽自己。本站收录原著第 1–156 章，以及由「墨笔」多 Agent 续写引擎按江南文风补全的第 157–260 章（直至结局）。",
+ "continuation_start": 157,
+ "total": 260,
+ "n_original": 156,
+ "n_continuation": 104,
+ "original_section": {
+  "name": "原著正文",
+  "start": 1,
+  "end": 156
+ },
+ "phases": [
+  {
+   "name": "命运决战前夜·红水银蒸汽的嘶吼",
+   "start": 157,
+   "end": 168,
+   "continuation": true
+  },
+  {
+   "name": "万国盛典对抗战·红莲舞于炼狱之上",
+   "start": 169,
+   "end": 188,
+   "continuation": true
+  },
+  {
+   "name": "维苏威火山的秘密·骷髅地的低语",
+   "start": 189,
+   "end": 207,
+   "continuation": true
+  },
+  {
+   "name": "锡兰星见的真相·梵蒂冈档案里的秘密",
+   "start": 208,
+   "end": 227,
+   "continuation": true
+  },
+  {
+   "name": "东西方联盟·红莲与大夏龙雀的握手",
+   "start": 228,
+   "end": 246,
+   "continuation": true
+  },
+  {
+   "name": "终局之战·梵天陨落，红莲绽放",
+   "start": 247,
+   "end": 260,
+   "continuation": true
+  }
+ ],
+ "toc": [
+  {
+   "i": 1,
+   "title": "第1章楔子：莲花(1)",
+   "kind": "original",
+   "chars": 2953
+  },
+  {
+   "i": 2,
+   "title": "第2章楔子：莲花(2)",
+   "kind": "original",
+   "chars": 2996
+  },
+  {
+   "i": 3,
+   "title": "第3章斗兽场(1)",
+   "kind": "original",
+   "chars": 5175
+  },
+  {
+   "i": 4,
+   "title": "第4章斗兽场(2)",
+   "kind": "original",
+   "chars": 2977
+  },
+  {
+   "i": 5,
+   "title": "第5章斗兽场(3)",
+   "kind": "original",
+   "chars": 3166
+  },
+  {
+   "i": 6,
+   "title": "第6章深渊(1)",
+   "kind": "original",
+   "chars": 5187
+  },
+  {
+   "i": 7,
+   "title": "第7章深渊(2)",
+   "kind": "original",
+   "chars": 5172
+  },
+  {
+   "i": 8,
+   "title": "第8章深渊(3)",
+   "kind": "original",
+   "chars": 5130
+  },
+  {
+   "i": 9,
+   "title": "第9章深渊(4)",
+   "kind": "original",
+   "chars": 2667
+  },
+  {
+   "i": 10,
+   "title": "第10章深渊(5)",
+   "kind": "original",
+   "chars": 2695
+  },
+  {
+   "i": 11,
+   "title": "第11章十字禁卫军(1)",
+   "kind": "original",
+   "chars": 5108
+  },
+  {
+   "i": 12,
+   "title": "第12章十字禁卫军(2)",
+   "kind": "original",
+   "chars": 4212
+  },
+  {
+   "i": 13,
+   "title": "第13章十字禁卫军(3)",
+   "kind": "original",
+   "chars": 4270
+  },
+  {
+   "i": 14,
+   "title": "第14章猫(1)",
+   "kind": "original",
+   "chars": 5152
+  },
+  {
+   "i": 15,
+   "title": "第15章猫(2)",
+   "kind": "original",
+   "chars": 5185
+  },
+  {
+   "i": 16,
+   "title": "第16章猫(3)",
+   "kind": "original",
+   "chars": 5210
+  },
+  {
+   "i": 17,
+   "title": "第17章猫(4)",
+   "kind": "original",
+   "chars": 4067
+  },
+  {
+   "i": 18,
+   "title": "第18章猫(5)",
+   "kind": "original",
+   "chars": 4487
+  },
+  {
+   "i": 19,
+   "title": "第19章见习骑士(1)",
+   "kind": "original",
+   "chars": 5159
+  },
+  {
+   "i": 20,
+   "title": "第20章见习骑士(2)",
+   "kind": "original",
+   "chars": 5168
+  },
+  {
+   "i": 21,
+   "title": "第21章见习骑士(3)",
+   "kind": "original",
+   "chars": 5224
+  },
+  {
+   "i": 22,
+   "title": "第22章见习骑士(4)",
+   "kind": "original",
+   "chars": 5141
+  },
+  {
+   "i": 23,
+   "title": "第23章见习骑士(5)",
+   "kind": "original",
+   "chars": 4412
+  },
+  {
+   "i": 24,
+   "title": "第24章见习骑士(6)",
+   "kind": "original",
+   "chars": 4545
+  },
+  {
+   "i": 25,
+   "title": "第25章炽天使之棺(1)",
+   "kind": "original",
+   "chars": 5144
+  },
+  {
+   "i": 26,
+   "title": "第26章炽天使之棺(2)",
+   "kind": "original",
+   "chars": 5189
+  },
+  {
+   "i": 27,
+   "title": "第27章炽天使之棺(3)",
+   "kind": "original",
+   "chars": 5189
+  },
+  {
+   "i": 28,
+   "title": "第28章炽天使之棺(4)",
+   "kind": "original",
+   "chars": 3940
+  },
+  {
+   "i": 29,
+   "title": "第29章炽天使之棺(5)",
+   "kind": "original",
+   "chars": 4072
+  },
+  {
+   "i": 30,
+   "title": "第30章大夏龙雀(1)",
+   "kind": "original",
+   "chars": 5228
+  },
+  {
+   "i": 31,
+   "title": "第31章大夏龙雀(2)",
+   "kind": "original",
+   "chars": 3333
+  },
+  {
+   "i": 32,
+   "title": "第32章大夏龙雀(3)",
+   "kind": "original",
+   "chars": 3370
+  },
+  {
+   "i": 33,
+   "title": "第33章创圣之枪(1)",
+   "kind": "original",
+   "chars": 4395
+  },
+  {
+   "i": 34,
+   "title": "第34章创圣之枪(2)",
+   "kind": "original",
+   "chars": 4476
+  },
+  {
+   "i": 35,
+   "title": "第35章魔女(1)",
+   "kind": "original",
+   "chars": 5075
+  },
+  {
+   "i": 36,
+   "title": "第36章魔女(2)",
+   "kind": "original",
+   "chars": 3110
+  },
+  {
+   "i": 37,
+   "title": "第37章魔女(3)",
+   "kind": "original",
+   "chars": 3207
+  },
+  {
+   "i": 38,
+   "title": "第38章故人(1)",
+   "kind": "original",
+   "chars": 5117
+  },
+  {
+   "i": 39,
+   "title": "第39章故人(2)",
+   "kind": "original",
+   "chars": 5116
+  },
+  {
+   "i": 40,
+   "title": "第40章故人(3)",
+   "kind": "original",
+   "chars": 3493
+  },
+  {
+   "i": 41,
+   "title": "第41章故人(4)",
+   "kind": "original",
+   "chars": 3577
+  },
+  {
+   "i": 42,
+   "title": "第42章欧米茄(1)",
+   "kind": "original",
+   "chars": 4792
+  },
+  {
+   "i": 43,
+   "title": "第43章欧米茄(2)",
+   "kind": "original",
+   "chars": 4862
+  },
+  {
+   "i": 44,
+   "title": "第44章圣堂装甲师(1)",
+   "kind": "original",
+   "chars": 5138
+  },
+  {
+   "i": 45,
+   "title": "第45章圣堂装甲师(2)",
+   "kind": "original",
+   "chars": 3368
+  },
+  {
+   "i": 46,
+   "title": "第46章圣堂装甲师(3)",
+   "kind": "original",
+   "chars": 3376
+  },
+  {
+   "i": 47,
+   "title": "第47章魔神归来之夜(1)",
+   "kind": "original",
+   "chars": 5186
+  },
+  {
+   "i": 48,
+   "title": "第48章魔神归来之夜(2)",
+   "kind": "original",
+   "chars": 2955
+  },
+  {
+   "i": 49,
+   "title": "第49章魔神归来之夜(3)",
+   "kind": "original",
+   "chars": 2993
+  },
+  {
+   "i": 50,
+   "title": "第50章密涅瓦机关(1)",
+   "kind": "original",
+   "chars": 5225
+  },
+  {
+   "i": 51,
+   "title": "第51章密涅瓦机关(2)",
+   "kind": "original",
+   "chars": 3173
+  },
+  {
+   "i": 52,
+   "title": "第52章密涅瓦机关(3)",
+   "kind": "original",
+   "chars": 3215
+  },
+  {
+   "i": 53,
+   "title": "第53章审判(1)",
+   "kind": "original",
+   "chars": 5146
+  },
+  {
+   "i": 54,
+   "title": "第54章审判(2)",
+   "kind": "original",
+   "chars": 5156
+  },
+  {
+   "i": 55,
+   "title": "第55章审判(3)",
+   "kind": "original",
+   "chars": 3618
+  },
+  {
+   "i": 56,
+   "title": "第56章审判(4)",
+   "kind": "original",
+   "chars": 3760
+  },
+  {
+   "i": 57,
+   "title": "第57章白橡树女孩(1)",
+   "kind": "original",
+   "chars": 4377
+  },
+  {
+   "i": 58,
+   "title": "第58章白橡树女孩(2)",
+   "kind": "original",
+   "chars": 4432
+  },
+  {
+   "i": 59,
+   "title": "第59章尾声：红龙再临(1)",
+   "kind": "original",
+   "chars": 2693
+  },
+  {
+   "i": 60,
+   "title": "第60章尾声：红龙再临(2)",
+   "kind": "original",
+   "chars": 2833
+  },
+  {
+   "i": 61,
+   "title": "第61章夜雨声烦之春(1)",
+   "kind": "original",
+   "chars": 5293
+  },
+  {
+   "i": 62,
+   "title": "第62章夜雨声烦之春(2)",
+   "kind": "original",
+   "chars": 5181
+  },
+  {
+   "i": 63,
+   "title": "第63章夜雨声烦之春(3)",
+   "kind": "original",
+   "chars": 3015
+  },
+  {
+   "i": 64,
+   "title": "第64章夜雨声烦之春(4)",
+   "kind": "original",
+   "chars": 3093
+  },
+  {
+   "i": 65,
+   "title": "第65章炽天之鬼(1)",
+   "kind": "original",
+   "chars": 5249
+  },
+  {
+   "i": 66,
+   "title": "第66章炽天之鬼(2)",
+   "kind": "original",
+   "chars": 5238
+  },
+  {
+   "i": 67,
+   "title": "第67章炽天之鬼(3)",
+   "kind": "original",
+   "chars": 5184
+  },
+  {
+   "i": 68,
+   "title": "第68章炽天之鬼(4)",
+   "kind": "original",
+   "chars": 5293
+  },
+  {
+   "i": 69,
+   "title": "第69章炽天之鬼(5)",
+   "kind": "original",
+   "chars": 4329
+  },
+  {
+   "i": 70,
+   "title": "第70章炽天之鬼(6)",
+   "kind": "original",
+   "chars": 4330
+  },
+  {
+   "i": 71,
+   "title": "第71章神圣家族(1)",
+   "kind": "original",
+   "chars": 5178
+  },
+  {
+   "i": 72,
+   "title": "第72章神圣家族(2)",
+   "kind": "original",
+   "chars": 5185
+  },
+  {
+   "i": 73,
+   "title": "第73章神圣家族(3)",
+   "kind": "original",
+   "chars": 5289
+  },
+  {
+   "i": 74,
+   "title": "第74章神圣家族(4)",
+   "kind": "original",
+   "chars": 5257
+  },
+  {
+   "i": 75,
+   "title": "第75章神圣家族(5)",
+   "kind": "original",
+   "chars": 5226
+  },
+  {
+   "i": 76,
+   "title": "第76章神圣家族(6)",
+   "kind": "original",
+   "chars": 5197
+  },
+  {
+   "i": 77,
+   "title": "第77章神圣家族(7)",
+   "kind": "original",
+   "chars": 5123
+  },
+  {
+   "i": 78,
+   "title": "第78章神圣家族(8)",
+   "kind": "original",
+   "chars": 5250
+  },
+  {
+   "i": 79,
+   "title": "第79章神圣家族(9)",
+   "kind": "original",
+   "chars": 3492
+  },
+  {
+   "i": 80,
+   "title": "第80章神圣家族(10)",
+   "kind": "original",
+   "chars": 3612
+  },
+  {
+   "i": 81,
+   "title": "第81章繁樱怒放之冬(1)",
+   "kind": "original",
+   "chars": 5167
+  },
+  {
+   "i": 82,
+   "title": "第82章繁樱怒放之冬(2)",
+   "kind": "original",
+   "chars": 4135
+  },
+  {
+   "i": 83,
+   "title": "第83章繁樱怒放之冬(3)",
+   "kind": "original",
+   "chars": 4219
+  },
+  {
+   "i": 84,
+   "title": "第84章龙与莲花(1)",
+   "kind": "original",
+   "chars": 5263
+  },
+  {
+   "i": 85,
+   "title": "第85章龙与莲花(2)",
+   "kind": "original",
+   "chars": 5250
+  },
+  {
+   "i": 86,
+   "title": "第86章龙与莲花(3)",
+   "kind": "original",
+   "chars": 5113
+  },
+  {
+   "i": 87,
+   "title": "第87章龙与莲花(4)",
+   "kind": "original",
+   "chars": 5410
+  },
+  {
+   "i": 88,
+   "title": "第88章红龙狂舞之夜(1)",
+   "kind": "original",
+   "chars": 5270
+  },
+  {
+   "i": 89,
+   "title": "第89章红龙狂舞之夜(2)",
+   "kind": "original",
+   "chars": 5240
+  },
+  {
+   "i": 90,
+   "title": "第90章红龙狂舞之夜(3)",
+   "kind": "original",
+   "chars": 5281
+  },
+  {
+   "i": 91,
+   "title": "第91章红龙狂舞之夜(4)",
+   "kind": "original",
+   "chars": 5223
+  },
+  {
+   "i": 92,
+   "title": "第92章红龙狂舞之夜(5)",
+   "kind": "original",
+   "chars": 5226
+  },
+  {
+   "i": 93,
+   "title": "第93章红龙狂舞之夜(6)",
+   "kind": "original",
+   "chars": 5277
+  },
+  {
+   "i": 94,
+   "title": "第94章红龙狂舞之夜(7)",
+   "kind": "original",
+   "chars": 5246
+  },
+  {
+   "i": 95,
+   "title": "第95章红龙狂舞之夜(8)",
+   "kind": "original",
+   "chars": 3622
+  },
+  {
+   "i": 96,
+   "title": "第96章红龙狂舞之夜(9)",
+   "kind": "original",
+   "chars": 3738
+  },
+  {
+   "i": 97,
+   "title": "第97章被称作老板的男孩和三骑士(1)",
+   "kind": "original",
+   "chars": 5220
+  },
+  {
+   "i": 98,
+   "title": "第98章被称作老板的男孩和三骑士(2)",
+   "kind": "original",
+   "chars": 5220
+  },
+  {
+   "i": 99,
+   "title": "第99章被称作老板的男孩和三骑士(3)",
+   "kind": "original",
+   "chars": 5202
+  },
+  {
+   "i": 100,
+   "title": "第100章被称作老板的男孩和三骑士(4)",
+   "kind": "original",
+   "chars": 5179
+  },
+  {
+   "i": 101,
+   "title": "第101章被称作老板的男孩和三骑士(5)",
+   "kind": "original",
+   "chars": 3746
+  },
+  {
+   "i": 102,
+   "title": "第102章被称作老板的男孩和三骑士(6)",
+   "kind": "original",
+   "chars": 3892
+  },
+  {
+   "i": 103,
+   "title": "第103章倾国之艳——第四骑士(1)",
+   "kind": "original",
+   "chars": 5236
+  },
+  {
+   "i": 104,
+   "title": "第104章倾国之艳——第四骑士(2)",
+   "kind": "original",
+   "chars": 3266
+  },
+  {
+   "i": 105,
+   "title": "第105章倾国之艳——第四骑士(3)",
+   "kind": "original",
+   "chars": 3389
+  },
+  {
+   "i": 106,
+   "title": "第106章大夏龙雀(1)",
+   "kind": "original",
+   "chars": 5247
+  },
+  {
+   "i": 107,
+   "title": "第107章大夏龙雀(2)",
+   "kind": "original",
+   "chars": 3493
+  },
+  {
+   "i": 108,
+   "title": "第108章大夏龙雀(3)",
+   "kind": "original",
+   "chars": 3495
+  },
+  {
+   "i": 109,
+   "title": "第109章机械女皇的契约(1)",
+   "kind": "original",
+   "chars": 5236
+  },
+  {
+   "i": 110,
+   "title": "第110章机械女皇的契约(2)",
+   "kind": "original",
+   "chars": 5258
+  },
+  {
+   "i": 111,
+   "title": "第111章机械女皇的契约(3)",
+   "kind": "original",
+   "chars": 4442
+  },
+  {
+   "i": 112,
+   "title": "第112章机械女皇的契约(4)",
+   "kind": "original",
+   "chars": 4474
+  },
+  {
+   "i": 113,
+   "title": "第113章炽天使的重临(1)",
+   "kind": "original",
+   "chars": 5243
+  },
+  {
+   "i": 114,
+   "title": "第114章炽天使的重临(2)",
+   "kind": "original",
+   "chars": 5224
+  },
+  {
+   "i": 115,
+   "title": "第115章炽天使的重临(3)",
+   "kind": "original",
+   "chars": 5207
+  },
+  {
+   "i": 116,
+   "title": "第116章炽天使的重临(4)",
+   "kind": "original",
+   "chars": 5246
+  },
+  {
+   "i": 117,
+   "title": "第117章炽天使的重临(5)",
+   "kind": "original",
+   "chars": 3596
+  },
+  {
+   "i": 118,
+   "title": "第118章炽天使的重临(6)",
+   "kind": "original",
+   "chars": 3664
+  },
+  {
+   "i": 119,
+   "title": "第119章中山之狼(1)",
+   "kind": "original",
+   "chars": 3960
+  },
+  {
+   "i": 120,
+   "title": "第120章中山之狼(2)",
+   "kind": "original",
+   "chars": 4080
+  },
+  {
+   "i": 121,
+   "title": "第121章古洛诺斯的阴影(1)",
+   "kind": "original",
+   "chars": 5258
+  },
+  {
+   "i": 122,
+   "title": "第122章古洛诺斯的阴影(2)",
+   "kind": "original",
+   "chars": 5242
+  },
+  {
+   "i": 123,
+   "title": "第123章古洛诺斯的阴影(3)",
+   "kind": "original",
+   "chars": 5218
+  },
+  {
+   "i": 124,
+   "title": "第124章古洛诺斯的阴影(4)",
+   "kind": "original",
+   "chars": 2849
+  },
+  {
+   "i": 125,
+   "title": "第125章古洛诺斯的阴影(5)",
+   "kind": "original",
+   "chars": 2985
+  },
+  {
+   "i": 126,
+   "title": "第126章忍冬之女(1)",
+   "kind": "original",
+   "chars": 5206
+  },
+  {
+   "i": 127,
+   "title": "第127章忍冬之女(2)",
+   "kind": "original",
+   "chars": 5196
+  },
+  {
+   "i": 128,
+   "title": "第128章忍冬之女(3)",
+   "kind": "original",
+   "chars": 5241
+  },
+  {
+   "i": 129,
+   "title": "第129章忍冬之女(4)",
+   "kind": "original",
+   "chars": 3710
+  },
+  {
+   "i": 130,
+   "title": "第130章忍冬之女(5)",
+   "kind": "original",
+   "chars": 3808
+  },
+  {
+   "i": 131,
+   "title": "第131章屠龙者圣乔治(1)",
+   "kind": "original",
+   "chars": 5253
+  },
+  {
+   "i": 132,
+   "title": "第132章屠龙者圣乔治(2)",
+   "kind": "original",
+   "chars": 5224
+  },
+  {
+   "i": 133,
+   "title": "第133章屠龙者圣乔治(3)",
+   "kind": "original",
+   "chars": 5198
+  },
+  {
+   "i": 134,
+   "title": "第134章屠龙者圣乔治(4)",
+   "kind": "original",
+   "chars": 5286
+  },
+  {
+   "i": 135,
+   "title": "第135章屠龙者圣乔治(5)",
+   "kind": "original",
+   "chars": 4455
+  },
+  {
+   "i": 136,
+   "title": "第136章屠龙者圣乔治(6)",
+   "kind": "original",
+   "chars": 4537
+  },
+  {
+   "i": 137,
+   "title": "第137章远东公主的使者(1)",
+   "kind": "original",
+   "chars": 5254
+  },
+  {
+   "i": 138,
+   "title": "第138章远东公主的使者(2)",
+   "kind": "original",
+   "chars": 5192
+  },
+  {
+   "i": 139,
+   "title": "第139章远东公主的使者(3)",
+   "kind": "original",
+   "chars": 5183
+  },
+  {
+   "i": 140,
+   "title": "第140章远东公主的使者(4)",
+   "kind": "original",
+   "chars": 4747
+  },
+  {
+   "i": 141,
+   "title": "第141章远东公主的使者(5)",
+   "kind": "original",
+   "chars": 4947
+  },
+  {
+   "i": 142,
+   "title": "第142章暴风雨降临之前(1)",
+   "kind": "original",
+   "chars": 5206
+  },
+  {
+   "i": 143,
+   "title": "第143章暴风雨降临之前(2)",
+   "kind": "original",
+   "chars": 5134
+  },
+  {
+   "i": 144,
+   "title": "第144章暴风雨降临之前(3)",
+   "kind": "original",
+   "chars": 5187
+  },
+  {
+   "i": 145,
+   "title": "第145章暴风雨降临之前(4)",
+   "kind": "original",
+   "chars": 5154
+  },
+  {
+   "i": 146,
+   "title": "第146章暴风雨降临之前(5)",
+   "kind": "original",
+   "chars": 4457
+  },
+  {
+   "i": 147,
+   "title": "第147章暴风雨降临之前(6)",
+   "kind": "original",
+   "chars": 4564
+  },
+  {
+   "i": 148,
+   "title": "第148章命运前夜(1)",
+   "kind": "original",
+   "chars": 5314
+  },
+  {
+   "i": 149,
+   "title": "第149章命运前夜(2)",
+   "kind": "original",
+   "chars": 5188
+  },
+  {
+   "i": 150,
+   "title": "第150章命运前夜(3)",
+   "kind": "original",
+   "chars": 5202
+  },
+  {
+   "i": 151,
+   "title": "第151章命运前夜(4)",
+   "kind": "original",
+   "chars": 5275
+  },
+  {
+   "i": 152,
+   "title": "第152章命运前夜(5)",
+   "kind": "original",
+   "chars": 5217
+  },
+  {
+   "i": 153,
+   "title": "第153章命运前夜(6)",
+   "kind": "original",
+   "chars": 5247
+  },
+  {
+   "i": 154,
+   "title": "第154章命运前夜(7)",
+   "kind": "original",
+   "chars": 1042
+  },
+  {
+   "i": 155,
+   "title": "第155章命运前夜(8)",
+   "kind": "original",
+   "chars": 0
+  },
+  {
+   "i": 156,
+   "title": "第156章命运前夜(9)",
+   "kind": "original",
+   "chars": 0
+  },
+  {
+   "i": 157,
+   "title": "第157章 叹息之墙的归巢",
+   "kind": "continuation",
+   "chars": 6414
+  },
+  {
+   "i": 158,
+   "title": "第158章 神怒Ⅲ型的冰原图纸",
+   "kind": "continuation",
+   "chars": 6750
+  },
+  {
+   "i": 159,
+   "title": "第159章 断剑与残片",
+   "kind": "continuation",
+   "chars": 5121
+  },
+  {
+   "i": 160,
+   "title": "第160章 不朽之王的第一次苏醒",
+   "kind": "continuation",
+   "chars": 4790
+  },
+  {
+   "i": 161,
+   "title": "第161章 新型炽天使的战术分工",
+   "kind": "continuation",
+   "chars": 7036
+  },
+  {
+   "i": 162,
+   "title": "第162章 齿轮吊坠与冰淇淋",
+   "kind": "continuation",
+   "chars": 6095
+  },
+  {
+   "i": 163,
+   "title": "第163章 法老宫赌局的最后下注",
+   "kind": "continuation",
+   "chars": 7693
+  },
+  {
+   "i": 164,
+   "title": "第164章 一号实验场的红眼睛",
+   "kind": "continuation",
+   "chars": 3873
+  },
+  {
+   "i": 165,
+   "title": "第165章 骷髅地的召唤",
+   "kind": "continuation",
+   "chars": 4597
+  },
+  {
+   "i": 166,
+   "title": "第166章 黑铁巨门前的真相",
+   "kind": "continuation",
+   "chars": 5591
+  },
+  {
+   "i": 167,
+   "title": "第167章 红水银蒸汽的第一声嘶吼",
+   "kind": "continuation",
+   "chars": 5524
+  },
+  {
+   "i": 168,
+   "title": "第168章 命运决战的倒计时",
+   "kind": "continuation",
+   "chars": 5068
+  },
+  {
+   "i": 169,
+   "title": "第169章 采石场上的血色誓约",
+   "kind": "continuation",
+   "chars": 8024
+  },
+  {
+   "i": 170,
+   "title": "第170章 各国的眼睛",
+   "kind": "continuation",
+   "chars": 7796
+  },
+  {
+   "i": 171,
+   "title": "第171章 峡谷入口的巨影",
+   "kind": "continuation",
+   "chars": 4629
+  },
+  {
+   "i": 172,
+   "title": "第172章 蝉翼之舞的第一刀",
+   "kind": "continuation",
+   "chars": 5155
+  },
+  {
+   "i": 173,
+   "title": "第173章 堡垒之盾的两次倒下",
+   "kind": "continuation",
+   "chars": 5222
+  },
+  {
+   "i": 174,
+   "title": "第174章 蛛网上的电子风暴",
+   "kind": "continuation",
+   "chars": 5576
+  },
+  {
+   "i": 175,
+   "title": "第175章 龙牙剑断的瞬间",
+   "kind": "continuation",
+   "chars": 4245
+  },
+  {
+   "i": 176,
+   "title": "第176章 红莲舞于紫瞳之上",
+   "kind": "continuation",
+   "chars": 4328
+  },
+  {
+   "i": 177,
+   "title": "第177章 黄金血液的失控",
+   "kind": "continuation",
+   "chars": 5105
+  },
+  {
+   "i": 178,
+   "title": "第178章 炼狱之上的红莲之翼",
+   "kind": "continuation",
+   "chars": 6920
+  },
+  {
+   "i": 179,
+   "title": "第179章 铁面具下的异端审判官",
+   "kind": "continuation",
+   "chars": 4081
+  },
+  {
+   "i": 180,
+   "title": "第180章 密涅瓦机关的血色清晨",
+   "kind": "continuation",
+   "chars": 6002
+  },
+  {
+   "i": 181,
+   "title": "第181章 枢机会的黑色命令",
+   "kind": "continuation",
+   "chars": 6743
+  },
+  {
+   "i": 182,
+   "title": "第182章 格里高利家的钢铁防线",
+   "kind": "continuation",
+   "chars": 4718
+  },
+  {
+   "i": 183,
+   "title": "第183章 紫瞳里的两个灵魂",
+   "kind": "continuation",
+   "chars": 5156
+  },
+  {
+   "i": 184,
+   "title": "第184章 红伞下的约定",
+   "kind": "continuation",
+   "chars": 5362
+  },
+  {
+   "i": 185,
+   "title": "第185章 出发前的最后准备",
+   "kind": "continuation",
+   "chars": 6446
+  },
+  {
+   "i": 186,
+   "title": "第186章 地下暗河的幽灵船",
+   "kind": "continuation",
+   "chars": 6981
+  },
+  {
+   "i": 187,
+   "title": "第187章 熔岩之心中的黑铁巨门",
+   "kind": "continuation",
+   "chars": 6459
+  },
+  {
+   "i": 188,
+   "title": "第188章 骷髅地的红莲之影",
+   "kind": "continuation",
+   "chars": 6531
+  },
+  {
+   "i": 189,
+   "title": "第189章 维苏威的暗门",
+   "kind": "continuation",
+   "chars": 6193
+  },
+  {
+   "i": 190,
+   "title": "第190章 灰烬中的日记残片",
+   "kind": "continuation",
+   "chars": 4900
+  },
+  {
+   "i": 191,
+   "title": "第191章 锡兰纸莲花",
+   "kind": "continuation",
+   "chars": 3809
+  },
+  {
+   "i": 192,
+   "title": "第192章 齿轮隧道",
+   "kind": "continuation",
+   "chars": 5160
+  },
+  {
+   "i": 193,
+   "title": "第193章 圣堂的脚步声",
+   "kind": "continuation",
+   "chars": 4344
+  },
+  {
+   "i": 194,
+   "title": "第194章 床底的机关",
+   "kind": "continuation",
+   "chars": 5274
+  },
+  {
+   "i": 195,
+   "title": "第195章 达芬奇的日记（上）",
+   "kind": "continuation",
+   "chars": 5005
+  },
+  {
+   "i": 196,
+   "title": "第196章 达芬奇的日记（中）",
+   "kind": "continuation",
+   "chars": 5785
+  },
+  {
+   "i": 197,
+   "title": "第197章 达芬奇的日记（下）",
+   "kind": "continuation",
+   "chars": 4922
+  },
+  {
+   "i": 198,
+   "title": "第198章 屠龙者的回归（上）",
+   "kind": "continuation",
+   "chars": 3581
+  },
+  {
+   "i": 199,
+   "title": "第199章 屠龙者的回归（中）",
+   "kind": "continuation",
+   "chars": 6260
+  },
+  {
+   "i": 200,
+   "title": "第200章 屠龙者的回归（下）",
+   "kind": "continuation",
+   "chars": 4291
+  },
+  {
+   "i": 201,
+   "title": "第201章 黑铁巨门",
+   "kind": "continuation",
+   "chars": 4526
+  },
+  {
+   "i": 202,
+   "title": "第一层封印",
+   "kind": "continuation",
+   "chars": 6961
+  },
+  {
+   "i": 203,
+   "title": "第203章 记忆碎片（上）",
+   "kind": "continuation",
+   "chars": 4728
+  },
+  {
+   "i": 204,
+   "title": "第204章 记忆碎片（下）",
+   "kind": "continuation",
+   "chars": 6917
+  },
+  {
+   "i": 205,
+   "title": "第205章 莲花状的欧米茄",
+   "kind": "continuation",
+   "chars": 6619
+  },
+  {
+   "i": 206,
+   "title": "第206章 白银面具的主人（上）",
+   "kind": "continuation",
+   "chars": 4553
+  },
+  {
+   "i": 207,
+   "title": "第207章 白银面具的主人（中）",
+   "kind": "continuation",
+   "chars": 3671
+  },
+  {
+   "i": 208,
+   "title": "第208章 维苏威阴影下的暂歇",
+   "kind": "continuation",
+   "chars": 4429
+  },
+  {
+   "i": 209,
+   "title": "第209章 尘封的预言书（上）",
+   "kind": "continuation",
+   "chars": 4031
+  },
+  {
+   "i": 210,
+   "title": "第210章 尘封的预言书（中）",
+   "kind": "continuation",
+   "chars": 5101
+  },
+  {
+   "i": 211,
+   "title": "第211章 碧儿的决定",
+   "kind": "continuation",
+   "chars": 7895
+  },
+  {
+   "i": 212,
+   "title": "第212章 觐见教皇的闹剧（上）",
+   "kind": "continuation",
+   "chars": 5061
+  },
+  {
+   "i": 213,
+   "title": "第213章 觐见教皇的闹剧（下）",
+   "kind": "continuation",
+   "chars": 4890
+  },
+  {
+   "i": 214,
+   "title": "第214章 通风管道里的逃亡",
+   "kind": "continuation",
+   "chars": 8529
+  },
+  {
+   "i": 215,
+   "title": "第215章 梵蒂冈档案的秘密（上）",
+   "kind": "continuation",
+   "chars": 3532
+  },
+  {
+   "i": 216,
+   "title": "第216章 密涅瓦机关的陷落",
+   "kind": "continuation",
+   "chars": 6262
+  },
+  {
+   "i": 217,
+   "title": "第217章 叹息之墙的潜入（上）",
+   "kind": "continuation",
+   "chars": 6233
+  },
+  {
+   "i": 218,
+   "title": "第218章 叹息之墙的潜入（中）",
+   "kind": "continuation",
+   "chars": 3112
+  },
+  {
+   "i": 219,
+   "title": "第219章 叹息之墙的潜入（下）",
+   "kind": "continuation",
+   "chars": 6570
+  },
+  {
+   "i": 220,
+   "title": "第220章 大夏的密使（上）",
+   "kind": "continuation",
+   "chars": 5780
+  },
+  {
+   "i": 221,
+   "title": "第221章 大夏的密使（下）",
+   "kind": "continuation",
+   "chars": 6310
+  },
+  {
+   "i": 222,
+   "title": "第222章 通天宫的叛乱（上）",
+   "kind": "continuation",
+   "chars": 5204
+  },
+  {
+   "i": 223,
+   "title": "第223章 通天宫的叛乱（中）",
+   "kind": "continuation",
+   "chars": 4524
+  },
+  {
+   "i": 224,
+   "title": "第224章 通天宫的叛乱（下）",
+   "kind": "continuation",
+   "chars": 4898
+  },
+  {
+   "i": 225,
+   "title": "第225章 维苏威火山的召唤（上）",
+   "kind": "continuation",
+   "chars": 5455
+  },
+  {
+   "i": 226,
+   "title": "第226章 维苏威火山的召唤（中）",
+   "kind": "continuation",
+   "chars": 6117
+  },
+  {
+   "i": 227,
+   "title": "第227章 维苏威火山的召唤（下）",
+   "kind": "continuation",
+   "chars": 6529
+  },
+  {
+   "i": 228,
+   "title": "第228章 东方专列的轰鸣",
+   "kind": "continuation",
+   "chars": 5461
+  },
+  {
+   "i": 229,
+   "title": "第229章 楚昭华的恐惧",
+   "kind": "continuation",
+   "chars": 7314
+  },
+  {
+   "i": 230,
+   "title": "第230章 高加索山脉的伏击（上）",
+   "kind": "continuation",
+   "chars": 6350
+  },
+  {
+   "i": 231,
+   "title": "第231章 高加索山脉的伏击（下）",
+   "kind": "continuation",
+   "chars": 4167
+  },
+  {
+   "i": 232,
+   "title": "第232章 沙漠绿洲的夜谈",
+   "kind": "continuation",
+   "chars": 5290
+  },
+  {
+   "i": 233,
+   "title": "第233章 叩门者的铜铃",
+   "kind": "continuation",
+   "chars": 4530
+  },
+  {
+   "i": 234,
+   "title": "第234章 洛阳城的欢迎",
+   "kind": "continuation",
+   "chars": 6915
+  },
+  {
+   "i": 235,
+   "title": "第235章 通天宫的鬼武者",
+   "kind": "continuation",
+   "chars": 6704
+  },
+  {
+   "i": 236,
+   "title": "第236章 翡冷翠的黄昏",
+   "kind": "continuation",
+   "chars": 6071
+  },
+  {
+   "i": 237,
+   "title": "第237章 马斯顿的再临",
+   "kind": "continuation",
+   "chars": 5601
+  },
+  {
+   "i": 238,
+   "title": "第238章 王屋山的召唤",
+   "kind": "continuation",
+   "chars": 4822
+  },
+  {
+   "i": 239,
+   "title": "第239章 世界树的根",
+   "kind": "continuation",
+   "chars": 4467
+  },
+  {
+   "i": 240,
+   "title": "第240章 龙雀与红莲的约定",
+   "kind": "continuation",
+   "chars": 5390
+  },
+  {
+   "i": 241,
+   "title": "第241章 鬼武者的防线",
+   "kind": "continuation",
+   "chars": 4937
+  },
+  {
+   "i": 242,
+   "title": "第242章 梵天陨落的零件",
+   "kind": "continuation",
+   "chars": 4913
+  },
+  {
+   "i": 243,
+   "title": "第243章 龙雀的陨落",
+   "kind": "continuation",
+   "chars": 6337
+  },
+  {
+   "i": 244,
+   "title": "第244章 佛朗哥的老师",
+   "kind": "continuation",
+   "chars": 7093
+  },
+  {
+   "i": 245,
+   "title": "第245章 梵天陨落的倒计时",
+   "kind": "continuation",
+   "chars": 4684
+  },
+  {
+   "i": 246,
+   "title": "第246章 新的黎明",
+   "kind": "continuation",
+   "chars": 6013
+  },
+  {
+   "i": 247,
+   "title": "第247章 黎明前的翡冷翠",
+   "kind": "continuation",
+   "chars": 7401
+  },
+  {
+   "i": 248,
+   "title": "第248章 假面下的陷阱",
+   "kind": "continuation",
+   "chars": 8527
+  },
+  {
+   "i": 249,
+   "title": "第249章 骷髅地的异动",
+   "kind": "continuation",
+   "chars": 5896
+  },
+  {
+   "i": 250,
+   "title": "第250章 另一条路",
+   "kind": "continuation",
+   "chars": 5787
+  },
+  {
+   "i": 251,
+   "title": "第251章 红莲初绽前夕",
+   "kind": "continuation",
+   "chars": 7195
+  },
+  {
+   "i": 252,
+   "title": "第252章 维苏威火山的心脏",
+   "kind": "continuation",
+   "chars": 9801
+  },
+  {
+   "i": 253,
+   "title": "第253章 不朽之王的觉醒",
+   "kind": "continuation",
+   "chars": 5216
+  },
+  {
+   "i": 254,
+   "title": "第254章 原罪机关的主人",
+   "kind": "continuation",
+   "chars": 6033
+  },
+  {
+   "i": 255,
+   "title": "第255章 莲花之歌",
+   "kind": "continuation",
+   "chars": 3123
+  },
+  {
+   "i": 256,
+   "title": "第256章 红莲刺穿心脏",
+   "kind": "continuation",
+   "chars": 5550
+  },
+  {
+   "i": 257,
+   "title": "第257章 梵天陨落倒计时",
+   "kind": "continuation",
+   "chars": 4189
+  },
+  {
+   "i": 258,
+   "title": "第258章 大夏龙雀的守护",
+   "kind": "continuation",
+   "chars": 4978
+  },
+  {
+   "i": 259,
+   "title": "第259章 新的黎明",
+   "kind": "continuation",
+   "chars": 4636
+  },
+  {
+   "i": 260,
+   "title": "第260章 红莲绽放的时代",
+   "kind": "continuation",
+   "chars": 7984
+  }
+ ]
+}

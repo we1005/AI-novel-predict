@@ -37,6 +37,8 @@ from ..llm.prompts.reviewers import (
     PLOT_REVIEWER_TOOL,
     STYLE_REVIEWER_SYSTEM,
     STYLE_REVIEWER_TOOL,
+    ERA_REGISTER_REVIEWER_TOOL,
+    build_era_register_system,
     gate_decision,
     hard_issue_score,
     heuristic_decision,
@@ -221,6 +223,41 @@ def _prev_chapter_tail(outline_run_id: int, chapter_index: int, n_chars: int = 7
     return _clean_tail(r.get("body") or "", n_chars)
 
 
+_SCENE_CUES = {
+    "combat": ["战", "打斗", "交手", "对决", "厮杀", "激战", "出手", "搏", "血", "袭", "攻", "击", "刃", "甲"],
+    "dialogue": ["对话", "谈", "质问", "交涉", "谈判", "审", "密谈", "试探", "争论", "觐见", "劝", "说服", "对峙"],
+    "scenery": ["夜", "赶路", "抵达", "潜入", "环境", "街", "城", "雨", "雪", "风", "景", "黎明", "黄昏", "废墟"],
+    "psychology": ["回忆", "独白", "挣扎", "心", "抉择", "痛", "孤", "念", "犹豫", "恐惧"],
+}
+
+
+def _scene_exemplar_block(chapter_outline: dict) -> str:
+    """按本章场景类型，取原著同类**真实范例段落**作 few-shot（"给范文"而非只"讲道理"）。"""
+    from ..memory.models import StyleProfile
+    with session_scope() as s:
+        row = s.execute(select(StyleProfile).order_by(desc(StyleProfile.id)).limit(1)).scalars().first()
+        ex = (row.scene_exemplars_json if row else None) or {}
+    if not ex:
+        return ""
+    text = " ".join([str(chapter_outline.get("intent") or ""), str(chapter_outline.get("pacing") or ""),
+                     " ".join(str(x) for x in (chapter_outline.get("must_include") or []))])
+    scores = {k: sum(text.count(c) for c in cues) for k, cues in _SCENE_CUES.items()}
+    # 取命中最高的 2 类；都为 0 则回退到最常见的 打斗+对话
+    ranked = [k for k, v in sorted(scores.items(), key=lambda kv: kv[1], reverse=True) if v > 0][:2]
+    if not ranked:
+        ranked = ["combat", "dialogue"]
+    labels = {"combat": "打斗/动作", "dialogue": "对话", "scenery": "景物", "psychology": "心理"}
+    parts = []
+    for k in ranked:
+        for seg in (ex.get(k) or [])[:1]:  # 每类 1 段，控制上下文体量
+            if seg.strip():
+                parts.append(f"〔{labels[k]}·原著范例〕\n{seg.strip()}")
+    if not parts:
+        return ""
+    return ("\n\n# 同类场景·原著真实范例（照着这种句子节奏、用词密度、留白来写本章对应场景；"
+            "模仿语感，不要照抄情节）\n" + "\n\n".join(parts))
+
+
 def _writer_call(
     *,
     chapter_outline: dict,
@@ -231,6 +268,10 @@ def _writer_call(
     cached_blocks: list,
     prev_chapter_tail: str | None = None,
 ) -> tuple[str, float, int]:
+    try:
+        scene_exemplars = _scene_exemplar_block(chapter_outline)
+    except Exception:  # noqa: BLE001
+        scene_exemplars = ""
     user = build_writer_user_message(
         chapter_outline=chapter_outline,
         style_refs=style_refs,
@@ -238,6 +279,7 @@ def _writer_call(
         previous_attempt=previous_attempt,
         chapter_index=chapter_index,
         prev_chapter_tail=prev_chapter_tail,
+        scene_exemplars=scene_exemplars,
     )
     # If this book has author-style mimic mode on, lead the writer with that
     # profile instead of the default 网文 voice.
@@ -252,7 +294,8 @@ def _writer_call(
         model=MODEL_STRONG,
         system=[{"type": "text", "text": writer_system}, *cached_blocks],
         messages=[{"role": "user", "content": user}],
-        max_tokens=8000,
+        # 16000：原著每章中位 5207 字，8000 token 顶不住 5000+ 字的成稿（会被截短）。
+        max_tokens=16000,
         temperature=0.75,
     )
     return _strip_inline_markdown(resp.text or ""), resp.cost_usd, resp.elapsed_ms
@@ -274,16 +317,33 @@ def _reviewer_call(
         f"## 章节正文\n\n{prose}\n\n"
         "请按你的职责审查并调用工具返回结果。"
     )
-    resp = llm.call(
-        agent=f"draft.review.{name}",
-        model=MODEL_FAST,
-        system=[{"type": "text", "text": system_text}, *cached_blocks],
-        messages=[{"role": "user", "content": user}],
-        tools=[tool],
-        tool_choice={"type": "tool", "name": tool["name"]},
-        max_tokens=4000,
-        temperature=0.2,
-    )
+    # 限流退避：审查撞 429/限流时退避重试，避免硬审"无结论"导致整章 blocked。
+    # 之前正是因为这里一报错就被当成"零问题"放行，制造了大量假过审。
+    import time as _time
+    last_exc: Exception | None = None
+    resp = None
+    for _try in range(4):
+        try:
+            resp = llm.call(
+                agent=f"draft.review.{name}",
+                model=MODEL_FAST,
+                system=[{"type": "text", "text": system_text}, *cached_blocks],
+                messages=[{"role": "user", "content": user}],
+                tools=[tool],
+                tool_choice={"type": "tool", "name": tool["name"]},
+                max_tokens=4000,
+                temperature=0.2,
+            )
+            break
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            msg = str(exc)
+            if any(k in msg for k in ("429", "RateLimit", "Quota", "rate limit", "TooManyRequests")):
+                _time.sleep(20 * (_try + 1))  # 20s/40s/60s 渐进退避
+                continue
+            raise
+    if resp is None:
+        raise last_exc or RuntimeError("reviewer call failed")
     out = (resp.tool_use or {}).get("input", {}) or {}
     if not out and resp.text:
         out = _coerce_dict(resp.text)
@@ -336,6 +396,22 @@ def _editor_call(
     return out, resp.cost_usd
 
 
+def corpus_median_chapter_chars(default: int = 4000) -> int:
+    """本书原著单章中位字数：按 corpus 章节真实 offset 统计（排除续写登记的 0-offset 章），
+    并缓存到 style_profile.median_chapter_chars。作为 word_target 的**书本级默认值**——
+    每本书自动算出自己的值（5000 字的书得 ~5000，8000 字的书得 ~8000），不写死。"""
+    from ..memory.models import Chapter, StyleProfile
+    with session_scope() as s:
+        rows = s.execute(select(Chapter.char_offset_start, Chapter.char_offset_end)).all()
+        lens = sorted((e - st) for st, e in rows
+                      if st is not None and e is not None and e > st)
+        med = int(lens[len(lens) // 2]) if lens else default
+        sp = s.execute(select(StyleProfile).order_by(desc(StyleProfile.id)).limit(1)).scalars().first()
+        if sp is not None and sp.median_chapter_chars != med:
+            sp.median_chapter_chars = med  # 缓存/保存，供前端展示与复用
+    return med
+
+
 def write_chapter(
     *,
     outline_run_id: int,
@@ -343,6 +419,8 @@ def write_chapter(
     skip_reviews: bool = False,
     max_attempts: int = 3,
     reingest: bool = True,
+    bilingual: bool = False,
+    repo_commit: bool = False,
 ) -> dict[str, Any]:
     # 1) Load outline + chapter outline
     with session_scope() as s:
@@ -360,6 +438,10 @@ def write_chapter(
         # Determine the "after_chapter" for cached context — this is the
         # chapter PRIOR to the one we're writing.
         after_chapter = max(0, chapter_index - 1)
+
+    # word_target 兜底：大纲未给则用**本书原著中位字数**（按书统计、非写死）。
+    if not chapter_outline.get("word_target"):
+        chapter_outline = {**chapter_outline, "word_target": corpus_median_chapter_chars()}
 
     # 2) Build cached context (entities/foreshadowings/mysteries/world rules etc.)
     ctx = _gather_context(after_chapter)
@@ -468,7 +550,22 @@ def write_chapter(
             ("plot", PLOT_REVIEWER_SYSTEM, PLOT_REVIEWER_TOOL),
             ("consistency", CONSISTENCY_REVIEWER_SYSTEM, CONSISTENCY_REVIEWER_TOOL),
         ]
-        with ThreadPoolExecutor(max_workers=3) as ex:
+        # 第4审「时代语域」：默认关；仅当本书开启(era/culture 任一) 且 有语域卡 时加入。
+        try:
+            from ..style.pipeline import get_profile as _gp
+            _prof = _gp() or {}
+            _era_on = bool(_prof.get("era_check_enabled"))
+            _cul_on = bool(_prof.get("culture_check_enabled"))
+            _card = _prof.get("register_card")
+            if (_era_on or _cul_on) and _card:
+                review_jobs.append((
+                    "era_register",
+                    build_era_register_system(_card, _era_on, _cul_on),
+                    ERA_REGISTER_REVIEWER_TOOL,
+                ))
+        except Exception:  # noqa: BLE001
+            pass
+        with ThreadPoolExecutor(max_workers=len(review_jobs)) as ex:
             futs = {
                 ex.submit(
                     _reviewer_call,
@@ -529,6 +626,17 @@ def write_chapter(
             final_text = prose
             final_status = decision
             break
+        if decision == "blocked":
+            # 硬审（剧情/一致性）无有效结论——多为持续限流。绝不假盖章 approve。
+            # 保留正文供排查，但标 review_failed（不以 approv/ship 开头）→ 不计入完成、
+            # 由编排器退避后重写/重审。这是修复"429 假过审"的下游闸门。
+            final_text = prose  # 保留以便仅重审而非全重写
+            final_status = "review_failed"
+            editor_out.setdefault("rationale", "")
+            editor_out["rationale"] = (
+                editor_out["rationale"] + " | 硬审报错无结论，拒绝放行（review_failed）").strip(" |")
+            attempt_record["editor"] = editor_out
+            break
 
         # Set up next iteration's revision feedback
         merged = editor_out.get("merged_issues") or []
@@ -561,17 +669,47 @@ def write_chapter(
     # "ship_with_warnings" / "shipped_with_warnings") — match by prefix.
     _ok = bool(final_text) and str(final_status).startswith(("approv", "ship"))
     if reingest and _ok:
-        def _reingest():
+        if repo_commit:
+            # 接版本控制时**同步**回灌，确保增量 ch<N>.json 落盘后再 commit。
             try:
                 from ..ingest.extract import extract_one_chapter
                 extract_one_chapter(chapter_index, final_text)
             except Exception:  # noqa: BLE001
                 pass
+        else:
+            def _reingest():
+                try:
+                    from ..ingest.extract import extract_one_chapter
+                    extract_one_chapter(chapter_index, final_text)
+                except Exception:  # noqa: BLE001
+                    pass
+            try:
+                import threading
+                threading.Thread(target=_reingest, daemon=True).start()
+            except Exception:  # noqa: BLE001
+                pass
+
+    # 双语交织（接入主流程）：中文**真过审**后，把定稿锚定生成英文版（中英对照）。
+    # 同步执行，确保返回时双语已就绪；非致命，失败不影响中文成稿。
+    bilingual_status = None
+    if bilingual and _ok:
         try:
-            import threading
-            threading.Thread(target=_reingest, daemon=True).start()
-        except Exception:  # noqa: BLE001
-            pass
+            from ..style.bilingual import bilingual_from_zh
+            br = bilingual_from_zh(final_text, chapter_index)
+            bilingual_status = "done" if (br.get("final_en") or "").strip() else "empty"
+            total_cost += br.get("cost_usd", 0.0)
+        except Exception as e:  # noqa: BLE001
+            bilingual_status = f"failed:{str(e)[:60]}"
+
+    # B · 接版本控制：中文+英文+增量都就绪后，导出正文并 git commit 本章。
+    repo_status = None
+    if repo_commit and _ok:
+        try:
+            from ..repo import store as _repo
+            r = _repo.snapshot_chapter(chapter_index)
+            repo_status = "committed" if r.get("ok") else "nochange"
+        except Exception as e:  # noqa: BLE001
+            repo_status = f"failed:{str(e)[:60]}"
 
     return {
         "id": draft_id,
@@ -580,6 +718,8 @@ def write_chapter(
         "attempts": attempts,
         "final_text": final_text,
         "cost_usd": round(total_cost, 5),
+        "bilingual": bilingual_status,
+        "repo": repo_status,
     }
 
 
@@ -587,7 +727,7 @@ def write_chapter(
 # Read APIs
 # ---------------------------------------------------------------------------
 
-def list_drafts(limit: int = 50) -> list[dict]:
+def list_drafts(limit: int = 800) -> list[dict]:
     with session_scope() as s:
         rows = s.execute(
             select(ChapterDraft).order_by(desc(ChapterDraft.id)).limit(limit)
@@ -600,6 +740,8 @@ def list_drafts(limit: int = 50) -> list[dict]:
                 "title": r.title,
                 "status": r.status,
                 "n_attempts": len(r.attempts_json or []),
+                # 正文字数（去空白）——让前端一眼看出空章/体量。
+                "chars": len((r.final_text or "").replace(" ", "").replace("\n", "").replace("\t", "")),
                 "cost_usd": r.cost_usd,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
                 "updated_at": r.updated_at.isoformat() if r.updated_at else None,

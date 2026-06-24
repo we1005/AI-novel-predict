@@ -36,12 +36,14 @@ const LANE_LABEL: Record<string, string> = {
   style: "文风",
   plot: "剧情",
   consistency: "一致性",
+  era_register: "时代语域",
 };
 
 const LANE_COLOR: Record<string, string> = {
   style: "#7aa2f7",
   plot: "#bb9af7",
   consistency: "#e0af68",
+  era_register: "#f7768e",
 };
 
 const SEVERITY_COLOR: Record<string, string> = {
@@ -121,16 +123,26 @@ function DraftPageInner() {
 
   useEffect(() => { reload(); }, []);
 
-  // Load outline runs for the picker; auto-select one if none chosen yet.
+  // Load outline runs for the picker.
   useEffect(() => {
-    api.outlineList().then((runs: any[]) => {
-      setOutlineRuns(runs || []);
-      if (!outlineRunId && runs && runs.length) {
-        setOutlineRunId(String(runs[0].id));
-      }
-    }).catch(() => {});
+    api.outlineList().then((runs: any[]) => setOutlineRuns(runs || [])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Smart default: land on the outline of the most-recently-written chapter
+  // (so freshly-written chapters show up without hunting the dropdown), falling
+  // back to the newest outline run. Runs once, never overrides a user/URL choice.
+  useEffect(() => {
+    if (outlineRunId || !outlineRuns.length) return;
+    let runId = outlineRuns[0].id;
+    if (drafts.length) {
+      const latest = [...drafts].sort((a, b) =>
+        String(b.updated_at || "").localeCompare(String(a.updated_at || "")))[0];
+      if (latest?.outline_run_id) runId = latest.outline_run_id;
+    }
+    setOutlineRunId(String(runId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drafts, outlineRuns]);
 
   // When the chosen outline run changes, load its chapters and auto-pick the
   // first not-yet-drafted chapter (or the first chapter).
@@ -279,12 +291,18 @@ function DraftPageInner() {
               <label style={{ fontSize: 12, color: "var(--muted)" }}>
                 <div style={{ marginBottom: 4 }}>选大纲</div>
                 <select value={outlineRunId} onChange={(e) => setOutlineRunId(e.target.value)}
-                  style={selectStyle}>
-                  {outlineRuns.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      #{r.id} · {r.phase_name || (r.source_kind === "arc" ? "全弧" : "预测")} · 第{r.chapter_start}-{r.chapter_end}章（{r.chapter_count}章）
-                    </option>
-                  ))}
+                  style={{ ...selectStyle, minWidth: 360, maxWidth: 560 }}>
+                  {outlineRuns.map((r) => {
+                    const src = r.source_kind === "arc"
+                      ? `全弧#${r.source_run_id}`
+                      : `预测#${r.source_run_id}`;
+                    const ph = r.phase_index != null ? `阶段${r.phase_index + 1}` : "";
+                    return (
+                      <option key={r.id} value={r.id}>
+                        {src}{ph ? ` ${ph}` : ""} · {r.phase_name || "(未命名)"} · 第{r.chapter_start}-{r.chapter_end}章（{r.chapter_count}章）· 大纲#{r.id}
+                      </option>
+                    );
+                  })}
                 </select>
               </label>
 
@@ -388,7 +406,9 @@ function DraftPageInner() {
                       {d.title || "(无标题)"}
                     </div>
                     <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-                      {d.n_attempts} 轮 · ${d.cost_usd?.toFixed(4)}
+                      <span style={{ color: (d.chars ?? 0) === 0 ? "var(--bad)" : "var(--accent-2)", fontWeight: 600 }}>
+                        {(d.chars ?? 0) === 0 ? "空章 0 字" : `${d.chars} 字`}
+                      </span> · {d.n_attempts} 轮 · ${d.cost_usd?.toFixed(4)}
                     </div>
                   </button>
                 );
@@ -419,8 +439,9 @@ function DraftPageInner() {
                     </span>
                   </div>
                   <div className="muted" style={{ marginTop: 4, fontSize: 11 }}>
-                    {d.title} · {d.n_attempts} 轮 · ${d.cost_usd?.toFixed(4)}
-                  </div>
+                    {d.title} · <span style={{ color: (d.chars ?? 0) === 0 ? "var(--bad)" : undefined, fontWeight: (d.chars ?? 0) === 0 ? 600 : 400 }}>
+                      {(d.chars ?? 0) === 0 ? "空章 0 字" : `${d.chars} 字`}
+                    </span> · {d.n_attempts} 轮</div>
                 </button>
               ))}
             </div>
@@ -468,6 +489,42 @@ function DraftDetail({ draft, outline, onSave, busy, onRegenerate }: {
   const [biView, setBiView] = useState<"zh" | "en" | "both">("both");
   const [biRunning, setBiRunning] = useState(false);
   const [mimicOn, setMimicOn] = useState<boolean | null>(null);
+
+  // 顾虑2 · 润色建议(落库 + 局部采纳 + 锚点失效检测)
+  const [edits, setEdits] = useState<any[] | null>(null);
+  const [baseChanged, setBaseChanged] = useState(false);
+  const [accepted, setAccepted] = useState<Set<number>>(new Set());
+  const [sugBusy, setSugBusy] = useState(false);
+  // 打开章节时加载已存建议(刷新后仍在)，并实时重算锚点状态
+  useEffect(() => {
+    setEdits(null); setAccepted(new Set()); setBaseChanged(false);
+    api.getSuggestions(draft.id).then((r) => {
+      if (r.edits && r.edits.length) { setEdits(r.edits); setBaseChanged(!!r.base_changed); }
+    }).catch(() => {});
+  }, [draft.id]);
+  const runSuggest = async () => {
+    setSugBusy(true); setAccepted(new Set());
+    try {
+      const r = await api.suggestEdits(draft.id);
+      setEdits(r.edits || []); setBaseChanged(!!r.base_changed);
+    } catch (e) { message.error("出建议失败：" + String(e)); }
+    finally { setSugBusy(false); }
+  };
+  const applyAccepted = async () => {
+    if (!edits) return;
+    const ids = edits.filter((e) => accepted.has(e.id) && e.applicable).map((e) => e.id);
+    if (!ids.length) { message.info("未勾选任何可采纳的建议"); return; }
+    setSugBusy(true);
+    try {
+      const r = await api.applyEdits(draft.id, ids);
+      const failMsg = (r.failed && r.failed.length) ? `，${r.failed.length} 处锚点失效未应用` : "";
+      message.success(`已采纳 ${r.applied} 处${failMsg}${r.en_stale ? "（英文版已过时，可重新生成）" : ""}`);
+      setAccepted(new Set()); onSave();
+      const rr = await api.getSuggestions(draft.id);  // 重载，刷新 applied/stale 状态
+      setEdits(rr.edits || []); setBaseChanged(!!rr.base_changed);
+    } catch (e) { message.error("应用失败：" + String(e)); }
+    finally { setSugBusy(false); }
+  };
 
   useEffect(() => { setTextDraft(draft.final_text || ""); }, [draft.id, draft.final_text]);
   useEffect(() => { api.styleGet().then((d: any) => setMimicOn(!!d?.mimic_enabled)).catch(() => {}); }, []);
@@ -549,6 +606,11 @@ function DraftDetail({ draft, outline, onSave, busy, onRegenerate }: {
               {busy ? "写作中…" : "🔄 重写本章"}
             </button>
           )}
+          <button onClick={runSuggest} disabled={sugBusy} className="ghost"
+            title="扫描中文定稿，出『就地替换』建议(套路词/翻译腔/时代错置/文化语域)。不改原文，逐条采纳。已有建议时点此重新生成(会花额度)。"
+            style={{ padding: "4px 12px", fontSize: 12 }}>
+            {sugBusy ? "分析中…" : (edits && edits.length ? "🔄 重新生成建议" : "✍️ 出修改建议(不改原文)")}
+          </button>
           <button onClick={() => {
             const title = `第${draft.chapter_index}章 ${draft.title || ""}`.trim();
             let body = `${title}\n\n【中文】\n\n${draft.final_text || ""}`;
@@ -571,7 +633,7 @@ function DraftDetail({ draft, outline, onSave, busy, onRegenerate }: {
       <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--panel-2)", borderRadius: 8, borderLeft: "3px solid var(--accent-2)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <strong style={{ fontSize: 13 }}>🌐 双语版本</strong>
-          {biJob?.status === "done" ? (
+          {biJob?.status === "done" && (
             <div style={{ display: "flex", gap: 4 }}>
               {(["zh", "both", "en"] as const).map((v) => (
                 <button key={v} onClick={() => setBiView(v)} className={biView === v ? "" : "ghost"}
@@ -580,14 +642,20 @@ function DraftDetail({ draft, outline, onSave, busy, onRegenerate }: {
                 </button>
               ))}
             </div>
-          ) : (
-            <button onClick={genBilingual} disabled={biRunning} style={{ padding: "3px 12px", fontSize: 12 }}>
-              {biRunning ? `生成中…${BI_STAGE_LABEL[biJob?.stage] ? `（${BI_STAGE_LABEL[biJob?.stage]}）` : "（约 5-15 分钟）"}` : "✨ 生成本章英文/双语版"}
-            </button>
           )}
-          {biJob?.status === "done" && (
-            <span className="muted" style={{ fontSize: 11 }}>独立中英稿→互译→取长补短融合 · 可在「文笔风格」页看融合过程</span>
-          )}
+          {/* A·完整互译精修：始终可点（即便已有 B 的锚定双语）。会重跑「独立中英稿→互译→取长补短」，**两边都会被改写**。 */}
+          <button onClick={genBilingual} disabled={biRunning} className="ghost"
+            title="模式 A：独立中英稿→互译→editor 取长补短融合。中英都会被精修改写（中文不再锁定）。约 5-15 分钟。"
+            style={{ padding: "3px 12px", fontSize: 12 }}>
+            {biRunning
+              ? `精修中…${BI_STAGE_LABEL[biJob?.stage] ? `（${BI_STAGE_LABEL[biJob?.stage]}）` : "（约 5-15 分钟）"}`
+              : biJob?.status === "done" ? "🔁 完整互译精修（A·会改中英）" : "✨ 生成本章英文/双语版（A）"}
+          </button>
+          <span className="muted" style={{ fontSize: 11 }}>
+            {biJob?.status === "done"
+              ? "当前为 B·锚定生成（中文锁定、英文锚定）。点上方按钮可跑 A·取长补短融合（会改中英）。"
+              : "A：独立中英稿→互译→取长补短融合 · 可在「文笔风格」页看过程"}
+          </span>
         </div>
         {biJob?.status === "done" && (
           <div style={{ display: "grid", gridTemplateColumns: biView === "both" ? "1fr 1fr" : "1fr", gap: 12, marginTop: 10 }}>
@@ -600,6 +668,58 @@ function DraftDetail({ draft, outline, onSave, busy, onRegenerate }: {
           </div>
         )}
       </div>
+
+      {/* 顾虑2 · 润色建议 diff（局部采纳，不改原文，直到点应用） */}
+      {edits && (
+        <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--panel-2)", borderRadius: 8, borderLeft: "3px solid var(--good)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+            <strong style={{ fontSize: 13 }}>✍️ 修改建议</strong>
+            <span className="muted" style={{ fontSize: 12 }}>{edits.length} 条 · 勾选要采纳的 · 不勾不改</span>
+            <button onClick={() => setAccepted(new Set(edits.filter((e) => e.found).map((e) => e.id)))}
+              className="ghost" style={{ padding: "2px 8px", fontSize: 11 }}>全选</button>
+            <button onClick={() => setAccepted(new Set())} className="ghost" style={{ padding: "2px 8px", fontSize: 11 }}>清空</button>
+            <button onClick={applyAccepted} disabled={sugBusy || accepted.size === 0}
+              style={{ padding: "3px 12px", fontSize: 12 }}>
+              {sugBusy ? "应用中…" : `✓ 应用已采纳（${accepted.size}）`}
+            </button>
+          </div>
+          {baseChanged && (
+            <p style={{ fontSize: 11.5, color: "var(--warn)", margin: "0 0 8px" }}>
+              ⚠ 原文自生成建议后已被改动——失效的条目已标「锚点失效」、不可采纳;如需最新建议请重新「修改建议」。
+            </p>
+          )}
+          {edits.length === 0 && <p className="muted" style={{ fontSize: 12 }}>未发现需修改处 👍</p>}
+          <div style={{ display: "grid", gap: 8 }}>
+            {edits.map((e) => {
+              const done = e.status === "applied";
+              const stale = e.stale || e.status === "stale";
+              const ok = e.applicable && !done;
+              return (
+              <label key={e.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: 8, borderRadius: 6,
+                background: done ? "rgba(158,206,106,.12)" : accepted.has(e.id) ? "rgba(158,206,106,.08)" : "var(--bg)",
+                cursor: ok ? "pointer" : "not-allowed", opacity: ok ? 1 : 0.5 }}>
+                <input type="checkbox" disabled={!ok} checked={accepted.has(e.id)}
+                  onChange={(ev) => { const n = new Set(accepted); ev.target.checked ? n.add(e.id) : n.delete(e.id); setAccepted(n); }}
+                  style={{ marginTop: 3 }} />
+                <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 1.7 }}>
+                  <div style={{ marginBottom: 2 }}>
+                    <span className="tag" style={{ fontSize: 10, background: "var(--panel)", marginRight: 6 }}>{e.category}</span>
+                    <span className="muted" style={{ fontSize: 11 }}>{e.reason}</span>
+                    {done && <span style={{ color: "var(--good)", fontSize: 11, marginLeft: 6 }}>✓ 已采纳</span>}
+                    {stale && <span style={{ color: "var(--bad)", fontSize: 11, marginLeft: 6 }}>⚠ 锚点失效（原文已改），不可应用</span>}
+                    {e.ambiguous && ok && <span style={{ color: "var(--warn)", fontSize: 11, marginLeft: 6 }}>（正文多处匹配，应用改第一处）</span>}
+                  </div>
+                  <div style={{ fontFamily: 'ui-serif, "PingFang SC", serif' }}>
+                    <span style={{ background: "rgba(247,118,142,.18)", textDecoration: "line-through", color: "var(--bad)" }}>{e.quote}</span>
+                    <span style={{ margin: "0 6px", color: "var(--muted)" }}>→</span>
+                    <span style={{ background: "rgba(158,206,106,.18)", color: "var(--good)" }}>{e.replacement}</span>
+                  </div>
+                </div>
+              </label>
+            ); })}
+          </div>
+        </div>
+      )}
 
       {/* review-model legend so the semantics are clear */}
       {(draft.attempts || []).some((a: any) => a.reviews) && (
@@ -631,8 +751,8 @@ function DraftDetail({ draft, outline, onSave, busy, onRegenerate }: {
           <div key={a.attempt} style={{ marginTop: 14 }}>
             {/* reviewer issues */}
             {a.reviews && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
-                {(["style", "plot", "consistency"] as const).map((lane) => {
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(${["style","plot","consistency","era_register"].filter((l)=>a.reviews[l]).length || 3}, 1fr)`, gap: 8, marginBottom: 12 }}>
+                {(["style", "plot", "consistency", "era_register"] as const).filter((lane) => a.reviews[lane]).map((lane) => {
                   const r = a.reviews[lane] || {};
                   const issues = r.issues || [];
                   return (
@@ -697,7 +817,12 @@ function DraftDetail({ draft, outline, onSave, busy, onRegenerate }: {
             {/* prose */}
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                <strong style={{ fontSize: 13, color: "var(--muted)" }}>正文（attempt {a.attempt}）</strong>
+                <strong style={{ fontSize: 13, color: "var(--muted)" }}>
+                  正文（attempt {a.attempt}）
+                  <span style={{ marginLeft: 8, color: "var(--accent-2)", fontWeight: 600 }}>
+                    {(a.prose || "").replace(/\s/g, "").length} 字
+                  </span>
+                </strong>
                 {a.attempt === (draft.attempts || []).length && (
                   editing ? (
                     <div style={{ display: "flex", gap: 6 }}>
