@@ -285,23 +285,28 @@ export default function StylePage() {
             </div>
           )}
 
-          {/* tropes + vocabulary */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {/* tropes + vocabulary — minWidth:0 防止长串撑破 grid 轨道、挤压邻列 */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
             {p.tropes && p.tropes.length > 0 && (
-              <div className="card">
+              <div className="card" style={{ minWidth: 0 }}>
                 <h3 style={{ marginTop: 0 }}>常用套路 / 母题</h3>
-                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8 }}>
-                  {p.tropes.map((t, i) => <li key={i}>{t}</li>)}
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, overflowWrap: "anywhere" }}>
+                  {p.tropes.map((t, i) => <li key={i}>{renderVal(t)}</li>)}
                 </ul>
               </div>
             )}
             {p.signature_vocabulary && p.signature_vocabulary.length > 0 && (
-              <div className="card">
+              <div className="card" style={{ minWidth: 0 }}>
                 <h3 style={{ marginTop: 0 }}>标志性词汇 / 意象</h3>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {p.signature_vocabulary.map((w, i) => (
-                    <Tag key={i} style={{ fontSize: 12, padding: "2px 8px" }}>{w}</Tag>
-                  ))}
+                  {/* 模型可能把整段「A、B、C…」塞成一个元素 → 按顿号/逗号拆成多个标签 */}
+                  {p.signature_vocabulary
+                    .flatMap((w) => cleanMd(w).split(/[、,，]/))
+                    .map((w) => w.trim())
+                    .filter(Boolean)
+                    .map((w, i) => (
+                      <Tag key={i} style={{ fontSize: 12, padding: "2px 8px", whiteSpace: "normal", overflowWrap: "anywhere", maxWidth: "100%" }}>{w}</Tag>
+                    ))}
                 </div>
               </div>
             )}
@@ -606,9 +611,15 @@ function BilingualPanel() {
 // 把任意值(字符串/数组/对象)渲染成可读文本——模型偶尔把本应是字符串的
 // 字段(如 structural_habits)返回成对象 {chapter_title, chapter_ending, …},
 // 直接当 React child 渲染会抛 "Objects are not valid as a React child"。
+// 去掉模型偶尔夹带的 markdown 标记(** 加粗、行首 - / * 列表符),避免字面显示。
+function cleanMd(s: any): string {
+  return String(s).replace(/\*\*/g, "").replace(/^\s*[-*]\s+/, "").trim();
+}
+
 function renderVal(v: any): ReactNode {
   if (v == null) return null;
-  if (typeof v === "string" || typeof v === "number") return v;
+  if (typeof v === "string") return cleanMd(v);
+  if (typeof v === "number") return v;
   if (Array.isArray(v)) {
     return (
       <ul style={{ margin: 0, paddingLeft: 18 }}>
