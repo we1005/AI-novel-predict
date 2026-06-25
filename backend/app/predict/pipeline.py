@@ -253,15 +253,18 @@ def recommend_target_chapters(after_chapter: int) -> dict[str, Any]:
     low = int(round(recommended * 0.8))
     high = int(round(recommended * 1.2))
 
+    end_at = after_chapter + recommended  # 续写完大约到第几章(绝对章号)
     rationale = (
         f"基于 {core} 个核心谜团、{major} 个重要谜团、{minor} 个次要谜团,"
         f"{open_fore} 条未收束伏笔,中位 {median} 字/章,{pacing_note};"
-        f"建议续写约 {recommended} 章(区间 {low}–{high})。"
+        f"建议**往后再续写约 {recommended} 章**(区间 {low}–{high}),"
+        f"即从第 {after_chapter + 1} 章写到约第 {end_at} 章。"
     )
     return {
         "recommended": recommended,
         "low": low,
         "high": high,
+        "end_at": end_at,
         "signals": {
             "open_foreshadowings": open_fore,
             "mysteries_core": core,

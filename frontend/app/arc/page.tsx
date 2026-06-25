@@ -57,7 +57,7 @@ function ArcPageInner() {
   const [target, setTarget] = useState(100);
   const [hints, setHints] = useState("");
   const [perCandidate, setPerCandidate] = useState(true);  // true=逐个生成(长章稳) / false=一起生成(短章快)
-  const [recommend, setRecommend] = useState<{ recommended: number; low: number; high: number; rationale: string } | null>(null);
+  const [recommend, setRecommend] = useState<{ recommended: number; low: number; high: number; end_at: number; rationale: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [busySince, setBusySince] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
@@ -200,7 +200,7 @@ function ArcPageInner() {
           <label title="不是「写到第几章为止」——故事弧永远规划到结局；这里只是「用大约多少章把整本剩余故事讲完」的节奏/篇幅软提示，模型可能按自估章数微调">目标延展章节（到结局的篇幅）<input type="number" value={target} onChange={(e) => setTarget(+e.target.value)} style={{ width: 90, marginLeft: 6 }} min={20} max={500} /></label>
           {recommend && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-              <span className="muted">💡 建议 <b style={{ color: "var(--accent-2)" }}>~{recommend.recommended}</b> 章（{recommend.low}–{recommend.high}）</span>
+              <span className="muted" title="往后再续写的章数（增量），不是写到第几章">💡 建议再写 <b style={{ color: "var(--accent-2)" }}>~{recommend.recommended}</b> 章（{recommend.low}–{recommend.high}，约到第 {recommend.end_at} 章）</span>
               <button onClick={() => setTarget(recommend.recommended)} className="ghost"
                 style={{ padding: "2px 8px", fontSize: 11 }} disabled={target === recommend.recommended}>
                 采用
