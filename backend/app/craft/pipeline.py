@@ -159,18 +159,32 @@ def build_style_cards() -> dict[str, Any]:
         if not sample:
             done[cat] = {"snippet_count": 0, "card": None}
             continue
-        try:
-            resp = llm.call(
-                agent="craft.card", model=MODEL_STRONG,
-                system=[{"type": "text", "text": CRAFT_CARD_SYSTEM + schema_hint(CRAFT_CARD_TOOL)}],
-                messages=[{"role": "user", "content": build_card_user(cat, sample)}],
-                max_tokens=4000, temperature=0.3,
-            )
-            total_cost += resp.cost_usd or 0.0
-            card = _loads_obj(resp)
-        except Exception as e:  # noqa: BLE001
-            print(f"[craft.card] {cat} 失败: {str(e)[:120]}", flush=True)
-            done[cat] = {"snippet_count": n_total, "card": None, "error": str(e)[:120]}
+        # 逐步缩样重试:provider 偶对整批片段触发内容审核(SensitiveContentDetected,
+        # 如比喻类含血/死意象),减少样本量常可绕过。
+        card = None
+        last_err = ""
+        for topn in (len(sample), 8, 4, 2):
+            sub = sample[:topn]
+            if not sub:
+                break
+            try:
+                resp = llm.call(
+                    agent="craft.card", model=MODEL_STRONG,
+                    system=[{"type": "text", "text": CRAFT_CARD_SYSTEM + schema_hint(CRAFT_CARD_TOOL)}],
+                    messages=[{"role": "user", "content": build_card_user(cat, sub)}],
+                    max_tokens=4000, temperature=0.3,
+                )
+                total_cost += resp.cost_usd or 0.0
+                card = _loads_obj(resp)
+                if card.get("summary"):
+                    break
+            except Exception as e:  # noqa: BLE001
+                last_err = str(e)[:120]
+                if "Sensitive" not in last_err and "content" not in last_err.lower():
+                    break  # 非内容审核类错误,缩样无用,直接停
+        if not (card and card.get("summary")):
+            print(f"[craft.card] {cat} 失败: {last_err or '空卡'}", flush=True)
+            done[cat] = {"snippet_count": n_total, "card": None, "error": last_err}
             continue
         # DB 写也要兜异常:建卡期间前端并发轮询会触发 SQLite "database is locked",
         # 若不捕获会把整个建卡循环打断(实测 26 类只建到第 11 类就停)。重试几次再跳过。
