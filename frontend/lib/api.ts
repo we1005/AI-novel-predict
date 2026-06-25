@@ -175,6 +175,7 @@ export const api = {
     chosen_index: number;
     phase_index?: number | null;
     user_hints?: string;
+    mode?: "oneshot" | "stepwise";
   }) => j<any>("/outline/refine", { method: "POST", body: JSON.stringify(params) }),
   outlineList: () => j<any[]>("/outline/runs"),
   outlineGet: (id: number) => j<any>(`/outline/runs/${id}`),

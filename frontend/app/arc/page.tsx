@@ -310,7 +310,7 @@ function ArcCard({ arc, idx, score, arcRunId, chosenIndex, isWinner, isOpen, onT
   const outlineIdFor = (phaseIndex: number): number | undefined =>
     outlineMap.get(`arc|${arcRunId}|${chosenIndex}|${phaseIndex}`);
 
-  const refinePhase = async (phaseIndex: number) => {
+  const refinePhase = async (phaseIndex: number, mode: "oneshot" | "stepwise" = "oneshot") => {
     setRefining(phaseIndex);
     try {
       const r = await api.outlineRefine({
@@ -318,6 +318,7 @@ function ArcCard({ arc, idx, score, arcRunId, chosenIndex, isWinner, isOpen, onT
         source_run_id: arcRunId,
         chosen_index: chosenIndex,
         phase_index: phaseIndex,
+        mode,
       });
       onOutlineCreated();
       router.push(`/outline?id=${r.id}`);
@@ -469,10 +470,18 @@ function ArcCard({ arc, idx, score, arcRunId, chosenIndex, isWinner, isOpen, onT
                             );
                           }
                           return (
-                            <button onClick={() => refinePhase(i)} disabled={refining !== null}
-                              className="ghost" style={{ padding: "3px 8px", fontSize: 11 }}>
-                              {refining === i ? "生成中…" : "→ 细化大纲"}
-                            </button>
+                            <span style={{ display: "inline-flex", gap: 4 }}>
+                              <button onClick={() => refinePhase(i, "oneshot")} disabled={refining !== null}
+                                className="ghost" style={{ padding: "3px 8px", fontSize: 11 }}
+                                title="一次性产出整段——快、省额度">
+                                {refining === i ? "生成中…" : "→ 细化大纲"}
+                              </button>
+                              <button onClick={() => refinePhase(i, "stepwise")} disabled={refining !== null}
+                                className="ghost" style={{ padding: "3px 8px", fontSize: 11 }}
+                                title="骨架+填充逐章——细节更厚、承接更稳,但更慢更耗额度">
+                                {refining === i ? "…" : "⊕ 骨架+填充"}
+                              </button>
+                            </span>
                           );
                         })()}
                       </div>

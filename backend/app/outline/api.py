@@ -16,6 +16,7 @@ class RefineRequest(BaseModel):
     chosen_index: int
     phase_index: int | None = None
     user_hints: str = ""
+    mode: str = "oneshot"   # oneshot=一次性 / stepwise=骨架→填充逐章
 
 
 @router.post("/refine")
@@ -27,6 +28,7 @@ def refine(req: RefineRequest):
             chosen_index=req.chosen_index,
             phase_index=req.phase_index,
             user_hints=req.user_hints,
+            mode=req.mode,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))

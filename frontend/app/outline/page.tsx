@@ -55,6 +55,7 @@ function OutlinePageInner() {
   };
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [hints, setHints] = useState("");
+  const [mode, setMode] = useState<"oneshot" | "stepwise">("oneshot");
 
   const reload = () => api.outlineList().then(setRuns).catch(() => {});
   const reloadDrafts = () => api.draftList().then(setDrafts).catch(() => {});
@@ -110,6 +111,7 @@ function OutlinePageInner() {
         chosen_index: chosenIdx,
         phase_index: phaseIdx,
         user_hints: hints,
+        mode,
       });
       await reload();
       setMsg(`✅ 生成 ${r.chapters?.length || 0} 章 · $${r.cost_usd?.toFixed(4)}`);
@@ -154,6 +156,22 @@ function OutlinePageInner() {
             <input type="number" value={phaseIdx} onChange={(e) => setPhaseIdx(+e.target.value)}
               style={{ width: 60, marginLeft: 6 }} min={0} />
           </label>
+        </div>
+        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13 }}>生成方式</span>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13, cursor: "pointer" }}>
+            <input type="radio" name="outline-mode" checked={mode === "oneshot"} onChange={() => setMode("oneshot")} />
+            一次性
+          </label>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13, cursor: "pointer" }}>
+            <input type="radio" name="outline-mode" checked={mode === "stepwise"} onChange={() => setMode("stepwise")} />
+            骨架+填充
+          </label>
+          <span className="muted" style={{ fontSize: 11 }}>
+            {mode === "oneshot"
+              ? "一次调用产出整段章节——快、省额度;长 phase 易细节浅/前后矛盾。"
+              : "先出整段骨架,再逐章展开(约 章数+1 次调用)——细节更厚、承接更稳,但更慢、更耗火山额度。"}
+          </span>
         </div>
         <textarea value={hints} onChange={(e) => setHints(e.target.value)} rows={2}
           placeholder="（可选）创作偏好/导演备注…"
