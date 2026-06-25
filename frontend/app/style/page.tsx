@@ -324,8 +324,8 @@ export default function StylePage() {
           {p.pitfalls_to_avoid && p.pitfalls_to_avoid.length > 0 && (
             <div className="card" style={{ borderLeft: "4px solid var(--bad)" }}>
               <h3 style={{ marginTop: 0 }}>模仿时务必避免</h3>
-              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8 }}>
-                {p.pitfalls_to_avoid.map((t, i) => <li key={i}>{t}</li>)}
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, overflowWrap: "anywhere" }}>
+                {p.pitfalls_to_avoid.map((t, i) => <li key={i}>{renderVal(t)}</li>)}
               </ul>
             </div>
           )}
@@ -613,7 +613,11 @@ function BilingualPanel() {
 // 直接当 React child 渲染会抛 "Objects are not valid as a React child"。
 // 去掉模型偶尔夹带的 markdown 标记(** 加粗、行首 - / * 列表符),避免字面显示。
 function cleanMd(s: any): string {
-  return String(s).replace(/\*\*/g, "").replace(/^\s*[-*]\s+/, "").trim();
+  return String(s)
+    .replace(/\*\*/g, "")            // 去 markdown 加粗
+    .replace(/^\s*[-*]\s+/, "")       // 去行首列表符
+    .replace(/^["'\s]+/, "")          // 去行首残留引号/空白(模型常在条目前加 ")
+    .trim();
 }
 
 function renderVal(v: any): ReactNode {
