@@ -252,10 +252,32 @@ def _scene_exemplar_block(chapter_outline: dict) -> str:
         for seg in (ex.get(k) or [])[:1]:  # 每类 1 段，控制上下文体量
             if seg.strip():
                 parts.append(f"〔{labels[k]}·原著范例〕\n{seg.strip()}")
-    if not parts:
-        return ""
-    return ("\n\n# 同类场景·原著真实范例（照着这种句子节奏、用词密度、留白来写本章对应场景；"
-            "模仿语感，不要照抄情节）\n" + "\n\n".join(parts))
+    block = ""
+    if parts:
+        block = ("\n\n# 同类场景·原著真实范例（照着这种句子节奏、用词密度、留白来写本章对应场景；"
+                 "模仿语感，不要照抄情节）\n" + "\n\n".join(parts))
+
+    # 笔法片段库(09)：按场景类型注入对应类的「风格卡要点 + 高分范例片段」;
+    # 并对每章都补"章末钩子"范式(钩子是写作短板)。库为空时各自返回 None、自动跳过。
+    try:
+        from ..craft.pipeline import fewshot_block as _craft_fewshot
+        _CRAFT_MAP = {"combat": "combat", "dialogue": "dialogue_subtext"}
+        craft_parts = []
+        for k in ranked:
+            cat = _CRAFT_MAP.get(k)
+            if cat:
+                fb = _craft_fewshot(cat, n=2)
+                if fb:
+                    craft_parts.append(fb)
+        hook_fb = _craft_fewshot("hook", n=1)
+        if hook_fb:
+            craft_parts.append(hook_fb)
+        if craft_parts:
+            block += ("\n\n# 本书笔法范式（来自「笔法拆解」库；按此句式/节奏/留白模仿，章末务必下钩子）\n"
+                      + "\n\n".join(craft_parts))
+    except Exception:  # noqa: BLE001 — 笔法库可选,失败不影响写作
+        pass
+    return block
 
 
 def _writer_call(

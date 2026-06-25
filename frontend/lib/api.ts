@@ -254,6 +254,15 @@ export const api = {
         per_candidate: perCandidate,
       }),
     }),
+  // 笔法片段库与拆解 (craft)
+  craftSummary: () => j<Record<string, { label: string; count: number; subtypes: Record<string, number>; has_card: boolean }>>("/craft/summary"),
+  craftSnippets: (category?: string, limit = 500) =>
+    j<any[]>(`/craft/snippets?${category ? `category=${encodeURIComponent(category)}&` : ""}limit=${limit}`),
+  craftCards: () => j<any[]>("/craft/cards"),
+  craftExtract: (batchSize = 5, maxChapters: number | null = null) =>
+    j<any>("/craft/extract", { method: "POST", body: JSON.stringify({ batch_size: batchSize, max_chapters: maxChapters }) }),
+  craftRebuildCards: () => j<any>("/craft/cards/rebuild", { method: "POST" }),
+
   arcList: () => j<any[]>("/predict/arc/runs"),
   arcGet: (id: number) => j<any>(`/predict/arc/runs/${id}`),
   arcRecommendChapters: (afterChapter: number) =>

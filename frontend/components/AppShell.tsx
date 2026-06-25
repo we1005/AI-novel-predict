@@ -41,6 +41,7 @@ const NAV_ITEMS: { key: string; icon: React.ReactNode; label: string }[] = [
   { key: "/arc", icon: <CompassOutlined />, label: "预测·全弧" },
   { key: "/sim", icon: <TeamOutlined />, label: "角色仿真" },
   { key: "/style", icon: <HighlightOutlined />, label: "文笔风格" },
+  { key: "/craft", icon: <HighlightOutlined />, label: "笔法拆解" },
   { key: "/outline", icon: <EditOutlined />, label: "大纲" },
   { key: "/draft", icon: <FileTextOutlined />, label: "成稿" },
   { key: "/monitor", icon: <DashboardOutlined />, label: "监控" },
@@ -233,6 +234,7 @@ function ClassicShell({ children }: { children: React.ReactNode }) {
         <Link href="/arc">预测·全弧</Link>
         <Link href="/sim">角色仿真</Link>
         <Link href="/style">文笔风格</Link>
+        <Link href="/craft">笔法拆解</Link>
         <Link href="/outline">大纲</Link>
         <Link href="/draft">成稿</Link>
         <Link href="/monitor">监控</Link>

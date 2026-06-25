@@ -457,3 +457,40 @@ class BookWrite(Base):
     cost_usd = Column(Float, default=0.0)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CraftSnippet(Base):
+    """原著「笔法片段」库的一条:从某章抽出的某类笔法片段(打斗/潜台词对话/章节钩子…)。
+
+    每类**留全部条目**(不截断);``representativeness`` 仅用于消费端排序与 few-shot
+    取高分,不作删除依据。``excerpt`` 是本地私有语料的原文片段,仅作仿写参考
+    (与 StyleProfile.scene_exemplars_json 同性质)。
+    """
+
+    __tablename__ = "craft_snippet"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    category = Column(String, index=True)   # combat / dialogue_subtext / hook (MVP)
+    subtype = Column(String)                # combat:duel/melee/war ; hook:opening/ending
+    chapter_number = Column(Integer, index=True)
+    char_start = Column(Integer)
+    char_end = Column(Integer)
+    excerpt = Column(Text)
+    representativeness = Column(Integer, default=50)  # 0-100 典型性
+    tags_json = Column(JSON, default=list)
+    notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CraftStyleCard(Base):
+    """每个笔法类别一张拆解卡(聚合层):句式/节奏/修辞/信息释放/正反例等。
+
+    ``card_json`` 可直接拼进写作 agent 的 system prompt(按场景类型选对应卡)。
+    """
+
+    __tablename__ = "craft_style_card"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    category = Column(String, unique=True, index=True)
+    snippet_count = Column(Integer, default=0)
+    card_json = Column(JSON)
+    cost_usd = Column(Float, default=0.0)
+    updated_at = Column(DateTime, default=datetime.utcnow)

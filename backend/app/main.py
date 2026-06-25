@@ -18,6 +18,7 @@ from .predict.api import router as predict_router
 from .settings.api import router as settings_router
 from .style.api import router as style_router
 from .repo.api import router as repo_router
+from .craft.api import router as craft_router
 
 app = FastAPI(title="Novel Writer API", version="0.1.0")
 
@@ -61,3 +62,4 @@ app.include_router(settings_router, prefix="/settings", tags=["settings"])
 app.include_router(style_router, prefix="/style", tags=["style"])
 app.include_router(books_router, prefix="/books", tags=["books"])
 app.include_router(repo_router, prefix="/repo", tags=["repo"])
+app.include_router(craft_router, prefix="/craft", tags=["craft"])
