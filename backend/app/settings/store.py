@@ -226,6 +226,14 @@ AGENT_REGISTRY: list[dict[str, Any]] = [
      "temperature": 0.75, "max_tokens": 8000, "top_p": None,
      "desc": "重写文笔：英文母语重写"},
 
+    # ── 笔法片段库（09）──
+    {"id": "craft.tag",          "group": "文笔", "lane": LANE_FAST,
+     "temperature": 0.3, "max_tokens": 6000, "top_p": None,
+     "desc": "笔法片段分类打标（逐批扫全书，高频便宜调用，适合 deepseek-v4-flash 等廉价模型）"},
+    {"id": "craft.card",         "group": "文笔", "lane": LANE_STRONG,
+     "temperature": 0.3, "max_tokens": 4000, "top_p": None,
+     "desc": "逐类笔法风格拆解（基于片段产风格卡）"},
+
     # ── 仿真 ──
     {"id": "profile.build",      "group": "仿真", "lane": LANE_FAST,
      "temperature": 0.3, "max_tokens": 4000, "top_p": None,
