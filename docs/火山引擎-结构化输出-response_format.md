@@ -84,10 +84,33 @@ object 下 `properties`/`required`/`additionalProperties`/`unevaluatedProperties
 代码位置:`backend/app/llm/client.py`(call 的 `response_format` 参数 + volc 网关 + 降级);
 调用处 `backend/app/craft/pipeline.py`、`backend/app/style/pipeline.py`。
 
-### 试点实测结论(火山)
-- `doubao-seed-2.0-lite`:✅ 支持 json_object。输出无围栏、`json.loads` 一次成功。
-- `deepseek-v4-flash`:✅ 支持 json_object。输出无围栏、`json.loads` 一次成功;约 49s/批(比 doubao-lite 略慢但覆盖更全)。
-- 即:火山 doubao / deepseek 系都支持 `json_object`,从源头消除了围栏/markdown 噪声。
+### 全模型实测支持矩阵(`scripts/probe_response_format.py`,直连 provider、绕过降级)
+
+| 模型 | json_object | json_schema(strict) |
+|---|---|---|
+| **doubao-seed-2.0-pro** | ✅ 合法JSON | ✅ 合法+合规结构 |
+| **doubao-seed-2.0-lite** | ✅ 合法JSON | ✅ 合法+合规结构 |
+| doubao-seed-2.0-code | ❌ 400 不支持 | ❌ 400 |
+| doubao-seed-code | ❌ 400 | ❌ 400 |
+| deepseek-v4-pro | ❌ 400 | ❌ 400 |
+| deepseek-v4-flash | ❌ 400 (`json_object is not supported by this model`) | ❌ 400 |
+| minimax-m2.7 | ❌ 400 | ❌ 400 |
+| minimax-m3 | ⚠ 接受但吐空(需 repair) | ⚠ 吐空 |
+| glm-5.2 | ⚠ 吐空 | ❌ 400 |
+| kimi-k2.6 | ⚠ 吐空 | ⚠ 带围栏 |
+
+**结论:火山里只有 `doubao-seed-2.0-pro` / `doubao-seed-2.0-lite` 真正支持两种模式(含 strict 合规)。**
+其余要么 400 拒绝(code/deepseek 系/minimax-2.7),要么接受但吐空/带围栏(minimax-m3/glm/kimi,不可靠)。
+
+> **更正(诚实记录)**:此前曾称"deepseek-v4-flash ✅ 支持 json_object"——错。它其实 **400 拒绝**
+> `response_format`;当时 `craft.tag` 看起来"干净成功",是 `llm.call` 的**自动降级**把该参数去掉、
+> 退回 JSON-in-text、模型恰好吐了干净 JSON 所致,**不是 response_format 的功劳**。降级兜底有效,
+> 但不能据此判定支持。
+
+### 据矩阵收紧 client 网关
+`client.py` 用**白名单** `RESPONSE_FORMAT_MODELS = {doubao-seed-2.0-pro, doubao-seed-2.0-lite}`:
+只对白名单模型挂 `response_format`,避免对其它模型每次"先 400 再重试"的浪费;非白名单走 JSON-in-text。
+自动降级仍保留作双保险。
 
 ## 六、后续计划(TODO)
 

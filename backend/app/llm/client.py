@@ -100,6 +100,11 @@ def estimate_cost_usd(model: str, usage: dict[str, int]) -> float:
     return round(inp + out, 6)
 
 
+# 实测确认支持 response_format(json_object + json_schema strict 均合规)的模型白名单。
+# 火山其余模型 400 拒绝或吐空(见 docs/火山引擎-结构化输出-response_format.md 矩阵)。
+RESPONSE_FORMAT_MODELS = {"doubao-seed-2.0-pro", "doubao-seed-2.0-lite"}
+
+
 @dataclass
 class LLMResponse:
     text: str
@@ -220,10 +225,11 @@ def call(
             if provider_for_model(model) == "dashscope":
                 kwargs["extra_body"] = {"enable_thinking": False}
 
-    # 结构化输出试点(09 文档):仅对火山(volc)模型挂 response_format=json_object,
-    # 保证输出是合法 JSON(消除 ```json 围栏 / markdown / 散文前言)。其它厂商/模型
-    # 不挂(走原 JSON-in-text + json_repair)。模型若不支持会在下面自动回退。
-    if response_format and provider_for_model(model) == "volc":
+    # 结构化输出:只对**实测确认支持**的模型挂 response_format(消除 ```围栏/markdown/
+    # 散文前言;json_schema 还保证结构)。实测火山仅 doubao-seed-2.0-pro/lite 真支持两种
+    # 模式;其余 400 拒绝或吐空(见 docs/火山引擎-结构化输出-response_format.md)。
+    # 不在白名单的模型不挂(走 JSON-in-text + json_repair)。仍保留下面的兜底回退。
+    if response_format and model in RESPONSE_FORMAT_MODELS:
         rf = {"type": "json_object"} if isinstance(response_format, str) else response_format
         kwargs["response_format"] = rf
 
