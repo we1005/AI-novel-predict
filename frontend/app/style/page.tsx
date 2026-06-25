@@ -325,7 +325,12 @@ export default function StylePage() {
             <div className="card" style={{ borderLeft: "4px solid var(--bad)" }}>
               <h3 style={{ marginTop: 0 }}>模仿时务必避免</h3>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, overflowWrap: "anywhere" }}>
-                {p.pitfalls_to_avoid.map((t, i) => <li key={i}>{renderVal(t)}</li>)}
+                {/* 模型常把多条"避免…"用 ； 串进一个元素 → 按分号拆开,每条各自成项 */}
+                {p.pitfalls_to_avoid
+                  .flatMap((t) => cleanMd(t).split(/[；;]/))
+                  .map((t) => t.trim())
+                  .filter(Boolean)
+                  .map((t, i) => <li key={i} style={{ marginBottom: 4 }}>{t}</li>)}
               </ul>
             </div>
           )}
