@@ -509,8 +509,27 @@ def _agent_call(*, name: str, system_blocks: list[dict[str, Any]], user_text: st
     return _extract_loads_json(resp2.text), resp2.cost_usd
 
 
-def run_batch(start: int, end: int) -> dict[str, Any]:
-    """Extract all signals from chapters in [start, end)."""
+def _safe_backfill_importance() -> None:
+    """重算 Entity.importance(`1 + 5*plot + 3*state + 2*fs`)。
+
+    抽取阶段的 `importance += 1` 只是提及计数,跨书不可比、且短书/少批次会
+    让所有人物停在 1~3,导致 arc 上下文的 `importance>=5` 人物块为空(光明皇帝
+    实测 0 人 → backfill 后 51 人)。在抽取收尾统一重算,使 arc/图谱/hero 选取
+    可用。纯 DB 重算、无 LLM、幂等;失败绝不连累抽取主流程。"""
+    try:
+        from ..graph.projections import backfill_importance
+        n = backfill_importance()
+        print(f"[finalize] backfill_importance: 重算 {n} 个实体")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[finalize] backfill_importance 跳过(不影响抽取): {exc}")
+
+
+def run_batch(start: int, end: int, *, finalize: bool = True) -> dict[str, Any]:
+    """Extract all signals from chapters in [start, end).
+
+    ``finalize=True`` 在批次成功后重算 importance(单批/重试路径用)。
+    ``run_all`` 走并行时对每批传 ``finalize=False``、跑完所有批再统一重算一次,
+    避免多线程同时全表更新 importance 互相竞争。"""
 
     init_schema()
     corpus = _load_corpus_text()
@@ -601,6 +620,8 @@ def run_batch(start: int, end: int) -> dict[str, Any]:
                 b.cost_usd = total_cost
                 b.finished_at = datetime.utcnow()
 
+        if finalize:
+            _safe_backfill_importance()
         return {"batch_id": batch_id, "status": "done", "cost_usd": total_cost}
 
     except Exception as exc:  # noqa: BLE001
@@ -787,16 +808,21 @@ def run_all(
         for start, end in todo:
             print(f"[run]  {start}-{end}")
             try:
-                print(f"       {run_batch(start, end)}")
+                # finalize=False:全部批次跑完后统一 backfill 一次(见下),
+                # 避免逐批重复重算。
+                print(f"       {run_batch(start, end, finalize=False)}")
             except Exception as exc:  # noqa: BLE001
                 print(f"       FAIL {start}-{end}: {exc}")
+        _safe_backfill_importance()
         return
 
     print(f"[parallel] {len(todo)} batches × {workers} workers")
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="batch") as exe:
-        futs = {exe.submit(run_batch, s, e): (s, e) for s, e in todo}
+        # finalize=False:并行时禁止逐批全表重算 importance(会多线程写竞争),
+        # 等所有批次完成后在主线程统一重算一次。
+        futs = {exe.submit(run_batch, s, e, finalize=False): (s, e) for s, e in todo}
         for fut in as_completed(futs):
             start, end = futs[fut]
             try:
@@ -804,6 +830,7 @@ def run_all(
                 print(f"[done] {start}-{end}: {info}")
             except Exception as exc:  # noqa: BLE001
                 print(f"[FAIL] {start}-{end}: {exc}")
+    _safe_backfill_importance()
 
 
 def main() -> int:
