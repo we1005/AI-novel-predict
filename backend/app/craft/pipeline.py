@@ -104,7 +104,7 @@ def tag_chapters(*, batch_size: int = _DEFAULT_BATCH, max_chapters: int | None =
                 agent="craft.tag", model=MODEL_FAST,
                 system=[{"type": "text", "text": CRAFT_TAG_SYSTEM + schema_hint(CRAFT_TAG_TOOL)}],
                 messages=[{"role": "user", "content": build_tag_user(batch)}],
-                max_tokens=6000, temperature=0.3,
+                max_tokens=8000, temperature=0.3,
                 # json_schema strict:白名单模型(doubao-seed-2.0-pro/lite)上强制结构合规
                 # (0 不合规);非白名单自动回落 JSON-in-text(见 client 白名单)。
                 response_format=craft_tag_response_format(),

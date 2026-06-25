@@ -5,9 +5,13 @@ import { api } from "@/lib/api";
 import PageTitle from "@/components/PageTitle";
 
 const CAT_LABEL: Record<string, string> = {
-  combat: "打斗（单挑/群战/战争）",
-  dialogue_subtext: "潜台词对话",
-  hook: "章节钩子（开篇/章末）",
+  combat: "打斗（单挑/群战/战争）", chase: "追逐潜行", ritual: "法术异象",
+  dialogue_subtext: "潜台词对话", dialogue_group: "群戏对话", monologue: "独白旁白",
+  scene_env: "景物环境", scene_place: "场所建筑", appearance: "人物出场", object: "服饰器物", sensory: "通感感官",
+  interior: "内心戏", emotion_peak: "情绪爆发", lyrical: "抒情咏叹", flashback: "回忆闪回",
+  hook: "章节钩子（开篇/章末）", transition: "转场过渡", suspense: "悬念铺设回收", climax: "高潮反转",
+  worldbuild: "设定引入", in_world_text: "书中文本", culture: "文化民俗",
+  signature_metaphor: "标志比喻", motif: "复现母题", rhythm: "句式节奏", anti_trope: "反套路",
 };
 const CARD_FIELD_LABEL: Record<string, string> = {
   summary: "总体特征", sentence_rhythm: "句式 / 节奏", rhetoric_density: "修辞密度",
