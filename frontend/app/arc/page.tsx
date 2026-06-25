@@ -56,6 +56,7 @@ function ArcPageInner() {
   const [n, setN] = useState(2);
   const [target, setTarget] = useState(100);
   const [hints, setHints] = useState("");
+  const [perCandidate, setPerCandidate] = useState(true);  // true=逐个生成(长章稳) / false=一起生成(短章快)
   const [busy, setBusy] = useState(false);
   const [busySince, setBusySince] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
@@ -140,7 +141,7 @@ function ArcPageInner() {
     setRun(null);
     setOpenCard(null);
     try {
-      const r = await api.arcRun(after, n, target, hints);
+      const r = await api.arcRun(after, n, target, hints, perCandidate);
       setRun(r);
       setOpenCard(r?.scores?.winner_index ?? 0);
     } catch (e: any) {
@@ -187,6 +188,23 @@ function ArcPageInner() {
           </label>
           <label>候选数<input type="number" value={n} onChange={(e) => setN(+e.target.value)} style={{ width: 70, marginLeft: 6 }} min={1} max={4} /></label>
           <label>目标延展章节<input type="number" value={target} onChange={(e) => setTarget(+e.target.value)} style={{ width: 90, marginLeft: 6 }} min={20} max={500} /></label>
+        </div>
+
+        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13 }}>生成方式</span>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13, cursor: "pointer" }}>
+            <input type="radio" name="arc-gen" checked={perCandidate} onChange={() => setPerCandidate(true)} />
+            逐个生成
+          </label>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13, cursor: "pointer" }}>
+            <input type="radio" name="arc-gen" checked={!perCandidate} onChange={() => setPerCandidate(false)} />
+            一起生成
+          </label>
+          <span className="muted" style={{ fontSize: 11 }}>
+            {perCandidate
+              ? "每次只产 1 个候选、逐个累计——章节较长 / 记忆量大时更稳（不易写崩成碎片）。"
+              : "一次性产出全部候选——章节较短 / 记忆量小时更快（省一轮调用），长章慎用。"}
+          </span>
         </div>
 
         <h3 style={{ marginTop: 16, marginBottom: 6 }}>创作偏好（可选）</h3>

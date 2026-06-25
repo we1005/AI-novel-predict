@@ -239,7 +239,7 @@ export const api = {
   settingsTestKey: (payload: { api_key?: string; base_url?: string; model?: string; provider?: string } = {}) =>
     j<any>("/settings/test-key", { method: "POST", body: JSON.stringify(payload) }),
 
-  arcRun: (afterChapter: number, nCandidates: number = 3, targetChapters: number = 100, userHints: string = "") =>
+  arcRun: (afterChapter: number, nCandidates: number = 3, targetChapters: number = 100, userHints: string = "", perCandidate: boolean = true) =>
     j<any>("/predict/arc/run", {
       method: "POST",
       body: JSON.stringify({
@@ -247,6 +247,7 @@ export const api = {
         n_candidates: nCandidates,
         target_chapters: targetChapters,
         user_hints: userHints,
+        per_candidate: perCandidate,
       }),
     }),
   arcList: () => j<any[]>("/predict/arc/runs"),

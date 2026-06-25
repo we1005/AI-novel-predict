@@ -26,6 +26,7 @@ class ArcRunRequest(BaseModel):
     n_candidates: int = 3
     target_chapters: int = 100
     user_hints: str = ""
+    per_candidate: bool = True   # True=逐个生成(长章稳) / False=一起生成(短章快)
 
 
 @router.post("/arc/run")
@@ -35,6 +36,7 @@ def arc_run(req: ArcRunRequest):
         n_candidates=req.n_candidates,
         target_chapters=req.target_chapters,
         user_hints=req.user_hints,
+        per_candidate=req.per_candidate,
     )
 
 
