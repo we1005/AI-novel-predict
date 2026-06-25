@@ -21,19 +21,19 @@ const STAGES: Stage[] = [
   },
   {
     group: "② 规划剧情", color: "var(--accent-2)",
-    note: "先定全局骨架与关键问题，再展开成整本书大纲",
+    note: "预测=阶段蓝图 → 推演=一键铺成逐章大纲 → /outline 工作台查看改（同一张表 OutlineRun）",
     steps: [
       { key: "/predict", emoji: "💡", title: "剧情预测 · 章", desc: "下 1-3 章走向候选 + 评分（局部探索/试方向）" },
-      { key: "/arc", emoji: "🌌", title: "整本故事弧 + 推演", spine: true, desc: "core_truths / 阶段 / 结局 / 体量 → 一键「🌌推演整本书」展开成连续全书大纲 + 完整性裁决" },
+      { key: "/arc", emoji: "🌌", title: "故事弧预测 + 推演", spine: true, desc: "①预测出 N 个候选(阶段级蓝图:core_truths/阶段/结局/体量) → ②选一个，一键「🌌推演整本书」把所有阶段批量铺成连续逐章大纲 + 完整性裁决。产出落到 /outline" },
+      { key: "/outline", emoji: "📝", title: "大纲工作台", spine: true, desc: "推演批量产出的逐章大纲都在这查看/微调(意图/必含/必避/钩子)；也可单阶段手动补做。与推演同一张 OutlineRun 表，是 /draft 成稿的唯一依据" },
     ],
   },
   {
     group: "③ 写作成书（核心）", color: "var(--c-subplot)",
-    note: "逐章成稿 → 回灌记忆 → 阶段复审 → 人审放行，滚动写完整本",
+    note: "照大纲(OutlineRun)逐章成稿 → 回灌记忆 → 阶段复审 → 人审放行，滚动写完整本",
     steps: [
       { key: "/arc", emoji: "📖", title: "写整本书（阶段 gate）", spine: true, desc: "在「整本故事弧」页：逐章成稿 → 回灌记忆(下一章读得到) → 每阶段跨章复审(伏笔燃尽/连贯/体量) → 暂停人审 → 续写" },
-      { key: "/draft", emoji: "✒️", title: "逐章成稿", desc: "Writer + 三审 + 确定性门控；也可按大纲手动单章打磨/导出" },
-      { key: "/outline", emoji: "📝", title: "大纲查看/编辑", desc: "逐章施工图：意图/必含/必避/节奏/钩子，成稿前可手改" },
+      { key: "/draft", emoji: "✒️", title: "逐章成稿", desc: "Writer + 三审 + 确定性门控；照 /outline 的大纲一章章写成正文，可单章打磨/导出" },
     ],
   },
   {
