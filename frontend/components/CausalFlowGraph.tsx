@@ -53,7 +53,9 @@ function layout(rawNodes: RawNode[], rawEdges: RawEdge[]): { nodes: Node[]; edge
 
   for (const n of rawNodes) {
     const sz = NODE_SIZE[n.kind] || { w: 200, h: 70 };
-    g.setNode(n.id, sz);
+    // dagre 要的是 width/height 键(不是 w/h)——传错键会让节点尺寸当 0、
+    // 布局塌缩成一列重叠(改进记录 #26)。
+    g.setNode(n.id, { width: sz.w, height: sz.h });
   }
   for (const e of rawEdges) g.setEdge(e.from, e.to);
 
