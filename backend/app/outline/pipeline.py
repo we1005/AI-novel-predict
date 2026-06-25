@@ -397,8 +397,8 @@ def refine(*, source_kind: str, source_run_id: int, chosen_index: int,
             "chapter_start": chapter_start,
             "chapter_end": chapter_end,
             "chapters": chapters,
-            "cost_usd": resp.cost_usd,
-            "elapsed_ms": resp.elapsed_ms,
+            "cost_usd": cost_usd,
+            "elapsed_ms": elapsed_ms,
         }
 
 
