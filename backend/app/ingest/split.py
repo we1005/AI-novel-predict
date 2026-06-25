@@ -24,7 +24,9 @@ from ..memory.models import Chapter
 from ..memory.schema_init import init_schema
 
 CHAPTER_PATTERN = re.compile(
-    r"^(?P<title>第(?P<num>[一二三四五六七八九十百千万零0-9]+)章[ 　\t]*[^\r\n]*)",
+    # 允许标题前有缩进空白(半角空格/全角空格 U+3000/Tab)——如《九州·缥缈录》
+    # 章节标题为「　　第一章 蛮荒〔一〕」,顶格锚定 ^第 会漏匹配(改进记录 #28)。
+    r"^[ 　\t]*(?P<title>第(?P<num>[一二三四五六七八九十百千万零0-9]+)章[ 　\t]*[^\r\n]*)",
     re.MULTILINE,
 )
 
@@ -96,8 +98,10 @@ def split_chapters(text_body: str) -> list[tuple[int, str, int, int]]:
     # First pass: compute body span for every match.
     raw: list[tuple[str, int, int]] = []
     for i, m in enumerate(matches):
-        start = m.start()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(text_body)
+        # 用 title 组起点(而非整个 match 起点)——前导缩进空白不计入正文偏移,
+        # 下一章正文从其标题首字开始,切片干净。
+        start = m.start("title")
+        end = matches[i + 1].start("title") if i + 1 < len(matches) else len(text_body)
         raw.append((m.group("title").strip(), start, end))
 
     # Filter out TOC entries: a "real" chapter body is at least ~200 chars.
