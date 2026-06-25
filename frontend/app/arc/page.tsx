@@ -188,7 +188,7 @@ function ArcPageInner() {
   return (
     <>
       <PageTitle title="整本故事弧预测"
-        subtitle="先答主角真实身份 / 世界真相 / 幕后主谋 / 王朝命运等大问题，给出完整证据链与因果图，再设计阶段揭露顺序" />
+        subtitle="预测「从下一章一路到大结局」的完整剩余故事：先答主角真实身份 / 世界真相 / 幕后主谋 / 王朝命运等大问题，给出完整证据链与因果图，再设计阶段揭露顺序。每个候选都规划到结局" />
 
       <div className="card">
         <h2>触发预测</h2>
@@ -197,7 +197,7 @@ function ArcPageInner() {
             {lastChapter != null && <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>（本书共 {lastChapter} 章）</span>}
           </label>
           <label>候选数<input type="number" value={n} onChange={(e) => setN(+e.target.value)} style={{ width: 70, marginLeft: 6 }} min={1} max={4} /></label>
-          <label>目标延展章节<input type="number" value={target} onChange={(e) => setTarget(+e.target.value)} style={{ width: 90, marginLeft: 6 }} min={20} max={500} /></label>
+          <label title="不是「写到第几章为止」——故事弧永远规划到结局；这里只是「用大约多少章把整本剩余故事讲完」的节奏/篇幅软提示，模型可能按自估章数微调">目标延展章节（到结局的篇幅）<input type="number" value={target} onChange={(e) => setTarget(+e.target.value)} style={{ width: 90, marginLeft: 6 }} min={20} max={500} /></label>
           {recommend && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}>
               <span className="muted">💡 建议 <b style={{ color: "var(--accent-2)" }}>~{recommend.recommended}</b> 章（{recommend.low}–{recommend.high}）</span>
