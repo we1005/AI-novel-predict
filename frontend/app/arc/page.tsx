@@ -57,6 +57,7 @@ function ArcPageInner() {
   const [target, setTarget] = useState(100);
   const [hints, setHints] = useState("");
   const [perCandidate, setPerCandidate] = useState(true);  // true=逐个生成(长章稳) / false=一起生成(短章快)
+  const [recommend, setRecommend] = useState<{ recommended: number; low: number; high: number; rationale: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [busySince, setBusySince] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
@@ -99,6 +100,15 @@ function ArcPageInner() {
       setAfter((cur) => (cur === 0 ? last : cur));
     }).catch(() => {});
   }, []);
+
+  // 推荐续写章数:随起始章节变化(防抖 400ms),依据未收束坑/体量/节奏
+  useEffect(() => {
+    if (!after) { setRecommend(null); return; }
+    const t = setTimeout(() => {
+      api.arcRecommendChapters(after).then(setRecommend).catch(() => setRecommend(null));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [after]);
 
   // Deep-link: load arc by ?id= once on mount
   useEffect(() => {
@@ -188,7 +198,19 @@ function ArcPageInner() {
           </label>
           <label>候选数<input type="number" value={n} onChange={(e) => setN(+e.target.value)} style={{ width: 70, marginLeft: 6 }} min={1} max={4} /></label>
           <label>目标延展章节<input type="number" value={target} onChange={(e) => setTarget(+e.target.value)} style={{ width: 90, marginLeft: 6 }} min={20} max={500} /></label>
+          {recommend && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+              <span className="muted">💡 建议 <b style={{ color: "var(--accent-2)" }}>~{recommend.recommended}</b> 章（{recommend.low}–{recommend.high}）</span>
+              <button onClick={() => setTarget(recommend.recommended)} className="ghost"
+                style={{ padding: "2px 8px", fontSize: 11 }} disabled={target === recommend.recommended}>
+                采用
+              </button>
+            </span>
+          )}
         </div>
+        {recommend && (
+          <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>{recommend.rationale}</p>
+        )}
 
         <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontSize: 13 }}>生成方式</span>

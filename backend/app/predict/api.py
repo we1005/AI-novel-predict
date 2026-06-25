@@ -11,7 +11,7 @@ from ..memory.models import PredictionRun
 from . import arc as arc_pipeline
 from ..arc import project as projection
 from ..arc import bookwriter
-from .pipeline import _gather_context, run_predict, stage_c_stream
+from .pipeline import _gather_context, recommend_target_chapters, run_predict, stage_c_stream
 
 router = APIRouter()
 
@@ -38,6 +38,12 @@ def arc_run(req: ArcRunRequest):
         user_hints=req.user_hints,
         per_candidate=req.per_candidate,
     )
+
+
+@router.get("/arc/recommend-chapters")
+def arc_recommend_chapters(after_chapter: int = 0):
+    """根据未收束伏笔/谜团(分级)+ 章节体量 + 叙事节奏,启发式推荐续写章数。"""
+    return recommend_target_chapters(after_chapter)
 
 
 @router.get("/arc/runs")

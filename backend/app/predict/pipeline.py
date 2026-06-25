@@ -186,6 +186,96 @@ def _ctx_blocks(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     return blocks
 
 
+def _median_chapter_chars(after_chapter: int) -> int:
+    """已写章节的中位字数(用 corpus offset 估)——长章书每章能装更多剧情,
+    收同样的坑需要更少章。"""
+    with session_scope() as s:
+        rows = s.execute(
+            select(Chapter.char_offset_start, Chapter.char_offset_end)
+            .where(Chapter.number <= after_chapter)
+        ).all() if after_chapter else s.execute(
+            select(Chapter.char_offset_start, Chapter.char_offset_end)
+        ).all()
+    lens = sorted(max(0, (e or 0) - (st or 0)) for st, e in rows)
+    lens = [x for x in lens if x > 0]
+    if not lens:
+        return 3000
+    return int(lens[len(lens) // 2])
+
+
+def _pacing_multiplier() -> tuple[float, str]:
+    """从文风画像的叙事节奏推一个章数乘子:快节奏→更少章、慢/史诗→更多章。"""
+    try:
+        from ..style.pipeline import get_profile
+        p = get_profile() or {}
+    except Exception:
+        p = {}
+    prof = (p or {}).get("profile") or {}
+    ns = prof.get("narrative_structure") or {}
+    text = " ".join(str(x) for x in [ns.get("pacing"), ns.get("mode"),
+                                     " ".join(prof.get("tropes") or [])]).lower()
+    fast = any(k in text for k in ["快", "紧凑", "爽", "网文", "明快", "高频"])
+    slow = any(k in text for k in ["慢", "舒缓", "史诗", "宏大", "厚重", "群像", "铺陈", "铺垫"])
+    if fast and not slow:
+        return 0.85, "节奏偏快(收束更紧凑)"
+    if slow and not fast:
+        return 1.2, "节奏偏慢/宏大(铺陈更长)"
+    return 1.0, "节奏适中"
+
+
+def recommend_target_chapters(after_chapter: int) -> dict[str, Any]:
+    """根据 未收束伏笔/谜团(分级) + 章节体量 + 叙事节奏,启发式推荐续写章数。
+
+    可解释、零 LLM 成本。谜团按 severity 给基准篇幅(core 一条要一个完整 arc 来收),
+    伏笔超出谜团可顺带覆盖的部分按每条 +1 章计;再用体量(中位字数)与节奏乘子调整。
+    """
+    ctx = _gather_context(after_chapter)
+    open_fore = len(ctx.get("open_foreshadowings") or [])
+    mys = ctx.get("open_mysteries") or []
+    core = sum(1 for m in mys if (m.get("severity") or "major") == "core")
+    major = sum(1 for m in mys if (m.get("severity") or "major") == "major")
+    minor = sum(1 for m in mys if (m.get("severity") or "major") == "minor")
+
+    PER_CORE, PER_MAJOR, PER_MINOR = 18, 9, 3
+    raw = core * PER_CORE + major * PER_MAJOR + minor * PER_MINOR
+    # 伏笔:谜团收束过程能顺带带掉一部分(每个谜团约带 2 条);超出的每条 +1 章。
+    coverable = 2 * (core + major + minor)
+    extra_fore = max(0, open_fore - coverable)
+    raw += extra_fore
+    raw = max(raw, 12)  # 给个下限,避免坑很少时推荐为 0
+
+    median = _median_chapter_chars(after_chapter)
+    density_mult = max(0.6, min(1.4, 3000.0 / median)) if median else 1.0
+    pacing_mult, pacing_note = _pacing_multiplier()
+
+    adj = raw * density_mult * pacing_mult
+    recommended = int(round(max(15, min(500, adj))))
+    low = int(round(recommended * 0.8))
+    high = int(round(recommended * 1.2))
+
+    rationale = (
+        f"基于 {core} 个核心谜团、{major} 个重要谜团、{minor} 个次要谜团,"
+        f"{open_fore} 条未收束伏笔,中位 {median} 字/章,{pacing_note};"
+        f"建议续写约 {recommended} 章(区间 {low}–{high})。"
+    )
+    return {
+        "recommended": recommended,
+        "low": low,
+        "high": high,
+        "signals": {
+            "open_foreshadowings": open_fore,
+            "mysteries_core": core,
+            "mysteries_major": major,
+            "mysteries_minor": minor,
+            "median_chapter_chars": median,
+            "density_mult": round(density_mult, 2),
+            "pacing_mult": pacing_mult,
+            "pacing_note": pacing_note,
+        },
+        "rationale": rationale,
+    }
+
+
 def _loads_json(s: str) -> dict:
     """Parse a JSON object out of model text (strips fences, repairs)."""
     import json

@@ -253,6 +253,9 @@ export const api = {
     }),
   arcList: () => j<any[]>("/predict/arc/runs"),
   arcGet: (id: number) => j<any>(`/predict/arc/runs/${id}`),
+  arcRecommendChapters: (afterChapter: number) =>
+    j<{ recommended: number; low: number; high: number; signals: any; rationale: string }>(
+      `/predict/arc/recommend-chapters?after_chapter=${afterChapter}`),
   // 整本故事弧推演 (whole-book projection)
   arcProject: (runId: number, chosenIndex: number) =>
     j<any>(`/predict/arc/runs/${runId}/project`, { method: "POST", body: JSON.stringify({ chosen_index: chosenIndex }) }),
