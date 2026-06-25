@@ -717,6 +717,18 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
 
   useEffect(() => { setIdx(defaultIndex); }, [defaultIndex]);
 
+  // 挂载/切换 arc 时,回读该 arc 最近一次已完成的整本推演,刷新后不丢失结果。
+  useEffect(() => {
+    let cancelled = false;
+    api.projectionList().then((list) => {
+      const mine = (list || []).filter((p: any) => p.arc_run_id === runId);
+      if (!mine.length) return;
+      mine.sort((a: any, b: any) => b.id - a.id);
+      return api.projectionGet(mine[0].id).then((d) => { if (!cancelled) setJob(d); });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [runId]);
+
   // B+C · 启动/续写整本书（阶段 gate 模式：写完 1 阶段→复审→人审通过再续）
   const startWriteBook = async () => {
     if (!job?.id) return;
