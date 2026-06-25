@@ -172,17 +172,29 @@ def build_style_cards() -> dict[str, Any]:
             print(f"[craft.card] {cat} 失败: {str(e)[:120]}", flush=True)
             done[cat] = {"snippet_count": n_total, "card": None, "error": str(e)[:120]}
             continue
-        with session_scope() as s:
-            row = s.execute(select(CraftStyleCard).where(CraftStyleCard.category == cat)).scalars().first()
-            if not row:
-                row = CraftStyleCard(category=cat)
-                s.add(row)
-            row.snippet_count = n_total
-            row.card_json = card
-            row.cost_usd = resp.cost_usd or 0.0
-            row.updated_at = datetime.utcnow()
-        done[cat] = {"snippet_count": n_total, "card": card}
-        print(f"[craft.card] {cat}: 拆解完成(基于 {len(sample)}/{n_total} 片段)", flush=True)
+        # DB 写也要兜异常:建卡期间前端并发轮询会触发 SQLite "database is locked",
+        # 若不捕获会把整个建卡循环打断(实测 26 类只建到第 11 类就停)。重试几次再跳过。
+        wrote = False
+        for attempt in range(4):
+            try:
+                with session_scope() as s:
+                    row = s.execute(select(CraftStyleCard).where(CraftStyleCard.category == cat)).scalars().first()
+                    if not row:
+                        row = CraftStyleCard(category=cat)
+                        s.add(row)
+                    row.snippet_count = n_total
+                    row.card_json = card
+                    row.cost_usd = resp.cost_usd or 0.0
+                    row.updated_at = datetime.utcnow()
+                wrote = True
+                break
+            except Exception as e:  # noqa: BLE001 — 多为 database is locked,退避重试
+                import time as _t
+                _t.sleep(0.5 * (attempt + 1))
+                if attempt == 3:
+                    print(f"[craft.card] {cat} 落库失败(跳过不中断): {str(e)[:80]}", flush=True)
+        done[cat] = {"snippet_count": n_total, "card": card if wrote else None}
+        print(f"[craft.card] {cat}: 拆解完成(基于 {len(sample)}/{n_total} 片段){'' if wrote else ' [未落库]'}", flush=True)
     return {"cards": done, "cost_usd": round(total_cost, 4)}
 
 
