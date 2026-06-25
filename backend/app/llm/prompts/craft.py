@@ -45,6 +45,38 @@ CRAFT_TAG_TOOL = {
 }
 
 
+# strict-安全版 schema(供 response_format=json_schema 用):去掉火山 strict 不支持的
+# minItems/minimum/maximum;所有字段进 required + additionalProperties:false。
+CRAFT_TAG_STRICT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "snippets": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string", "enum": ["combat", "dialogue_subtext", "hook"]},
+                    "subtype": {"type": "string"},
+                    "chapter_number": {"type": "integer"},
+                    "excerpt": {"type": "string"},
+                    "representativeness": {"type": "integer"},
+                    "tags": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["category", "subtype", "chapter_number", "excerpt", "representativeness", "tags"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["snippets"],
+    "additionalProperties": False,
+}
+
+
+def craft_tag_response_format() -> dict:
+    return {"type": "json_schema",
+            "json_schema": {"name": "craft_tag", "strict": True, "schema": CRAFT_TAG_STRICT_SCHEMA}}
+
+
 CRAFT_TAG_SYSTEM = """你是中文小说的"笔法标注员"。给你若干章原文,请摘出其中**真正典型**的三类笔法片段,逐字摘抄(不改写)。
 
 # 只摘这三类
