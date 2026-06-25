@@ -316,7 +316,7 @@ export default function StylePage() {
           {p.continuation_guide && (
             <div className="card" style={{ borderLeft: "4px solid var(--good)" }}>
               <h3 style={{ marginTop: 0 }}>续写指导（喂给写作 agent）</h3>
-              <p className="prose-cn" style={{ fontSize: 14, lineHeight: 1.75, whiteSpace: "pre-wrap" }}>{renderVal(p.continuation_guide)}</p>
+              <div className="prose-cn" style={{ fontSize: 14, lineHeight: 1.75, overflowWrap: "anywhere" }}>{renderVal(p.continuation_guide)}</div>
             </div>
           )}
 
@@ -622,7 +622,28 @@ function cleanMd(s: any): string {
 
 function renderVal(v: any): ReactNode {
   if (v == null) return null;
-  if (typeof v === "string") return cleanMd(v);
+  if (typeof v === "string") {
+    // 多行字符串(如续写指导:模型把 "1. / 2." 结构 + "- " 列表塞进一个字段)
+    // 逐行渲染:行首 "- " 转成缩进项目符号 ·,其余行原样,避免满屏字面 "-"。
+    if (v.includes("\n")) {
+      const lines = v.split("\n");
+      return (
+        <div style={{ display: "grid", gap: 3 }}>
+          {lines.map((ln, i) => {
+            const bullet = /^\s*[-*]\s+/.test(ln);
+            const t = cleanMd(ln);
+            if (!t) return null;
+            return (
+              <div key={i} style={bullet ? { paddingLeft: 16, textIndent: "-12px" } : undefined}>
+                {bullet ? "· " : ""}{t}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+    return cleanMd(v);
+  }
   if (typeof v === "number") return v;
   if (Array.isArray(v)) {
     return (
