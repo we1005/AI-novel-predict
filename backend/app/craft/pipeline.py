@@ -104,6 +104,7 @@ def tag_chapters(*, batch_size: int = _DEFAULT_BATCH, max_chapters: int | None =
                 system=[{"type": "text", "text": CRAFT_TAG_SYSTEM + schema_hint(CRAFT_TAG_TOOL)}],
                 messages=[{"role": "user", "content": build_tag_user(batch)}],
                 max_tokens=6000, temperature=0.3,
+                response_format="json_object",   # 火山模型试点:强制合法 JSON
             )
             total_cost += resp.cost_usd or 0.0
             snips = _loads_obj(resp).get("snippets") or []

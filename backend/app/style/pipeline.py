@@ -88,6 +88,7 @@ def analyze(sample_n: int = 8) -> dict[str, Any]:
         messages=[{"role": "user", "content": build_style_user_message(samples)}],
         max_tokens=8000,
         temperature=0.3,
+        response_format="json_object",   # 火山模型试点:强制合法 JSON(消除围栏/markdown)
     )
     def _loads(s: str) -> dict:
         s = re.sub(r"```json|```", "", s or "").strip()

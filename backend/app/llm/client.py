@@ -187,6 +187,7 @@ def call(
     max_tokens: int = 4096,
     temperature: float = 0.7,
     top_p: float | None = None,
+    response_format: str | dict[str, Any] | None = None,
     extra_log: dict[str, Any] | None = None,
 ) -> LLMResponse:
     model, temperature, max_tokens, top_p = apply_overrides(
@@ -219,8 +220,23 @@ def call(
             if provider_for_model(model) == "dashscope":
                 kwargs["extra_body"] = {"enable_thinking": False}
 
+    # 结构化输出试点(09 文档):仅对火山(volc)模型挂 response_format=json_object,
+    # 保证输出是合法 JSON(消除 ```json 围栏 / markdown / 散文前言)。其它厂商/模型
+    # 不挂(走原 JSON-in-text + json_repair)。模型若不支持会在下面自动回退。
+    if response_format and provider_for_model(model) == "volc":
+        rf = {"type": "json_object"} if isinstance(response_format, str) else response_format
+        kwargs["response_format"] = rf
+
     t0 = time.perf_counter()
-    resp = client.chat.completions.create(**kwargs)
+    try:
+        resp = client.chat.completions.create(**kwargs)
+    except Exception as exc:  # noqa: BLE001
+        # 该模型不支持 response_format → 去掉它重试一次(降级回 JSON-in-text)。
+        if "response_format" in kwargs and "response_format" in str(exc).lower():
+            kwargs.pop("response_format", None)
+            resp = client.chat.completions.create(**kwargs)
+        else:
+            raise
     elapsed = int((time.perf_counter() - t0) * 1000)
 
     usage_obj = getattr(resp, "usage", None)
