@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Switch, Tag, message, Tooltip } from "antd";
 import { HighlightOutlined, ThunderboltOutlined, GlobalOutlined } from "@ant-design/icons";
 import { api } from "@/lib/api";
@@ -258,7 +258,7 @@ export default function StylePage() {
             <h3 style={{ marginTop: 0 }}>整体文风
               {p.is_western_setting && <Tag color="blue" style={{ marginLeft: 8 }}>西方/奇幻背景</Tag>}
             </h3>
-            <p className="prose-cn" style={{ fontSize: 14, lineHeight: 1.7 }}>{p.overall_voice}</p>
+            <p className="prose-cn" style={{ fontSize: 14, lineHeight: 1.7 }}>{renderVal(p.overall_voice)}</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, marginTop: 10 }}>
               <Field label="叙事视角" v={p.narrative_pov} />
               <Field label="句式 / 节奏" v={p.sentence_rhythm} />
@@ -278,7 +278,7 @@ export default function StylePage() {
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)", marginBottom: 4 }}>
                       {SCENE_LABEL[k] || k}
                     </div>
-                    <div style={{ fontSize: 13, lineHeight: 1.6 }}>{v}</div>
+                    <div style={{ fontSize: 13, lineHeight: 1.6 }}>{renderVal(v)}</div>
                   </div>
                 ))}
               </div>
@@ -311,7 +311,7 @@ export default function StylePage() {
           {p.continuation_guide && (
             <div className="card" style={{ borderLeft: "4px solid var(--good)" }}>
               <h3 style={{ marginTop: 0 }}>续写指导（喂给写作 agent）</h3>
-              <p className="prose-cn" style={{ fontSize: 14, lineHeight: 1.75, whiteSpace: "pre-wrap" }}>{p.continuation_guide}</p>
+              <p className="prose-cn" style={{ fontSize: 14, lineHeight: 1.75, whiteSpace: "pre-wrap" }}>{renderVal(p.continuation_guide)}</p>
             </div>
           )}
 
@@ -603,12 +603,40 @@ function BilingualPanel() {
   );
 }
 
-function Field({ label, v }: { label: string; v?: string }) {
-  if (!v) return null;
+// 把任意值(字符串/数组/对象)渲染成可读文本——模型偶尔把本应是字符串的
+// 字段(如 structural_habits)返回成对象 {chapter_title, chapter_ending, …},
+// 直接当 React child 渲染会抛 "Objects are not valid as a React child"。
+function renderVal(v: any): ReactNode {
+  if (v == null) return null;
+  if (typeof v === "string" || typeof v === "number") return v;
+  if (Array.isArray(v)) {
+    return (
+      <ul style={{ margin: 0, paddingLeft: 18 }}>
+        {v.map((x, i) => <li key={i}>{renderVal(x)}</li>)}
+      </ul>
+    );
+  }
+  if (typeof v === "object") {
+    return (
+      <div style={{ display: "grid", gap: 4 }}>
+        {Object.entries(v).map(([k, val]) => (
+          <div key={k}>
+            <span style={{ color: "var(--muted)" }}>{k}：</span>
+            <span>{renderVal(val)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return String(v);
+}
+
+function Field({ label, v }: { label: string; v?: any }) {
+  if (v == null || v === "") return null;
   return (
     <div>
       <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 13, lineHeight: 1.6 }}>{v}</div>
+      <div style={{ fontSize: 13, lineHeight: 1.6 }}>{renderVal(v)}</div>
     </div>
   );
 }
