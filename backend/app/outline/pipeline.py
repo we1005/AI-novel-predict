@@ -48,6 +48,22 @@ def _coerce_list(v: Any) -> list:
     return []
 
 
+def _str_items(v: Any) -> list[str]:
+    """把 must_include / key_events 等列表里偶发的 dict/非字符串元素强制成字符串
+    (模型有时把条目返回成 {"事件": "..."} 这样的对象,下游 join/渲染会崩)。"""
+    out: list[str] = []
+    for x in _coerce_list(v):
+        if isinstance(x, str):
+            out.append(x)
+        elif isinstance(x, dict):
+            # 取常见值字段,否则整体 json 化
+            picked = x.get("text") or x.get("event") or x.get("事件") or x.get("content")
+            out.append(str(picked) if picked else json.dumps(x, ensure_ascii=False))
+        elif x is not None:
+            out.append(str(x))
+    return out
+
+
 def _resolve_source(source_kind: str, source_run_id: int, chosen_index: int,
                     phase_index: int | None) -> dict[str, Any]:
     """Pull the source candidate (an arc phase, or a predict candidate's text)
@@ -196,17 +212,24 @@ def _refine_stepwise(src: dict, blocks: list, extra: list, chapter_start: int,
         f"# Phase 元信息\n\n" + phase_meta
         + f"\n\n请输出 {chapter_start}–{chapter_end} 范围内 chapter_index 递增的逐章骨架。"
     )
-    sk_resp = llm.call(agent="outline.skeleton", model=MODEL_STRONG, system=sk_system,
-                       messages=[{"role": "user", "content": sk_user}],
-                       max_tokens=6000, temperature=0.5)
-    total_cost += sk_resp.cost_usd
-    total_ms += sk_resp.elapsed_ms or 0
-    skeleton = [c for c in _parse_chapters_field(sk_resp)
-                if isinstance(c, dict) and isinstance(c.get("chapter_index"), int) and c.get("title")]
+    # 骨架是 JSON-in-text,大上下文下偶发吐出 json_repair 救不回的内容→判空(同 arc 家族)。
+    # 重试至多 2 次再降级,而不是一次空就放弃。
+    skeleton: list[dict] = []
+    for attempt in range(2):
+        sk_resp = llm.call(agent="outline.skeleton", model=MODEL_STRONG, system=sk_system,
+                           messages=[{"role": "user", "content": sk_user}],
+                           max_tokens=8000, temperature=0.5 if attempt == 0 else 0.7)
+        total_cost += sk_resp.cost_usd
+        total_ms += sk_resp.elapsed_ms or 0
+        skeleton = [c for c in _parse_chapters_field(sk_resp)
+                    if isinstance(c, dict) and isinstance(c.get("chapter_index"), int) and c.get("title")]
+        if skeleton:
+            break
+        log.warning("stepwise 骨架第 %d 次为空,重试", attempt + 1)
     skeleton.sort(key=lambda c: c["chapter_index"])
     if not skeleton:
-        # 骨架崩了:降级回一次性,保证有产出而非空。
-        log.warning("stepwise 骨架为空,降级回 oneshot")
+        # 重试仍空:降级回一次性,保证有产出而非空。
+        log.warning("stepwise 骨架重试后仍空,降级回 oneshot")
         return _refine_oneshot(src, blocks, extra, chapter_start, chapter_end)
 
     # ---- 遍 2:逐章填充 ----
@@ -280,6 +303,11 @@ def _refine_stepwise(src: dict, blocks: list, extra: list, chapter_start: int,
                 "foreshadow_ids_addressed": sc.get("foreshadow_ids", []),
             }
         obj["chapter_index"] = sc["chapter_index"]  # 强制对齐骨架编号
+        # 列表字段强制成字符串(模型偶把条目返回成 dict,会让 join/渲染/落库崩)
+        obj["must_include"] = _str_items(obj.get("must_include"))
+        obj["key_events"] = _str_items(obj.get("key_events"))
+        if obj.get("must_avoid") is not None:
+            obj["must_avoid"] = _str_items(obj.get("must_avoid"))
         # 从待覆盖清单里划掉本章认领的 key_event
         for k in (sc.get("key_event_refs") or []):
             if str(k) in remaining_keys:
@@ -325,6 +353,12 @@ def refine(*, source_kind: str, source_run_id: int, chosen_index: int,
         if isinstance(c, dict) and isinstance(c.get("chapter_index"), int)
         and c.get("title") and c.get("must_include")
     ]
+    # 列表字段强制成字符串(两模式通用:oneshot 偶尔也把条目返回成 dict)
+    for c in chapters:
+        c["must_include"] = _str_items(c.get("must_include"))
+        c["key_events"] = _str_items(c.get("key_events"))
+        if c.get("must_avoid") is not None:
+            c["must_avoid"] = _str_items(c.get("must_avoid"))
     chapters.sort(key=lambda c: c["chapter_index"])
 
     if not persist:
