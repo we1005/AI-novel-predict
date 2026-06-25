@@ -547,6 +547,18 @@ def run_batch(start: int, end: int, *, finalize: bool = True) -> dict[str, Any]:
         if not chapters:
             raise RuntimeError(f"no chapters in [{start},{end})")
 
+        # 同范围若已存在旧批次(多为之前 failed),先删除——否则新建会撞
+        # (chapter_start, chapter_end) 唯一键 → IntegrityError,导致重试/重跑
+        # 静默崩溃(改进记录 #30)。重跑即取代旧记录。
+        for old in s.execute(
+            select(ExtractionBatch).where(
+                ExtractionBatch.chapter_start == start,
+                ExtractionBatch.chapter_end == end,
+            )
+        ).scalars().all():
+            s.delete(old)
+        s.flush()
+
         batch = ExtractionBatch(
             chapter_start=start, chapter_end=end, status="running"
         )
