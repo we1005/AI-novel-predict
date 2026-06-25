@@ -26,6 +26,9 @@ export const api = {
     ),
   chapterCount: () =>
     j<{ total: number; first: number; last: number }>("/ingest/chapters/count"),
+  recommendBatch: () =>
+    j<{ batch_size: number; workers: number; median_chars: number; total_chapters: number; est_batches?: number; rationale: string }>(
+      "/ingest/recommend-batch"),
   startExtract: (start: number, end: number) =>
     j<unknown>(`/ingest/extract?start=${start}&end=${end}`, { method: "POST" }),
   startExtractAll: (batchSize: number = 50, workers: number = 2) =>

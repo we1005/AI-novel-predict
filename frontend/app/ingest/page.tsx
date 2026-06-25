@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Tag, Tooltip, Modal, message } from "antd";
 import { BookOutlined, FileTextOutlined, RedoOutlined, WarningOutlined, CheckOutlined } from "@ant-design/icons";
 import Link from "next/link";
@@ -28,6 +28,8 @@ export default function IngestPage() {
   const [err, setErr] = useState("");
 
   const [coverage, setCoverage] = useState<{ total: number; covered: number; missing_ranges: [number, number][] } | null>(null);
+  const [recommend, setRecommend] = useState<{ batch_size: number; workers: number; median_chars: number; total_chapters: number; est_batches?: number; rationale: string } | null>(null);
+  const appliedBook = useRef<string | null>(null);
 
   const refresh = async () => {
     try {
@@ -52,6 +54,18 @@ export default function IngestPage() {
     const t = setInterval(refresh, 5000);
     return () => clearInterval(t);
   }, []);
+
+  // 按体量推荐「每批/并发」默认值,每本书自动带入一次(用户改过就不再覆盖)。
+  useEffect(() => {
+    if (!book?.slug || !count || count <= 0) return;
+    if (appliedBook.current === book.slug) return;
+    api.recommendBatch().then((r) => {
+      setRecommend(r);
+      setBatchSize(r.batch_size);
+      setWorkers(r.workers);
+      appliedBook.current = book.slug;
+    }).catch(() => {});
+  }, [book?.slug, count]);
 
   const split = async () => {
     setBusy(true); setErr(""); setSplitResult("");
@@ -313,7 +327,7 @@ export default function IngestPage() {
             <input
               type="number"
               value={batchSize}
-              onChange={(e) => setBatchSize(Math.max(5, +e.target.value || 50))}
+              onChange={(e) => setBatchSize(Math.max(1, +e.target.value || 1))}
               style={{ width: 70, marginLeft: 4, marginRight: 2 }}
             />
             章
@@ -333,6 +347,15 @@ export default function IngestPage() {
               : "需先切分章节"}
           </span>
         </div>
+        {recommend && (
+          <div className="muted" style={{ fontSize: 11, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span>💡 按体量推荐 每批 <b style={{ color: "var(--accent-2)" }}>{recommend.batch_size}</b> 章 · 并发 <b style={{ color: "var(--accent-2)" }}>{recommend.workers}</b>（{recommend.rationale}）</span>
+            {(batchSize !== recommend.batch_size || workers !== recommend.workers) && (
+              <button onClick={() => { setBatchSize(recommend.batch_size); setWorkers(recommend.workers); }}
+                className="ghost" style={{ padding: "2px 8px", fontSize: 11 }}>采用推荐</button>
+            )}
+          </div>
+        )}
         {extractAllResult && (
           <div style={{ marginTop: 8, fontSize: 12, color: "var(--good)" }}>{extractAllResult}</div>
         )}

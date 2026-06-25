@@ -44,6 +44,38 @@ def chapter_count():
     return {"total": total, "first": first, "last": last}
 
 
+@router.get("/recommend-batch")
+def recommend_batch():
+    """按本书体量(章数)与每章中位字数,推荐「每批章数 / 并发」默认值。
+
+    抽取是**输出 token 瓶颈**:每批喂给 6 个 agent 的文本越多、产出越易被截/漏抽
+    (改进记录 #20)。所以每批章数应与每章字数成反比——长章每批要小、短章可大。
+    目标:每批输入文本量稳定在 ~22000 字的舒适窗口。
+    """
+    with session_scope() as s:
+        rows = s.execute(select(Chapter.char_offset_start, Chapter.char_offset_end)).all()
+    lens = sorted(max(0, (e or 0) - (st or 0)) for st, e in rows)
+    lens = [x for x in lens if x > 0]
+    total = len(lens)
+    if not lens:
+        return {"batch_size": 10, "workers": 3, "median_chars": 0, "total_chapters": 0,
+                "rationale": "尚未切分章节;切分后会按体量给出推荐。"}
+    median = lens[len(lens) // 2]
+
+    TARGET_CHARS_PER_BATCH = 22000
+    batch_size = max(1, min(12, round(TARGET_CHARS_PER_BATCH / median)))
+    # 并发:长章批次重→压低避免火山额度突刺与跨批写竞争;短章可略高。
+    workers = 2 if median > 12000 else (4 if median < 4000 else 3)
+    est_batches = max(1, -(-total // batch_size))  # ceil
+    rationale = (
+        f"全书 {total} 章、中位 {median} 字/章 → 每批 {batch_size} 章(约 "
+        f"{batch_size * median} 字/批,贴近 ~{TARGET_CHARS_PER_BATCH} 字舒适窗口)、"
+        f"并发 {workers} → 约 {est_batches} 批。长章每批小、短章每批大,以防输出被截漏抽。"
+    )
+    return {"batch_size": batch_size, "workers": workers, "median_chars": median,
+            "total_chapters": total, "est_batches": est_batches, "rationale": rationale}
+
+
 @router.post("/extract")
 async def extract_endpoint(start: int, end: int, background: BackgroundTasks):
     if end <= start:
