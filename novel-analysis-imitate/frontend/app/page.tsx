@@ -97,6 +97,7 @@ function AppShell(props: any) {
         <nav className="railnav">
           <Link href="/" className={"railitem" + (page === "analyze" ? " active" : "")}><Icon k="analyze" /><span>深度分析</span></Link>
           <Link href="/generate" className={"railitem" + (page === "compose" ? " active" : "")}><Icon k="compose" /><span>仿写 · 重组</span></Link>
+          <Link href="/architecture" className="railitem"><Icon k="arch" /><span>架构</span></Link>
         </nav>
 
         {page === "analyze" && (

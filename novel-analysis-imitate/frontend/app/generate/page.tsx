@@ -82,6 +82,7 @@ export default function GeneratePage() {
         <nav className="railnav">
           <Link href="/" className="railitem"><Icon k="analyze" /><span>深度分析</span></Link>
           <Link href="/generate" className="railitem active"><Icon k="compose" /><span>仿写 · 重组</span></Link>
+          <Link href="/architecture" className="railitem"><Icon k="arch" /><span>架构</span></Link>
         </nav>
         <div className="railsection">用例</div>
         <nav className="railtabs">

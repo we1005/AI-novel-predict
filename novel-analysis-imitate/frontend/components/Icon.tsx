@@ -11,6 +11,7 @@ const P: Record<string, string> = {
   golden: "M3 17l6-6 4 4 8-8M21 7h-5M21 7v5",                            // 金手指=上升
   analyze: "M4 4h7v7H4zM13 4h7v4h-7zM13 11h7v9h-7zM4 13h7v7H4z",          // 深度分析=网格
   compose: "M12 19l7-7 3 3-7 7-3-3zM5 6l1 4 4 1-4 1-1 4-1-4-4-1 4-1z",   // 仿写=魔法笔
+  arch: "M12 3l4 2v4l-4 2-4-2V5zM4 13l4 2v4l-4 2-4-2v-4zM20 13l-4 2v4l4 2 4-2v-4zM12 9v4M8 15l4-2M16 15l-4-2", // 架构=节点树
 };
 
 export default function Icon({ k, size = 18 }: { k: string; size?: number }) {
