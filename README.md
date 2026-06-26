@@ -32,6 +32,17 @@
 
 ---
 
+> ### 🧬 本仓库是「孪生双项目」的公用仓库
+>
+> | 项目 | 目录 | 端口 | 定位 |
+> |---|---|---|---|
+> | **墨笔 · MoBi**（本 README 主体) | `backend/` + `frontend/` | 后端 8000 / 前端 3100 | **多 Agent 续写**:把长篇嚼成结构化记忆 → 推演 → 写整本 |
+> | **墨析 · MoXi** | [`novel-analysis-imitate/`](novel-analysis-imitate/) | 后端 8100 / 前端 3200 | **跨书深度分析 + 仿写/重组**:拆解技法/文笔/架构 → 文风基因组 → 驱动生成 |
+>
+> 墨析把整个 `backend/` 当**可 import 的包**复用(零改墨笔),共享同一套 `data/books/<书>/novel.db` 与 settings;详见下文 [**🧬 孪生项目 · 墨析**](#-孪生项目--墨析--novel-analysis-imitate) 与 [`novel-analysis-imitate/README.md`](novel-analysis-imitate/README.md)、[`文风基因组-设计.md`](novel-analysis-imitate/文风基因组-设计.md)。
+
+---
+
 ## 📖 在线 Demo · 墨笔书阁
 
 **<https://mobi-ai-novel.netlify.app/>** —— 用墨笔把江南《天之炽》从第 157 章一路续写到结局（至第 260 章，约 58.5 万字）的成品阅读站：书架首页 → 书籍简介与大纲（清晰区分原著 1–156 章与 AI 续写 157–260 章）→ 左目录右正文的纯中文阅读体验。
@@ -317,6 +328,55 @@ cp ~/Downloads/我的小说.txt backend/data/library/
 
 ---
 
+## 🧬 孪生项目 · 墨析 · novel-analysis-imitate
+
+墨笔解决「**续写**一本书」;**墨析**解决「**拆解一批书、再借它们的笔法写新的**」。它把墨笔的整套 `backend`(LLM 客户端 / 6 抽取 agent / 关系图 / 风格 / 笔法 / 生成内核)当**包 import**,只**新增**「时间轴 / 技法 / 文风基因组」分析层与跨书编排,**零改墨笔**;共享同一份 per-book `novel.db` 与 `settings.json`。
+
+> 形态:独立 **FastAPI :8100 + Next.js :3200**;视觉为**稿纸 · 朱批 · 水墨**(区别于墨笔)。当前全链路模型切到**小米 MiMo**(火山额度告急时切换),FAST/STRONG lane 复用墨笔 settings。
+
+### 🔬 深度分析(9 个维度,前端左栏切换 · 图表/文字双视图)
+- **基础抽取**(复用墨笔 6 agent + 关系图):实体 / 伏笔 / 剧情点 / 世界规则 / 关系网
+- **速读 · 剧情脉络** — 按章序切阶段,重要阶段详写(发生/铺垫/内心/转折/线索),次要一句带过
+- **节拍 · 张力曲线** — 逐章 张力/场景类型/plot_function/章末钩子(ECharts 曲线)
+- **文笔 · 声音** — StyleProfile:整体声音/句式/语域/常用词汇/套路/范文 + 26 类笔法卡
+- **世界观铺垫** — 设定揭示事件:手法/信息倾倒率/埋设跨度(江南式反信息倾倒量化)
+- **人物关系** — 关系演变事件 + **react-flow 关系网络图** + 主要人物简介卡(据关系/POV/出场或实体表自动判重要度)
+- **视角调度** — POV 切换时间轴(离主视角时长/切回触发)
+- **金手指** — 升级台阶/触发方式/对手差距 → 升级斜率
+- **设定 · 伏笔** — 世界设定词条 / 伏笔(埋设→回收/状态) / 剧情点逐条
+
+### 🧬 文风基因组(STYLE GENOME · 7 层)
+把「文风」从一段总结升级成**可复用、可喂给别的 LLM 复现**的分层范式:`L1 词汇分层 / L2 句式构式 / L3 修辞与叙述声音 / L4 类型氛围配方 / L5 场景调度套路 / L6 宏观架构 / L7 转移模型(场景马尔可夫,Transformer/LSTM 类比)`。
+- 每层走「**分场景桶取样 → LLM 抽范式 → 纯代码量化兜底**(密度 str.count/千字、弱断言频率、张力峰检测、转移矩阵)」
+- 组装出 **fingerprint_vector**(可计算文风向量)+ **system-prompt spec**(一键复制喂给任意 LLM)
+- 双档复用:静态 spec(`compose.seed_genome` 拼进 writer) / 动态逐章 brief(L7 当采样器)
+- **对照评测**:同章大纲 基线(单段总结) vs 基因组(分层 spec)各生成 → 7 维盲评 + 指纹对账 → **基因组全面胜出(整体 65.25 vs 56.75,场景调度 +10.75)**
+- 专页 `/genome`:保姆级讲解 + **KaTeX 公式渲染** + L1 密度热力条 + L7 转移图 + 真实抽取样例
+- 设计与评测全文见 [`novel-analysis-imitate/文风基因组-设计.md`](novel-analysis-imitate/文风基因组-设计.md)
+
+### ✍️ 四类生成用例(compose 虚拟书 · 复用墨笔生成内核)
+统一收敛到「**compose 虚拟书 → set_active → OutlineRun → draft.write_chapter(三审一编辑)**」,差别只在塞什么:
+- **UC2 文风迁移** — 用 A 的文风(或基因组 spec)写你的故事;`voice_only` 模式只搬声音/笔法、不串 A 的剧情
+- **UC1 融合世界观+文风** — 多书 `fused_worldview / fused_style / fused_technique` 融合 → 写自创剧情
+- **UC4 技法注入** — `technique_template` 逐章约束节奏/POV/铺垫(可自动从分析层蒸馏)
+- **UC3 剧情移植** — 抽 A/B/C 去设定剧情母核 → 重锚定到目标世界观 → 用其文风写
+
+### 🧱 工程基座
+- **book_scope 进程级绑定**(contextvar):多进程并发分析/生成时锁定当前书,无视共享 active 指针 → **不写串库**
+- 结构化输出 JSON-in-text + json_repair;小米仅 json_object,传 json_schema 自动降级
+- **架构动画**:[`novel-analysis-imitate/docs/architecture-animation.html`](novel-analysis-imitate/docs/architecture-animation.html) —— GSAP scrollytelling 自包含单文件,7 幕讲解整条管线(浏览器直接打开)
+
+### 🚀 启动墨析
+```bash
+# 后端(复用墨笔 .venv;venv 的 uvicorn shebang 已坏,必须 python -m)
+cd novel-analysis-imitate/backend
+PYTHONPATH=. ../../backend/.venv/bin/python -m uvicorn naimitate.main:app --host 0.0.0.0 --port 8100
+# 前端
+cd novel-analysis-imitate/frontend && npm install && npm run dev   # http://localhost:3200(/api/* 自动代理到 :8100)
+```
+
+---
+
 ## 📁 项目结构
 
 ```
@@ -354,6 +414,22 @@ cp ~/Downloads/我的小说.txt backend/data/library/
 │       ├── architecture/                # 内嵌架构文档浏览器
 │       └── settings/                    # 模型 / 参数 / API key
 ├── 墨笔-agent架构设计docs/              # 7 篇设计文档（在前端 /architecture 渲染）
+├── novel-analysis-imitate/              # 🧬 孪生项目「墨析」(跨书分析 + 仿写/重组)
+│   ├── backend/naimitate/
+│   │   ├── main.py                      # FastAPI :8100(import 墨笔 app 为包)
+│   │   ├── bootstrap.py                 # 把 ../../backend 加进 sys.path
+│   │   ├── analysis/                    # 分析层:base/speedread/beat/style/worldview/
+│   │   │   │                            #   relationship/pov/golden/character +
+│   │   │   ├── style_genome.py          #   文风基因组 7 层
+│   │   │   ├── _fingerprint.py          #   指纹确定性工具(密度/转移/KL·余弦保真度)
+│   │   │   ├── _sampling.py             #   分场景取样器
+│   │   │   └── genome_eval.py           #   基线 vs 基因组 对比评测
+│   │   ├── generate/                    # 生成:compose/usecases(UC1-4)/fusion/technique/transplant
+│   │   └── project/                     # project.db + 跨书编排 + compose_book/fused_product
+│   ├── frontend/                        # Next.js :3200(深度分析/仿写重组/架构 + 文风基因组专页)
+│   ├── docs/architecture-animation.html # GSAP scrollytelling 架构动画(自包含)
+│   ├── 分析和设计.md                     # 总体设计 + 实现状态
+│   └── 文风基因组-设计.md                # 基因组规格 + 7维盲评结果
 ├── MiroFish/                            # 角色仿真灵感来源（git submodule 风格）
 ├── 末法王座.txt                          # 示例语料（1472 章）
 └── 需求.md                              # 原始需求
@@ -391,6 +467,6 @@ MIT
 
 <div align="center">
 
-<sub>用 21 个 agent 接住一本百万字的小说。</sub>
+<sub>墨笔 · 用 21 个 agent 接住一本百万字的小说　|　墨析 · 把一批书的文风拆成可复现的基因组。</sub>
 
 </div>
