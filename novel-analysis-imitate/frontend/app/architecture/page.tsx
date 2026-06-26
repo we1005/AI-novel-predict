@@ -11,6 +11,8 @@ function Rail() {
         <Link href="/generate" className="railitem"><Icon k="compose" /><span>仿写 · 重组</span></Link>
         <Link href="/architecture" className="railitem active"><Icon k="arch" /><span>架构</span></Link>
       </nav>
+      <div className="railsection">专页</div>
+      <Link href="/genome" className="railitem"><Icon k="style" /><span>文风基因组</span></Link>
     </aside>
   );
 }

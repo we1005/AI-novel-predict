@@ -3,6 +3,76 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import Icon from "@/components/Icon";
 import Link from "next/link";
+import Chart from "@/components/Chart";
+
+const SCENE_COLORS: Record<string, string> = {
+  铺垫: "#9a6b2f", 小高潮: "#cf6b4a", 大高潮: "#c0392b", 热血: "#c8552f",
+  悬疑惊悚: "#565a8c", 煽情: "#2e6f80", 日常: "#8a8270", 转场: "#b3a98f",
+  其他: "#a0957c", 信息揭示: "#7a8a6a",
+};
+
+// L1 词汇密度热力条:层(行)× 场景(列),色深∝每千字密度
+function DensityHeat({ data }: { data: Record<string, Record<string, number>> }) {
+  const layers = Object.keys(data);
+  if (!layers.length) return null;
+  const scenes = Array.from(new Set(layers.flatMap((l) => Object.keys(data[l] || {}))));
+  let max = 0;
+  layers.forEach((l) => scenes.forEach((s) => { max = Math.max(max, data[l]?.[s] || 0); }));
+  max = max || 1;
+  const cell = (v: number) => ({
+    background: `rgba(192,57,43,${(v / max) * 0.85 + (v ? 0.06 : 0)})`,
+    color: v / max > 0.5 ? "#fdf6f2" : "var(--ink-dim)",
+  });
+  return (
+    <div style={{ overflowX: "auto", marginBottom: 12 }}>
+      <table style={{ borderCollapse: "separate", borderSpacing: 2, fontSize: 11 }}>
+        <thead><tr><th style={{ textAlign: "right", padding: "2px 6px", color: "var(--muted)", fontFamily: "var(--mono)" }}>层 \ 场景</th>
+          {scenes.map((s) => <th key={s} style={{ padding: "2px 4px", color: "var(--zhe)", fontFamily: "var(--mono)", fontWeight: 500, whiteSpace: "nowrap" }}>{s}</th>)}
+        </tr></thead>
+        <tbody>{layers.map((l) => (
+          <tr key={l}>
+            <td style={{ textAlign: "right", padding: "2px 6px", color: "var(--ink)", whiteSpace: "nowrap", fontFamily: "var(--mono)" }}>{l}</td>
+            {scenes.map((s) => { const v = data[l]?.[s] || 0; return (
+              <td key={s} title={`${l} · ${s}: ${v}/千字`} style={{ ...cell(v), textAlign: "center", padding: "4px 6px", borderRadius: 2, minWidth: 34 }}>{v || ""}</td>
+            ); })}
+          </tr>
+        ))}</tbody>
+      </table>
+      <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>色深 ∝ 该层词在该场景的每千字密度;空白=≈0。可见各语义场在不同场景的浓度差异(如不可名状词在大高潮最浓)。</div>
+    </div>
+  );
+}
+
+// L7 场景转移图:有向图,边宽/不透明度 ∝ 转移概率(环路安全)
+function TransitionGraph({ data }: { data: Record<string, Record<string, number>> }) {
+  const froms = Object.keys(data || {});
+  if (!froms.length) return null;
+  const nodeSet = new Set<string>(froms);
+  froms.forEach((a) => Object.keys(data[a] || {}).forEach((b) => nodeSet.add(b)));
+  const nodes = Array.from(nodeSet).map((n) => ({ name: n, itemStyle: { color: SCENE_COLORS[n] || "#8a8270" }, symbolSize: 30 }));
+  const links: any[] = [];
+  froms.forEach((a) => Object.entries(data[a] || {}).forEach(([b, p]) => {
+    if ((p as number) >= 0.12) links.push({
+      source: a, target: b, value: p,
+      lineStyle: { width: 1 + (p as number) * 7, opacity: 0.35 + (p as number) * 0.55, curveness: 0.22, color: SCENE_COLORS[a] || "#999" },
+    });
+  }));
+  const option = {
+    tooltip: { formatter: (x: any) => x.dataType === "edge" ? `${x.data.source} → ${x.data.target}<br/>转移概率 ${(x.data.value * 100).toFixed(0)}%` : x.name },
+    series: [{
+      type: "graph", layout: "circular", circular: { rotateLabel: true },
+      roam: true, label: { show: true, color: "#211d16", fontFamily: "-apple-system,'PingFang SC',sans-serif" },
+      edgeSymbol: ["none", "arrow"], edgeSymbolSize: 7,
+      data: nodes, links, lineStyle: { curveness: 0.2 },
+    }],
+  };
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <Chart option={option} height={380} />
+      <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>节点=场景类型,有向边=该作者"上一拍→下一拍"的转移倾向(边越粗概率越高,仅显示≥12%)。可当采样器逐章驱动生成。</div>
+    </div>
+  );
+}
 
 // 七层「阐释」内容(怎么实现) + 对应 live 数据键
 const LAYERS = [
@@ -151,6 +221,8 @@ export default function GenomeDoc() {
               {got && live && (
                 <div>
                   <div className="eyebrow" style={{ marginBottom: 6 }}>本书实抽样例 · {slug}</div>
+                  {L.key === "lexicon" && live.density_by_scene && <DensityHeat data={live.density_by_scene} />}
+                  {L.key === "transition" && live.scene_transition && <TransitionGraph data={live.scene_transition} />}
                   <div className="tablescroll" style={{ maxHeight: 300, padding: "10px 12px" }}>
                     <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 11.8, lineHeight: 1.6, fontFamily: "var(--mono)" }}>{trim(live)}</pre>
                   </div>
