@@ -93,17 +93,35 @@ def uc2_voice_transfer(*, cslug: str, voice_source: str, chapters: list[dict],
 
 def uc1_fused_world_voice(*, cslug: str, voice_source: str, fuse_sources: list[str],
                           chapters: list[dict], project_slug: str = "",
-                          user_hints: str = "", overwrite: bool = False) -> dict:
-    """融合一组源书的世界观+文风,写自创剧情。voice_source=主声音克隆源。"""
+                          user_hints: str = "", overwrite: bool = False,
+                          rebuild_fusion: bool = True) -> dict:
+    """融合一组源书的**世界观骨架 + 文风声音**,写自创剧情。
+
+    用 Phase 3 结构化融合产物:build fused_worldview/fused_style/fused_technique(MODEL_STRONG
+    蒸馏)→ seed 进 compose 虚拟书(声音卡 + 跨书范文池 + 融合世界观术语)→ 生成。
+    project_slug 留空时用 cslug 作为融合产物归属。
+    """
+    from . import fusion
+    pslug = project_slug or f"_compose_{cslug}"
+    sources = list(dict.fromkeys([voice_source, *fuse_sources]))   # 去重保序
+
     compose.create_from_source(cslug, voice_source, overwrite=overwrite)
     _ensure_mimic(cslug)
-    compose.overlay_fused_voice(cslug, fuse_sources)
+
+    # 1) 跨书融合产物(已存且不重建则复用)
+    if rebuild_fusion or not project_store.get_fused(pslug, "fused_style"):
+        fusion.build_fused_worldview(pslug, sources)
+        fusion.build_fused_style(pslug, sources)
+        fusion.build_fused_technique(pslug, sources)
+    # 2) 塞进虚拟书
+    seeded = fusion.seed_compose_from_fusion(cslug, pslug)
+
     run_id = make_outline_run(cslug, chapters, phase_name="UC1", user_hints=user_hints)
-    project_store.record_compose(cslug, project_slug=project_slug, use_case="uc1",
-                                 source_slugs=list({voice_source, *fuse_sources}),
-                                 voice_source=voice_source, outline_run_id=run_id)
+    project_store.record_compose(cslug, project_slug=pslug, use_case="uc1",
+                                 source_slugs=sources, voice_source=voice_source,
+                                 outline_run_id=run_id, meta={"fusion_project": pslug, **seeded})
     return {"cslug": cslug, "outline_run_id": run_id, "use_case": "uc1",
-            "voice": voice_source, "fused": fuse_sources}
+            "voice": voice_source, "fused": sources, "fusion_project": pslug, "seeded": seeded}
 
 
 def uc4_technique_injected(*, cslug: str, voice_source: str, chapters: list[dict],

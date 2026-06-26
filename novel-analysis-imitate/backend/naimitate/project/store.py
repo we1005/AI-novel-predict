@@ -29,6 +29,52 @@ def init() -> None:
             cslug TEXT UNIQUE, project_slug TEXT, use_case TEXT,
             source_slugs_json TEXT, voice_source TEXT,
             outline_run_id INTEGER, meta_json TEXT, created_at TEXT)"""))
+        # Phase 3 跨书融合产物(导演手册)。一个 project 各一行,kind 区分。
+        c.execute(text("""CREATE TABLE IF NOT EXISTS fused_product(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_slug TEXT, kind TEXT,
+            card_json TEXT, source_slugs_json TEXT, cost_usd REAL, updated_at TEXT,
+            UNIQUE(project_slug, kind))"""))
+
+
+def save_fused(project_slug: str, kind: str, card: dict, *,
+               source_slugs: list[str] | None = None, cost_usd: float = 0.0) -> dict:
+    """kind: fused_worldview / fused_style / fused_technique。"""
+    init()
+    with _engine.begin() as c:
+        c.execute(text("""INSERT OR REPLACE INTO fused_product
+            (project_slug,kind,card_json,source_slugs_json,cost_usd,updated_at)
+            VALUES (:p,:k,:c,:s,:cost,:t)"""),
+            {"p": project_slug, "k": kind,
+             "c": json.dumps(card, ensure_ascii=False),
+             "s": json.dumps(source_slugs or [], ensure_ascii=False),
+             "cost": cost_usd, "t": datetime.now(timezone.utc).isoformat()})
+    return get_fused(project_slug, kind)
+
+
+def get_fused(project_slug: str, kind: str) -> dict | None:
+    init()
+    with _engine.begin() as c:
+        r = c.execute(text("SELECT * FROM fused_product WHERE project_slug=:p AND kind=:k"),
+                      {"p": project_slug, "k": kind}).mappings().first()
+    if not r:
+        return None
+    d = dict(r)
+    d["card"] = json.loads(d.pop("card_json") or "{}")
+    d["source_slugs"] = json.loads(d.pop("source_slugs_json") or "[]")
+    return d
+
+
+def list_fused(project_slug: str) -> dict:
+    init()
+    with _engine.begin() as c:
+        rows = c.execute(text("SELECT kind,source_slugs_json,updated_at FROM fused_product "
+                              "WHERE project_slug=:p"), {"p": project_slug}).mappings().all()
+    out = {}
+    for r in rows:
+        out[r["kind"]] = {"source_slugs": json.loads(r["source_slugs_json"] or "[]"),
+                          "updated_at": r["updated_at"]}
+    return out
 
 
 def record_compose(cslug: str, *, project_slug: str = "", use_case: str = "",

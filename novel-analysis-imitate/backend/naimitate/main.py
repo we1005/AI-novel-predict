@@ -18,7 +18,7 @@ from app.books import library  # 复用现有多书库
 from .project import store as project_store
 from .project import orchestrate
 from .analysis import beat, worldview, relationship, golden, pov
-from .generate import usecases, compose, transplant
+from .generate import usecases, compose, transplant, fusion
 from .generate import technique as tech
 
 app = FastAPI(title="novel-analysis-imitate")
@@ -180,6 +180,22 @@ class UC4Req(UC2Req):
 class GenReq(BaseModel):
     chapter_index: int
     skip_reviews: bool = False
+
+
+class FuseReq(BaseModel):
+    source_slugs: list[str]
+
+
+@app.post("/projects/{slug}/fuse")
+def fuse_project(slug: str, body: FuseReq, background: BackgroundTasks):
+    """后台跨书融合(MODEL_STRONG 蒸馏 fused_worldview/style/technique)。轮询 /fusion。"""
+    background.add_task(fusion.build_all, slug, body.source_slugs)
+    return {"status": "started", "project": slug, "sources": body.source_slugs}
+
+
+@app.get("/projects/{slug}/fusion")
+def project_fusion(slug: str):
+    return fusion.get_fusion(slug)
 
 
 @app.get("/compose")
