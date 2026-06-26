@@ -25,6 +25,7 @@ export default function Page() {
   const [slug, setSlug] = useState("");
   const [data, setData] = useState<any>(null);
   const [tab, setTab] = useState("pacing");
+  const [view, setView] = useState<"chart" | "text">("chart");
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [maxCh, setMaxCh] = useState<string>("");
@@ -84,15 +85,23 @@ export default function Page() {
         {TABS.map((x) => (
           <div key={x.k} className={"tab" + (tab === x.k ? " active" : "")} onClick={() => setTab(x.k)}>{x.t}</div>
         ))}
+        <span style={{ flex: 1 }} />
+        <div className="viewtoggle">
+          {(["chart", "text"] as const).map((v) => (
+            <span key={v} className={"vbtn" + (view === v ? " on" : "")} onClick={() => setView(v)}>
+              {v === "chart" ? "图表" : "文字"}
+            </span>
+          ))}
+        </div>
       </div>
 
       {!data ? <div className="empty">选择书籍后将展示分析结果</div> : (
         <>
-          {tab === "pacing" && <Pacing d={data.beats} />}
+          {tab === "pacing" && <Pacing d={data.beats} view={view} />}
           {tab === "style" && <Style d={data.style} />}
-          {tab === "worldview" && <Worldview d={data.worldview} />}
+          {tab === "worldview" && <Worldview d={data.worldview} view={view} />}
           {tab === "relationship" && <Relationship d={data.relationships} />}
-          {tab === "pov" && <Pov d={data.pov} />}
+          {tab === "pov" && <Pov d={data.pov} view={view} />}
           {tab === "golden" && <Golden d={data.golden} />}
         </>
       )}
@@ -104,10 +113,27 @@ function Stat({ v, k }: { v: any; k: string }) {
   return <div className="stat"><div className="v">{v}</div><div className="k">{k}</div></div>;
 }
 
-function Pacing({ d }: { d: any }) {
+function Pacing({ d, view }: { d: any; view: string }) {
   const beats = d?.beats || [];
   const card = d?.pacing_card;
   if (!beats.length) return <Empty layer="节拍" />;
+  if (view === "text") return (
+    <div className="card">
+      <h2>逐章节拍 <span className="tag">{beats.length} 章</span></h2>
+      <div className="tablescroll"><table>
+        <thead><tr><th>章</th><th>场景</th><th>张力</th><th>钩子</th><th>功能</th><th>POV</th><th>节拍摘要</th></tr></thead>
+        <tbody>{beats.map((b: any) => (
+          <tr key={b.chapter}>
+            <td>{b.chapter}</td>
+            <td><span className="scenechip" style={{ background: SCENE_COLORS[b.scene_type] || "#999" }} />{b.scene_type}</td>
+            <td>{b.tension}</td><td>{b.cliffhanger}</td><td className="muted">{b.plot_function}</td>
+            <td>{b.pov_holder}{b.is_protagonist_pov ? "" : "·配"}</td>
+            <td className="muted">{b.summary}</td>
+          </tr>
+        ))}</tbody>
+      </table></div>
+    </div>
+  );
   const xs = beats.map((b: any) => b.chapter);
   const option = {
     grid: { left: 45, right: 20, top: 30, bottom: 40 },
@@ -165,10 +191,23 @@ function Pacing({ d }: { d: any }) {
   );
 }
 
-function Worldview({ d }: { d: any }) {
+function Worldview({ d, view }: { d: any; view: string }) {
   const rv = d?.reveals || [];
   const card = d?.worldview_card;
   if (!rv.length) return <Empty layer="世界观揭示" />;
+  if (view === "text") return (
+    <div className="card">
+      <h2>世界观揭示逐条 <span className="tag">{rv.length} 条 · 按章序</span></h2>
+      <div className="tablescroll"><table>
+        <thead><tr><th>章</th><th>设定/概念</th><th>手法</th><th>重要度</th><th>说明</th></tr></thead>
+        <tbody>{rv.map((r: any, i: number) => (
+          <tr key={i}><td>{r.chapter}</td><td>{r.concept}</td>
+            <td>{r.reveal_method}{r.is_infodump ? <span className="pill dump">倒灌</span> : null}</td>
+            <td>{r.importance}</td><td className="muted">{r.summary}</td></tr>
+        ))}</tbody>
+      </table></div>
+    </div>
+  );
   const scatter = {
     grid: { left: 45, right: 20, top: 20, bottom: 40 },
     tooltip: {
@@ -262,11 +301,23 @@ function Relationship({ d }: { d: any }) {
   );
 }
 
-function Pov({ d }: { d: any }) {
+function Pov({ d, view }: { d: any; view: string }) {
   const tl = d?.timeline || [];
   const card = d?.pov_card;
   const ev = d?.events || [];
   if (!tl.length) return <Empty layer="视角(需先跑节拍层)" />;
+  if (view === "text") return (
+    <div className="card">
+      <h2>视角切换逐条 <span className="tag">{ev.length} 次切换</span></h2>
+      <div className="tablescroll"><table>
+        <thead><tr><th>章</th><th>由 → 至</th><th>动机</th><th>几章后回主视角</th><th>说明</th></tr></thead>
+        <tbody>{ev.map((e: any, i: number) => (
+          <tr key={i}><td>{e.chapter}</td><td>{e.from_pov} → {e.to_pov}</td>
+            <td>{e.why_switch}</td><td>{e.return_after || "—"}</td><td className="muted">{e.summary}</td></tr>
+        ))}</tbody>
+      </table></div>
+    </div>
+  );
   const holders = Array.from(new Set(tl.map((t: any) => t.pov_holder)));
   const colorOf = (h: string) => POV_PALETTE[holders.indexOf(h) % POV_PALETTE.length];
   return (
