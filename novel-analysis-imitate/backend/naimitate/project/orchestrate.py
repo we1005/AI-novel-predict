@@ -11,14 +11,14 @@ ensure_app_importable()
 
 from app.books import library  # noqa: E402
 from app.db import book_scope  # noqa: E402  进程级绑定,防多进程写串库
-from ..analysis import beat, worldview, relationship, golden, pov  # noqa: E402
+from ..analysis import beat, worldview, relationship, golden, pov, style  # noqa: E402
 from . import store as project_store  # noqa: E402
 
 # 进程内 job 状态(MVP;重启即丢,够用)。
 _JOBS: dict[str, dict] = {}
 
-# Phase 1 全分析层。pov 依赖 beat,故置于 beat 之后(派生,零 LLM)。
-ALL_LAYERS = ["beat", "worldview", "relationship", "golden", "pov"]
+# Phase 1 全分析层。pov 依赖 beat,故置于 beat 之后(派生,零 LLM)。style=文笔画像。
+ALL_LAYERS = ["beat", "worldview", "relationship", "golden", "pov", "style"]
 
 
 def _book_slugs_of(pslug: str) -> list[str]:
@@ -50,6 +50,9 @@ def analyze_book_layer(slug: str, layer: str, *, max_chapters: int | None = None
     if layer == "pov":
         r = pov.derive_events(slug)        # 派生自 beat,无 max_chapters
         return {"layer": layer, "count": r.get("events"), "card": r.get("card")}
+    if layer == "style":
+        r = style.run_style(slug)          # 文笔画像(声音/句式/语域/词汇/套路/范文)
+        return {"layer": layer, "count": 1 if r.get("ok") else 0}
     raise ValueError(f"unknown layer {layer}")
 
 

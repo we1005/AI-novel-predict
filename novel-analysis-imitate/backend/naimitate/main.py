@@ -17,7 +17,7 @@ from fastapi import BackgroundTasks  # noqa: E402
 from app.books import library  # 复用现有多书库
 from .project import store as project_store
 from .project import orchestrate
-from .analysis import beat, worldview, relationship, golden, pov
+from .analysis import beat, worldview, relationship, golden, pov, style
 from .generate import usecases, compose, transplant, fusion
 from .generate import technique as tech
 
@@ -155,6 +155,18 @@ def book_pov(slug: str):
     return pov.get_events(slug)
 
 
+@app.get("/books/{slug}/style")
+def book_style(slug: str):
+    return style.get_style(slug)
+
+
+@app.post("/books/{slug}/style")
+def run_book_style(slug: str, background: BackgroundTasks):
+    """后台跑文笔分析(声音/句式/语域/常用词汇/套路/范文)。"""
+    background.add_task(style.run_style, slug)
+    return {"status": "started", "book": slug}
+
+
 @app.get("/books/{slug}/analysis")
 def book_analysis(slug: str):
     """汇总一本书的全部分析层,供前端一次拉取渲染。"""
@@ -165,6 +177,7 @@ def book_analysis(slug: str):
         "relationships": relationship.get_events(slug),
         "golden": golden.get_steps(slug),
         "pov": pov.get_events(slug),
+        "style": style.get_style(slug),
     }
 
 

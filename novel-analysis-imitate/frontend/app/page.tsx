@@ -13,6 +13,7 @@ const C = { paper: "#f1efe5", rule: "#d6d0bf", ruleSoft: "#e6e1d1", qing: "#2e6f
 
 const TABS = [
   { k: "pacing", t: "节拍 · 张力曲线" },
+  { k: "style", t: "文笔 · 声音" },
   { k: "worldview", t: "世界观铺垫" },
   { k: "relationship", t: "人物关系" },
   { k: "pov", t: "视角调度" },
@@ -88,6 +89,7 @@ export default function Page() {
       {!data ? <div className="empty">选择书籍后将展示分析结果</div> : (
         <>
           {tab === "pacing" && <Pacing d={data.beats} />}
+          {tab === "style" && <Style d={data.style} />}
           {tab === "worldview" && <Worldview d={data.worldview} />}
           {tab === "relationship" && <Relationship d={data.relationships} />}
           {tab === "pov" && <Pov d={data.pov} />}
@@ -327,6 +329,45 @@ function Golden({ d }: { d: any }) {
               <td>{s.trigger}</td><td>{s.gap_vs_antagonist}</td></tr>
           ))}</tbody></table>
       </div>
+    </>
+  );
+}
+
+function Style({ d }: { d: any }) {
+  if (!d || !d.has_profile) return <Empty layer="文笔(尚未分析,点上方『运行分析』会一并跑文笔)" />;
+  const asText = (v: any) => Array.isArray(v) ? v.join("、") : (typeof v === "object" && v ? JSON.stringify(v) : (v ?? "—"));
+  const rows: [string, any][] = [
+    ["整体声音", d.overall_voice], ["叙事视角", d.narrative_pov], ["句式节奏", d.sentence_rhythm],
+    ["语域", d.register], ["叙事结构", d.narrative_structure], ["结构习惯", d.structural_habits],
+  ];
+  const vocab: string[] = Array.isArray(d.signature_vocabulary) ? d.signature_vocabulary
+    : (d.signature_vocabulary ? String(d.signature_vocabulary).split(/[,，、\s]+/).filter(Boolean) : []);
+  const tropes: string[] = Array.isArray(d.tropes) ? d.tropes
+    : (d.tropes ? String(d.tropes).split(/[,，、；;\n]+/).filter(Boolean) : []);
+  const ex = d.scene_exemplars || [];
+  return (
+    <>
+      <div className="card">
+        <span className="eyebrow">VOICE</span>
+        <h2>文笔画像 <span className="tag">复用续写内核同款 StyleProfile,生成时即据此仿写</span></h2>
+        {d.summary && <p style={{ lineHeight: 1.8, fontSize: 14.5, color: "var(--ink)" }}>{d.summary}</p>}
+        <table><tbody>
+          {rows.map(([k, v]) => <tr key={k}><th style={{ width: 110 }}>{k}</th><td>{asText(v)}</td></tr>)}
+        </tbody></table>
+      </div>
+      {!!vocab.length && <div className="card"><h2>标志性词汇 / 意象 <span className="tag">{vocab.length}</span></h2>
+        <div>{vocab.slice(0, 60).map((w, i) => <span key={i} className="pill">{w}</span>)}</div></div>}
+      {!!tropes.length && <div className="card"><h2>套路 / 惯用手法</h2>
+        <div>{tropes.map((w, i) => <span key={i} className="pill">{w}</span>)}</div></div>}
+      {!!ex.length && <div className="card"><h2>文风范文 <span className="tag">逐字摘录,仿写 few-shot 用</span></h2>
+        {ex.map((e: any, i: number) => (
+          <div key={i} style={{ marginBottom: 12 }}>
+            {e.scene && <div className="eyebrow" style={{ color: "var(--qing, #2e6f80)" }}>{e.scene}</div>}
+            <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.85, fontSize: 14, fontFamily: "var(--serif)" }}>{typeof e.text === "string" ? e.text : JSON.stringify(e.text)}</div>
+          </div>
+        ))}</div>}
+      {!!d.n_craft_cards && <div className="card"><h2>笔法拆解 <span className="tag">{d.n_craft_cards} 类</span></h2>
+        <div>{d.craft_cards.map((c: any, i: number) => <span key={i} className="pill">{c.category} ({c.snippet_count})</span>)}</div></div>}
     </>
   );
 }
