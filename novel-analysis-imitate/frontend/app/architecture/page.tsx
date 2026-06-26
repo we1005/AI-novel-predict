@@ -29,13 +29,62 @@ const LAYERS = [
 ];
 
 const GENOME = [
-  ["L1 lexicon", "词汇分层", "克苏鲁/蒸汽朋克/宗教… 分层词表 + 搭配 + 分场景密度(确定性兜底)"],
-  ["L2 syntax", "句式构式", "填空骨架 + 触发场景 + 弱断言滥用红线"],
-  ["L3 rhetoric", "修辞·声音", "比喻本体→喻体映射 + FID/叙述距离/心理动词"],
-  ["L4 atmosphere", "类型氛围配方", "蒸汽朋克/克苏鲁怎么营造:手段→实现→例证→剂量"],
-  ["L5 scene_routine", "场景调度套路", "每类场面:切入机位/节拍序列/详略预算/收尾钩子"],
-  ["L6 macro_arch", "宏观架构", "伏笔plant→payoff图/信息预算/张力控制律/章型模板"],
-  ["L7 transition", "转移模型", "场景&功能的马尔可夫转移矩阵(Transformer/LSTM 类比)"],
+  {
+    id: "L1", t: "词汇分层", cap: "用词调色盘:每层词在什么场景该撒多浓",
+    sample: "按 scene_type 分桶,每桶取张力最高的代表章原文(spread + bucket)",
+    how: "LLM 把实词归入语义场(克苏鲁不可名状/蒸汽朋克器物/宗教/感官身体/军事…),只收原文真出现的词 + 逐字共现搭配,不许编造",
+    code: "每层词在每个场景桶里 str.count/千字 → density_by_scene,LLM 估值不准就用代码兜底",
+    out: "strata:[{layer, signature_words, collocations, trigger_context}], diction, avoid(廉价网文词黑名单)",
+    spec: "渲染成『用词调色盘』:每层标志词 + 该类场景密度配比",
+  },
+  {
+    id: "L2", t: "句式构式", cap: "可填空的句式骨架库,不是一句话节奏总结",
+    sample: "按 scene_type×plot_function 分桶;直接复用 craft 26 类已切好的逐字片段(省 token)",
+    how: "LLM 抽反复出现的句式构造,抽象成带槽模板(如『随着[X],[Y]』),给触发场景/效果/逐字例",
+    code: "弱断言(似乎/仿佛)用正则全书计数得 authentic_rate;LLM 只判滥用红线倍数 → 防网文腔",
+    out: "templates:[{skeleton, trigger_scenes, freq_band, exemplars, misuse_redline}], hedge_usage, rhythm",
+    spec: "『句式骨架库』:填空模板 + 频率上限 + 滥用红线",
+  },
+  {
+    id: "L3", t: "修辞 · 叙述声音", cap: "比喻怎么打 + 叙述者站多近、是否议论",
+    sample: "煽情/悬疑/人物刻画桶权重高;复用 craft 的 signature_metaphor/interior/monologue 片段",
+    how: "LLM 逐条记比喻 [本体]→[喻体] 并归语义场;分析叙述距离/自由间接引语(FID)/旁白评议/心理动词/反问",
+    code: "叠词、省略号独段用正则全书计数补强",
+    out: "metaphor_map{favored,vehicle_dist}, reduplications, narrator{distance,fid_examples,psych_verbs}",
+    spec: "『修辞与叙述者操作手册』:喻体取向 + FID/距离 + 招牌一招",
+  },
+  {
+    id: "L4", t: "类型氛围配方", cap: "蒸汽朋克/克苏鲁到底靠什么手段营造",
+    sample: "高氛围取样:scene_type∈{悬疑惊悚,大高潮} 且张力≥70 + 世界观揭示命中超自然概念的章",
+    how: "分类型拆 carrier:means(回避命名/感官失序/理智代价/器物密度/能源-机械隐喻…)→how→逐字例证,并给黄金律",
+    code: "carrier 词在对应场景桶 str.count/千字 → 剂量",
+    out: "genres:[{genre, techniques:[{means,how,intensity,examples,density}], golden_rule, lexicon{do,avoid}}]",
+    spec: "每质感一张『配方卡』+ 黄金律(如克苏鲁:永不正面写本体,只写反应与代价)",
+  },
+  {
+    id: "L5", t: "场景调度套路", cap: "写某类场面的『分场拍摄剧本』(最补缺陷的一层)",
+    sample: "每类 scene_type 取**整场全文(不截断)**6-10 场,优先高潮/强钩子章(顺序是命门)",
+    how: "LLM 逆向写作程序:从哪切入(机位枚举)→节拍数组(每拍 function+镜头+字数占比)→详略五分类%→POV距离→收尾钩子模板",
+    code: "聚合:opening_cut 算分布、beat_function 序列做 bigram 转移、详略/字数占比求均",
+    out: "routines:[{scene_type, opening_cut{dist}, modal_beat_sequence, detail_budget, exit{hook_grammar,hook_template}}]",
+    spec: "『分场景调度手册』:每类场面 切入→节拍链→详略→钩子模板",
+  },
+  {
+    id: "L6", t: "宏观架构", cap: "片段法抓不到的整体结构(关系/序列/转移)",
+    sample: "大部分纯代码:复用既有 foreshadowing 表 + chapter_beat 全序列 + pov_event + 速读阶段",
+    how: "伏笔账本(plant→payoff跨度/长线比)、信息预算(逐章载体/drip序列)、章型模板由 LLM 切 macro-block 序列再聚类",
+    code: "张力控制律(峰检测/上升斜率/回落/峰间距分位)、POV调度、伏笔跨度统计 全为纯代码",
+    out: "foreshadow{threads,stats}, info_budget, tension_law, pov_schedule, chapter_type_templates",
+    spec: "『宏观编排纪律』:伏笔中位跨度/反信息倾倒红线/张力控制律/POV调度规则",
+  },
+  {
+    id: "L7", t: "转移模型", cap: "状态→下一步倾向,你说的 Transformer/LSTM 那种",
+    sample: "纯代码:chapter_beat 的 scene_type / plot_function 序列",
+    how: "对相邻状态计数→归一成转移概率,得一阶(可扩二阶)马尔可夫矩阵 + 每状态最可能的下一拍",
+    code: "全为确定性矩阵计算,零 LLM",
+    out: "scene_transition{a:{b:prob}}, plot_function_transition, most_likely_next",
+    spec: "『场景递进倾向表』:上一拍→最可能的下一拍,可当采样器逐章驱动",
+  },
 ];
 
 const UCS = [
@@ -90,23 +139,51 @@ export default function Architecture() {
           </div>
         </div>
 
-        {/* 3 · 文风基因组 7 层 */}
+        {/* 3 · 文风基因组 7 层(细化) */}
         <div className="card">
           <span className="eyebrow">STYLE GENOME</span>
-          <h2>③ 文风基因组 7 层 <span className="tag">把"单段总结"升级成可复现的分层范式</span></h2>
-          <div className="archlayer">
-            {GENOME.map(([n, t, d]) => (
-              <div key={n} className="archrow"><span className="n">{n}</span><span className="t">{t}</span><span className="d">{d}</span></div>
-            ))}
+          <h2>③ 文风基因组 · 怎么实现 <span className="tag">把"单段总结"升级成可复现的分层范式</span></h2>
+          <div style={{ marginBottom: 10 }}><Link href="/genome" className="btn" style={{ display: "inline-block", textDecoration: "none" }}>查看专页:七层详解 + 真实抽取样例 →</Link></div>
+          <p style={{ fontSize: 13.5, lineHeight: 1.8, color: "var(--ink)", margin: "0 0 14px" }}>
+            核心思路:<b>定性的范式一律挂上频率/密度,且按场景类型路由</b>——把"风格"从一个全局常量,
+            升级成<b>可路由的状态机</b>,根治"全程一个腔"。每层都是「<b>分桶取样 → LLM 抽范式 → 纯代码兜底量化 → 落结构化 JSON</b>」,
+            最后组装成<b>可计算指纹</b> + <b>可喂给别的 LLM 的 system-prompt</b>。
+          </p>
+
+          {/* 总管线 */}
+          <div className="pipe">
+            <div className="pb k1"><b>分桶取样</b>按 scene_type×POV<br/>整场不截断</div>
+            <div className="pa">→</div>
+            <div className="pb k2"><b>逐层抽取</b>LLM 抽范式<br/>+ 代码兜底量化</div>
+            <div className="pa">→</div>
+            <div className="pb k2"><b>组装</b>7层卡<br/>+ 指纹向量</div>
+            <div className="pa">→</div>
+            <div className="pb k3"><b>双档渲染</b>静态 spec /<br/>动态逐章 brief</div>
+            <div className="pa">→</div>
+            <div className="pb k3"><b>驱动 writer</b>seed_genome<br/>仿写</div>
+            <div className="pa">→</div>
+            <div className="pb k3"><b>对账回灌</b>同schema扫产出<br/>→指纹diff→修spec</div>
           </div>
-          <div className="archflow" style={{ marginTop: 14 }}>
-            <div className="archbox zhe"><b>7 层抽取</b><span>分场景桶取样 + 确定性兜底</span></div>
-            <Arrow />
-            <div className="archbox zhe"><b>指纹向量</b><span>可计算文风(密度/弱断言/张力型…)</span></div>
-            <Arrow />
-            <div className="archbox zhu"><b>system-prompt spec</b><span>喂给任意 LLM 即复现文风</span></div>
-            <Arrow />
-            <div className="archbox zhu"><b>驱动生成</b><span>compose.seed_genome</span></div>
+
+          {/* 逐层详解 */}
+          {GENOME.map((g) => (
+            <div key={g.id} className="gstep">
+              <div className="ghead"><span className="gid">{g.id}</span><span className="gt">{g.t}</span><span className="gcap">{g.cap}</span></div>
+              <div className="gsub">
+                <span className="gk">取样</span><span className="gv">{g.sample}</span>
+                <span className="gk">LLM抽</span><span className="gv">{g.how}</span>
+                <span className="gk">代码兜底</span><span className="gv">{g.code}</span>
+                <span className="gk">输出</span><span className="gv"><code>{g.out}</code></span>
+                <span className="gk">进spec</span><span className="gv">{g.spec}</span>
+              </div>
+            </div>
+          ))}
+
+          <div className="archnote">
+            <b>两档复用</b>:① 静态档——把 spec 拼进 writer 的 system prompt,零改生成链直接软约束;
+            ② 动态档——把 L7 转移矩阵当采样器,逐章给定当前状态采样下一拍的 scene_type/张力/POV,
+            取该场景的 L5 调度卡 + L6 章型模板 + 待办伏笔栈,组装成"本章导演 brief"再交 writer 填词
+            (这就是 ML 类比里"可运行的状态机":基因组既能当 JSON 存,又能当采样策略逐章驱动)。
           </div>
         </div>
 
