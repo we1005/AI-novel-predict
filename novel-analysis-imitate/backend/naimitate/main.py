@@ -12,8 +12,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from fastapi import BackgroundTasks  # noqa: E402
+
 from app.books import library  # 复用现有多书库
 from .project import store as project_store
+from .project import orchestrate
+from .analysis import beat
 
 app = FastAPI(title="novel-analysis-imitate")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -52,3 +56,34 @@ def projects():
 @app.get("/projects/{slug}")
 def project(slug: str):
     return project_store.get_project(slug) or {"error": "not found"}
+
+
+# ---- Phase 1 · 节拍分析(chapter_beat)----
+
+class BeatReq(BaseModel):
+    max_chapters: int | None = None   # 调试用:只扫前 N 章;None=全书
+
+
+@app.post("/projects/{slug}/analyze-beats")
+def analyze_beats(slug: str, body: BeatReq, background: BackgroundTasks):
+    """后台串行对 project 各成员书跑 chapter_beat;轮询 /projects/{slug}/beat-job。"""
+    background.add_task(orchestrate.run_project_beats, slug, max_chapters=body.max_chapters)
+    return {"status": "started", "project": slug}
+
+
+@app.get("/projects/{slug}/beat-job")
+def beat_job(slug: str):
+    return orchestrate.job_status(slug)
+
+
+@app.post("/books/{slug}/analyze-beats")
+def analyze_book_beats(slug: str, body: BeatReq, background: BackgroundTasks):
+    """对单本书跑节拍分析(后台)。"""
+    background.add_task(orchestrate.analyze_book_beats, slug, max_chapters=body.max_chapters)
+    return {"status": "started", "book": slug}
+
+
+@app.get("/books/{slug}/beats")
+def book_beats(slug: str):
+    """给前端可视化:逐章节拍曲线 + pacing 聚合卡。"""
+    return beat.get_beats(slug)
