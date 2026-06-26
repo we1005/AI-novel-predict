@@ -18,6 +18,7 @@ from app.books import library  # 复用现有多书库
 from .project import store as project_store
 from .project import orchestrate
 from .analysis import beat, worldview, relationship, golden, pov
+from .generate import usecases, compose, transplant
 
 app = FastAPI(title="novel-analysis-imitate")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -143,3 +144,100 @@ def book_analysis(slug: str):
         "golden": golden.get_steps(slug),
         "pov": pov.get_events(slug),
     }
+
+
+# ---- Phase 2+ · 生成用例(compose 虚拟书)----
+
+class ChapterOutline(BaseModel):
+    chapter_index: int | None = None
+    title: str | None = None
+    summary: str = ""
+    beats: list[str] = []
+    must_include: list[str] = []
+    word_target: int | None = None
+    directives: str = ""
+
+
+class UC2Req(BaseModel):
+    cslug: str
+    voice_source: str
+    chapters: list[ChapterOutline]
+    project_slug: str = ""
+    user_hints: str = ""
+    overwrite: bool = False
+
+
+class UC1Req(UC2Req):
+    fuse_sources: list[str] = []
+
+
+class UC4Req(UC2Req):
+    technique_template: dict = {}
+
+
+class GenReq(BaseModel):
+    chapter_index: int
+    skip_reviews: bool = False
+
+
+@app.get("/compose")
+def list_compose():
+    return project_store.list_compose()
+
+
+@app.post("/compose/uc2")
+def compose_uc2(body: UC2Req):
+    return usecases.uc2_voice_transfer(
+        cslug=body.cslug, voice_source=body.voice_source,
+        chapters=[c.model_dump() for c in body.chapters],
+        project_slug=body.project_slug, user_hints=body.user_hints, overwrite=body.overwrite)
+
+
+@app.post("/compose/uc1")
+def compose_uc1(body: UC1Req):
+    return usecases.uc1_fused_world_voice(
+        cslug=body.cslug, voice_source=body.voice_source, fuse_sources=body.fuse_sources,
+        chapters=[c.model_dump() for c in body.chapters],
+        project_slug=body.project_slug, user_hints=body.user_hints, overwrite=body.overwrite)
+
+
+@app.post("/compose/uc4")
+def compose_uc4(body: UC4Req):
+    return usecases.uc4_technique_injected(
+        cslug=body.cslug, voice_source=body.voice_source,
+        chapters=[c.model_dump() for c in body.chapters],
+        technique_template=body.technique_template,
+        project_slug=body.project_slug, user_hints=body.user_hints, overwrite=body.overwrite)
+
+
+class UC3Req(BaseModel):
+    cslug: str
+    voice_source: str           # 目标世界观的文风源(如克苏鲁组某书)
+    plot_sources: list[str]     # 提供剧情母核的源书(A/B/C)
+    anchor_world: str           # 目标世界观设定描述
+    n_chapters: int = 3
+    top_n_per_source: int = 8
+    project_slug: str = ""
+    overwrite: bool = False
+
+
+@app.post("/compose/uc3")
+def compose_uc3(body: UC3Req):
+    return transplant.uc3_transplant(
+        cslug=body.cslug, voice_source=body.voice_source, plot_sources=body.plot_sources,
+        anchor_world=body.anchor_world, n_chapters=body.n_chapters,
+        top_n_per_source=body.top_n_per_source, project_slug=body.project_slug,
+        overwrite=body.overwrite)
+
+
+@app.post("/compose/{cslug}/generate")
+def compose_generate(cslug: str, body: GenReq, background: BackgroundTasks):
+    """后台生成某章(写章较慢);轮询 /compose/{cslug}/export 看产物。"""
+    background.add_task(usecases.generate_chapter, cslug, body.chapter_index,
+                        skip_reviews=body.skip_reviews)
+    return {"status": "started", "cslug": cslug, "chapter_index": body.chapter_index}
+
+
+@app.get("/compose/{cslug}/export")
+def compose_export(cslug: str):
+    return compose.export_chapters(cslug)
