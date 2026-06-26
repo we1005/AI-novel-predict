@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import threading
 from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any
 
 from sqlalchemy import create_engine, event
@@ -19,6 +20,24 @@ from sqlalchemy.orm import Session, sessionmaker
 
 _engines: dict[str, tuple[Engine, sessionmaker]] = {}
 _LOCK = threading.Lock()
+
+# 进程级/上下文级的「绑定书」覆盖。设置后,get_engine/session_scope **只认它**,
+# 无视共享的 data/active_book 指针文件——多进程并发时避免写串库(Phase 5)。
+_book_override: ContextVar[str | None] = ContextVar("book_override", default=None)
+
+
+@contextmanager
+def book_scope(slug: str):
+    """在此上下文内,所有 DB 操作绑定到 ``slug``,不受其它进程切换 active_book 影响。
+
+    用于跨书串行分析/生成:即便外部(服务/前端)同时把全局 active 切到别的书,
+    本上下文的写入仍精确落到 ``slug`` 的 novel.db。
+    """
+    token = _book_override.set(slug)
+    try:
+        yield
+    finally:
+        _book_override.reset(token)
 
 
 def _configure(engine: Engine) -> None:
@@ -51,6 +70,9 @@ def _build(slug: str) -> tuple[Engine, sessionmaker]:
 
 
 def _active_slug() -> str:
+    override = _book_override.get()
+    if override:
+        return override
     from .books.library import active_paths, get_active
     slug = get_active()
     if not slug:

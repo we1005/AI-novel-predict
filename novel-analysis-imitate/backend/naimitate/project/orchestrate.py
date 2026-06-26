@@ -10,6 +10,7 @@ from ..bootstrap import ensure_app_importable
 ensure_app_importable()
 
 from app.books import library  # noqa: E402
+from app.db import book_scope  # noqa: E402  进程级绑定,防多进程写串库
 from ..analysis import beat, worldview, relationship, golden, pov  # noqa: E402
 from . import store as project_store  # noqa: E402
 
@@ -54,14 +55,19 @@ def analyze_book_layer(slug: str, layer: str, *, max_chapters: int | None = None
 
 def analyze_book_all(slug: str, *, layers: list[str] | None = None,
                      max_chapters: int | None = None) -> dict:
-    """对单本书串行跑所有(或指定)分析层。"""
+    """对单本书串行跑所有(或指定)分析层。
+
+    全程 book_scope(slug):即便服务/前端同时把全局 active 切到别的书,本次写入
+    也精确落到 slug 的库,不会串库。
+    """
     layers = layers or ALL_LAYERS
     out = {}
-    for ly in layers:
-        try:
-            out[ly] = analyze_book_layer(slug, ly, max_chapters=max_chapters)
-        except Exception as e:  # noqa: BLE001
-            out[ly] = {"layer": ly, "error": str(e)[:160]}
+    with book_scope(slug):
+        for ly in layers:
+            try:
+                out[ly] = analyze_book_layer(slug, ly, max_chapters=max_chapters)
+            except Exception as e:  # noqa: BLE001
+                out[ly] = {"layer": ly, "error": str(e)[:160]}
     return {"slug": slug, "layers": out}
 
 

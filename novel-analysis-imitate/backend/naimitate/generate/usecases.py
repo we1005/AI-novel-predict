@@ -160,16 +160,20 @@ def _ensure_mimic(cslug: str) -> None:
 
 
 def generate_chapter(cslug: str, chapter_index: int, *, skip_reviews: bool = False) -> dict:
-    """对虚拟书生成某章(复用现有 draft.write_chapter,自动带克隆来的文风/笔法)。"""
+    """对虚拟书生成某章(复用现有 draft.write_chapter,自动带克隆来的文风/笔法)。
+
+    全程 book_scope(cslug):异步生成期间即便前端切到别的书,本章也只写进 cslug 的库。
+    """
+    from app.db import book_scope
     rec = project_store.get_compose(cslug)
     if not rec or not rec.get("outline_run_id"):
         raise ValueError(f"compose book {cslug!r} has no outline_run — run a uc*_setup first")
-    library.set_active(cslug)
-    init_schema()
-    from app.draft import pipeline as draft
-    res = draft.write_chapter(outline_run_id=rec["outline_run_id"],
-                              chapter_index=chapter_index, skip_reviews=skip_reviews,
-                              reingest=False)   # 虚拟书不必回灌(避免污染 FTS 文风池)
+    with book_scope(cslug):
+        init_schema()
+        from app.draft import pipeline as draft
+        res = draft.write_chapter(outline_run_id=rec["outline_run_id"],
+                                  chapter_index=chapter_index, skip_reviews=skip_reviews,
+                                  reingest=False)   # 虚拟书不必回灌(避免污染 FTS 文风池)
     return {"cslug": cslug, "chapter_index": chapter_index,
             "chars": len((res or {}).get("final_text") or ""),
             "status": (res or {}).get("status")}
