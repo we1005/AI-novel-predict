@@ -228,6 +228,25 @@ tbody tr:hover { background: var(--paper); }
   .archrow .t { width: auto; }
 }
 
+/* —— 文档排版(保姆级讲解)—— */
+.doc { font-size: 14px; line-height: 1.9; color: var(--ink); }
+.doc p { margin: 0 0 12px; }
+.doc h3 { font-family: var(--serif); font-size: 16px; color: var(--ink); margin: 18px 0 8px; font-weight: 700; }
+.doc ul, .doc ol { margin: 4px 0 12px; padding-left: 22px; }
+.doc li { margin: 4px 0; }
+.doc b { color: var(--ink); }
+.doc .katex { font-size: 1.04em; color: var(--ink); }
+.callout { border-left: 3px solid var(--qing); background: rgba(46,111,128,.06); border-radius: 0 4px 4px 0; padding: 10px 14px; margin: 12px 0; font-size: 13.5px; line-height: 1.8; }
+.callout.zhu { border-left-color: var(--zhu); background: rgba(192,57,43,.05); }
+.callout .lab { font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--qing); display: block; margin-bottom: 3px; }
+.callout.zhu .lab { color: var(--zhu-deep); }
+.steps { counter-reset: st; list-style: none; padding-left: 0; }
+.steps > li { counter-increment: st; position: relative; padding-left: 30px; margin: 8px 0; }
+.steps > li::before { content: counter(st); position: absolute; left: 0; top: 1px; width: 21px; height: 21px; background: var(--zhu); color: #fdf6f2; border-radius: 50%; font-size: 12px; font-family: var(--mono); display: grid; place-items: center; }
+.worked { background: var(--paper); border: 1px dashed var(--rule); border-radius: 4px; padding: 11px 14px; margin: 12px 0; font-size: 13px; line-height: 1.8; }
+.worked .lab { font-family: var(--mono); font-size: 11px; color: var(--zhe); letter-spacing: 1px; }
+.formula-note { font-size: 12px; color: var(--muted); margin: -4px 0 12px; }
+
 /* 人物卡 */
 .charscroll { display: grid; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 14px; }
 .charcard { border: 1px solid var(--rule); border-radius: 3px; padding: 13px 15px; background: var(--paper); }
