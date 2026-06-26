@@ -236,6 +236,7 @@ def book_analysis(slug: str):
         "style": style.get_style(slug),
         "speedread": speedread.get_speedread(slug),
         "base": base.get_base(slug),
+        "genome": style_genome.get_genome(slug),
     }
 
 

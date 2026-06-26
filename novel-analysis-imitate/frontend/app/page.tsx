@@ -19,6 +19,7 @@ const TABS = [
   { k: "speedread", t: "速读 · 剧情脉络", i: "speedread" },
   { k: "pacing", t: "节拍 · 张力曲线", i: "pacing" },
   { k: "style", t: "文笔 · 声音", i: "style" },
+  { k: "genome", t: "文风基因组", i: "compose" },
   { k: "worldview", t: "世界观铺垫", i: "worldview" },
   { k: "relationship", t: "人物关系", i: "relationship" },
   { k: "settings", t: "设定 · 伏笔", i: "settings" },
@@ -73,6 +74,7 @@ export default function Page() {
           {tab === "speedread" && <SpeedRead d={data.speedread} slug={slug} />}
           {tab === "pacing" && <Pacing d={data.beats} view={view} />}
           {tab === "style" && <Style d={data.style} />}
+          {tab === "genome" && <Genome d={data.genome} slug={slug} />}
           {tab === "worldview" && <Worldview d={data.worldview} view={view} />}
           {tab === "relationship" && <Relationship d={data.relationships} chars={data.characters} slug={slug} view={view} />}
           {tab === "settings" && <Settings d={data.base} slug={slug} />}
@@ -595,6 +597,82 @@ function Style({ d }: { d: any }) {
         ))}</div>}
       {!!d.n_craft_cards && <div className="card"><h2>笔法拆解 <span className="tag">{d.n_craft_cards} 类</span></h2>
         <div>{d.craft_cards.map((c: any, i: number) => <span key={i} className="pill">{c.category} ({c.snippet_count})</span>)}</div></div>}
+    </>
+  );
+}
+
+function Genome({ d, slug }: { d: any; slug: string }) {
+  const [msg, setMsg] = useState("");
+  const [copied, setCopied] = useState(false);
+  const present = d?.layers_present || [];
+  const g = d?.genome || {};
+  const fp = d?.fingerprint_vector || {};
+  const spec = d?.system_prompt || "";
+  async function run() {
+    setMsg("已后台抽取文风基因组(7层,约5-8分钟,走小米)。稍后侧栏『刷新』。");
+    try { await fetch(`/api/books/${encodeURIComponent(slug)}/genome`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); }
+    catch (e: any) { setMsg("启动失败: " + e.message); }
+  }
+  if (!present.length) return (
+    <div className="card">
+      <span className="eyebrow">STYLE GENOME</span>
+      <h2>文风基因组</h2>
+      <div className="muted" style={{ marginBottom: 10, lineHeight: 1.7 }}>
+        把作者的写作范式 + 宏观编排架构抽成可复用、可喂给别的 LLM 复现的分层「基因组」:
+        词汇分层 / 句式构式 / 修辞与叙述声音 / 类型氛围配方 / 场景调度套路 / 宏观架构 / 场景转移模型。
+      </div>
+      <button className="btn" onClick={run}>抽取文风基因组</button>
+      {msg && <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>{msg}</div>}
+    </div>
+  );
+  const J = (v: any) => typeof v === "string" ? v : JSON.stringify(v, null, 2);
+  const LAYER_T: Record<string, string> = {
+    lexicon: "词汇分层", syntax: "句式构式", rhetoric: "修辞与叙述声音", atmosphere: "类型氛围配方",
+    scene_routine: "场景调度套路", macro_arch: "宏观编排架构", transition: "场景转移模型",
+  };
+  return (
+    <>
+      <div className="card">
+        <span className="eyebrow">STYLE GENOME</span>
+        <h2>文风基因组 <span className="tag">{present.length} 层已抽取</span></h2>
+        <div className="row" style={{ gap: 8 }}>
+          {present.map((l: string) => <span key={l} className="pill">{LAYER_T[l] || l}</span>)}
+          <span style={{ flex: 1 }} />
+          <button className="btn ghost" onClick={run}>重抽</button>
+        </div>
+        {msg && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>{msg}</div>}
+      </div>
+
+      {!!Object.keys(fp).length && <div className="card">
+        <h2>文风指纹向量 <span className="tag">可计算·用于和生成稿做客观对账</span></h2>
+        <div className="row" style={{ gap: 14 }}>
+          {fp.tension_profile && <Stat v={fp.tension_profile} k="张力曲线型" />}
+          {fp.tension_avg != null && <Stat v={fp.tension_avg} k="平均张力" />}
+          {fp.hedge_per_kchar != null && <Stat v={fp.hedge_per_kchar} k="弱断言/千字" />}
+          {fp.reduplication_per_kchar != null && <Stat v={fp.reduplication_per_kchar} k="叠词/千字" />}
+          {fp.bluntness != null && <Stat v={fp.bluntness} k="直白度" />}
+          {fp.infodump_ratio != null && <Stat v={`${Math.round((fp.infodump_ratio||0)*100)}%`} k="信息倾倒率" />}
+        </div>
+      </div>}
+
+      <div className="card">
+        <h2>可复用 system-prompt <span className="tag">喂给别的 LLM/Agent 即可复现该文风</span></h2>
+        <button className="btn" style={{ marginBottom: 10 }} onClick={() => { navigator.clipboard?.writeText(spec); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
+          {copied ? "已复制 ✓" : "复制 spec"}
+        </button>
+        <div className="tablescroll" style={{ maxHeight: 360, padding: "10px 12px" }}>
+          <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 12.5, lineHeight: 1.7, fontFamily: "var(--mono)" }}>{spec}</pre>
+        </div>
+      </div>
+
+      {present.map((l: string) => (
+        <div key={l} className="card">
+          <h2>{LAYER_T[l] || l}</h2>
+          <div className="tablescroll" style={{ maxHeight: 340, padding: "10px 12px" }}>
+            <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 12, lineHeight: 1.65, fontFamily: "var(--mono)" }}>{J(g[l])}</pre>
+          </div>
+        </div>
+      ))}
     </>
   );
 }
