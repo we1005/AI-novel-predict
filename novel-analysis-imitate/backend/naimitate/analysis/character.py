@@ -84,9 +84,57 @@ _SYS = (
 )
 
 
-def build_cards(slug: str, *, top_n: int = 12) -> dict:
+def _from_entities(slug: str, top_n: int) -> int:
+    """优先用主项目既有 Entity 表(有描述/角色/importance)直接成卡 + 补关系,零 LLM。"""
+    from sqlalchemy import text as _t
+    from app.db import get_engine
+    with get_engine().begin() as c:
+        ents = [dict(r) for r in c.execute(_t(
+            "SELECT name,type,role,importance,description,first_appear_chapter "
+            "FROM entities WHERE type IN ('person','角色','人物','character') OR type IS NULL "
+            "ORDER BY importance DESC LIMIT :n"), {"n": top_n}).mappings()]
+    if not ents:
+        # type 不规范时退而求其次:全表按 importance
+        with get_engine().begin() as c:
+            ents = [dict(r) for r in c.execute(_t(
+                "SELECT name,type,role,importance,description,first_appear_chapter "
+                "FROM entities ORDER BY importance DESC LIMIT :n"), {"n": top_n}).mappings()]
+    if not ents:
+        return 0
+    with session_scope() as s:
+        rels = s.execute(select(M.RelationshipEvent)).scalars().all()
+    rel_by = {}
+    for r in rels:
+        for who, other in ((r.a, r.b), (r.b, r.a)):
+            rel_by.setdefault(who, []).append({"who": other, "relation": r.state})
+    with session_scope() as s:
+        s.execute(delete(M.CharacterCard))
+        for e in ents:
+            name = e["name"]
+            kr, seen = [], set()
+            for x in rel_by.get(name, []):
+                key = (x["who"], x["relation"])
+                if key not in seen:
+                    seen.add(key); kr.append(x)
+            s.add(M.CharacterCard(
+                name=name[:40], role=(e.get("role") or "")[:20],
+                importance=int(e.get("importance") or 50),
+                one_line=(e.get("description") or "")[:120],
+                description=(e.get("description") or "")[:600],
+                personality="", arc="",
+                key_relations_json=kr[:6],
+                first_chapter=e.get("first_appear_chapter") or 0,
+                created_at=datetime.utcnow()))
+    return len(ents)
+
+
+def build_cards(slug: str, *, top_n: int = 12, prefer_entities: bool = True) -> dict:
     with book_scope(slug):
         init_schema()
+        if prefer_entities:
+            n = _from_entities(slug, top_n)
+            if n:
+                return {"characters": n, "source": "entities"}
         ranked = _rank(slug, top_n)
         if not ranked:
             return {"error": "无关系/节拍数据 — 先跑节拍+关系层", "characters": 0}

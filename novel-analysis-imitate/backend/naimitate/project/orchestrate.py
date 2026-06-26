@@ -11,14 +11,15 @@ ensure_app_importable()
 
 from app.books import library  # noqa: E402
 from app.db import book_scope  # noqa: E402  进程级绑定,防多进程写串库
-from ..analysis import beat, worldview, relationship, golden, pov, style  # noqa: E402
+from ..analysis import beat, worldview, relationship, golden, pov, style, base  # noqa: E402
 from . import store as project_store  # noqa: E402
 
 # 进程内 job 状态(MVP;重启即丢,够用)。
 _JOBS: dict[str, dict] = {}
 
-# Phase 1 全分析层。pov 依赖 beat,故置于 beat 之后(派生,零 LLM)。style=文笔画像。
-ALL_LAYERS = ["beat", "worldview", "relationship", "golden", "pov", "style"]
+# base=复用主项目6抽取agent+关系图(实体/伏笔/剧情点/世界规则/关系网),置首供后续用。
+# pov 依赖 beat(派生零LLM)。style=文笔画像。
+ALL_LAYERS = ["base", "beat", "worldview", "relationship", "golden", "pov", "style"]
 
 
 def _book_slugs_of(pslug: str) -> list[str]:
@@ -35,6 +36,9 @@ def analyze_book_beats(slug: str, *, max_chapters: int | None = None) -> dict:
 
 def analyze_book_layer(slug: str, layer: str, *, max_chapters: int | None = None) -> dict:
     """对单本书跑指定分析层。返回 {layer, count, card?}。"""
+    if layer == "base":
+        r = base.run_base(slug)          # 复用主项目 6 抽取 agent + 关系图
+        return {"layer": layer, "count": (r.get("counts") or {}).get("entities", 0), "detail": r}
     if layer == "beat":
         r = beat.tag_beats(slug, max_chapters=max_chapters)
         return {"layer": layer, "count": r.get("beats"), "card": beat.beat_summary(slug).get("card")}

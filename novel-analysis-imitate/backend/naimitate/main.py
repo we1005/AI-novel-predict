@@ -17,7 +17,7 @@ from fastapi import BackgroundTasks  # noqa: E402
 from app.books import library  # 复用现有多书库
 from .project import store as project_store
 from .project import orchestrate
-from .analysis import beat, worldview, relationship, golden, pov, style, speedread, character
+from .analysis import beat, worldview, relationship, golden, pov, style, speedread, character, base
 from .generate import usecases, compose, transplant, fusion
 from .generate import technique as tech
 
@@ -143,6 +143,18 @@ def book_worldview(slug: str):
 @app.get("/books/{slug}/relationships")
 def book_relationships(slug: str):
     return relationship.get_events(slug)
+
+
+@app.get("/books/{slug}/base")
+def book_base(slug: str):
+    return base.get_base(slug)
+
+
+@app.post("/books/{slug}/base")
+def run_book_base(slug: str, background: BackgroundTasks):
+    """复用主项目 6 抽取 agent + 关系图(实体/伏笔/剧情点/世界规则/关系)。"""
+    background.add_task(base.run_base, slug)
+    return {"status": "started", "book": slug}
 
 
 @app.get("/books/{slug}/characters")
