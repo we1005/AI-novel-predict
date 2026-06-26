@@ -122,7 +122,44 @@ tbody tr:hover { background: var(--paper); }
 
 .povcell { display: inline-block; width: 14px; height: 14px; margin: 1px; border-radius: 1px; }
 
-/* —— 侧边栏布局(响应式)—— */
+/* —— App 全局左栏(固定全高,仿主项目)—— */
+.applayout { min-height: 100vh; }
+.rail {
+  position: fixed; left: 0; top: 0; bottom: 0; width: 232px; z-index: 30;
+  background: var(--paper-2); border-right: 1px solid var(--rule);
+  display: flex; flex-direction: column; gap: 6px; padding: 18px 14px;
+  overflow-y: auto;
+}
+.railbrand { display: flex; align-items: center; gap: 10px; font-family: var(--serif); font-size: 20px; font-weight: 700; color: var(--ink); padding: 2px 6px 14px; letter-spacing: 3px; }
+.railseal { display: inline-grid; place-items: center; width: 30px; height: 30px; background: var(--zhu); color: #fdf6f2; font-size: 17px; border-radius: 4px; box-shadow: 2px 2px 0 rgba(156,44,31,.25); }
+.railnav { display: flex; flex-direction: column; gap: 2px; }
+.railtabs { display: flex; flex-direction: column; gap: 1px; }
+.railitem {
+  display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 6px;
+  cursor: pointer; color: var(--ink-dim); font-size: 14px; letter-spacing: .5px; white-space: nowrap;
+}
+.railitem svg { flex-shrink: 0; opacity: .75; }
+.railitem:hover { background: var(--paper); color: var(--ink); }
+.railitem.active { background: rgba(192,57,43,.10); color: var(--zhu); font-weight: 600; }
+.railitem.active svg { opacity: 1; }
+.railsection { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--zhe); margin: 14px 6px 4px; }
+.appmain { margin-left: 232px; padding: 28px 30px 90px; max-width: 1080px; }
+
+@media (max-width: 860px) {
+  .rail {
+    position: static; width: 100%; height: auto; flex-direction: column;
+    border-right: none; border-bottom: 1px solid var(--rule); padding: 12px 14px;
+  }
+  .railbrand { padding-bottom: 8px; }
+  .railnav { flex-direction: row; }
+  .railtabs { flex-direction: row; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .railtabs .railitem { white-space: nowrap; }
+  .railitem span { font-size: 13px; }
+  .appmain { margin-left: 0; padding: 18px 14px 70px; }
+  .h1 { font-size: 22px; }
+}
+
+/* —— (旧)内容区子侧栏布局 —— */
 .layout { display: flex; gap: 24px; align-items: flex-start; }
 .side { width: 210px; flex-shrink: 0; position: sticky; top: 72px; display: flex; flex-direction: column; gap: 14px; }
 .main { flex: 1; min-width: 0; }

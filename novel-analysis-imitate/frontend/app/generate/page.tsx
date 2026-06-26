@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import Icon from "@/components/Icon";
+import Link from "next/link";
 
 const UCS = [
   { k: "uc2", t: "UC2 · 用A文风写我的故事" },
@@ -74,14 +76,27 @@ export default function GeneratePage() {
   }
 
   return (
-    <div className="wrap">
+    <div className="applayout">
+      <aside className="rail">
+        <Link href="/" className="railbrand"><span className="railseal">墨</span><span>墨析</span></Link>
+        <nav className="railnav">
+          <Link href="/" className="railitem"><Icon k="analyze" /><span>深度分析</span></Link>
+          <Link href="/generate" className="railitem active"><Icon k="compose" /><span>仿写 · 重组</span></Link>
+        </nav>
+        <div className="railsection">用例</div>
+        <nav className="railtabs">
+          {UCS.map((x) => (
+            <div key={x.k} className={"railitem" + (uc === x.k ? " active" : "")} onClick={() => setUc(x.k)}>
+              <Icon k="compose" /><span>{x.t.split(" · ")[0]}</span>
+            </div>
+          ))}
+        </nav>
+      </aside>
+      <main className="appmain">
       <span className="eyebrow">COMPOSE · 借声成文</span>
       <div className="h1">借一本书的笔法,写另一个故事</div>
       <div className="sub">虚拟书载入源书的声音与笔法,沿用三审一编辑的续写内核。四类重组共用一条生成路径。</div>
 
-      <div className="tabs">
-        {UCS.map((x) => <div key={x.k} className={"tab" + (uc === x.k ? " active" : "")} onClick={() => setUc(x.k)}>{x.t}</div>)}
-      </div>
 
       <div className="card">
         <div className="row" style={{ marginBottom: 10 }}>
@@ -163,6 +178,7 @@ export default function GeneratePage() {
                 <td>{c.outline_run_id ? "✓" : "—"}</td></tr>
             ))}</tbody></table>}
       </div>
+      </main>
     </div>
   );
 }

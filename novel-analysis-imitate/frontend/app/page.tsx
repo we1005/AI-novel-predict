@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import Chart from "@/components/Chart";
+import Icon from "@/components/Icon";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 const RelationGraph = dynamic(() => import("@/components/RelationGraph"), { ssr: false });
 
@@ -14,14 +16,14 @@ const POV_PALETTE = ["#2e6f80", "#9a6b2f", "#565a8c", "#c0392b", "#7a8a6a", "#8a
 const C = { paper: "#f1efe5", rule: "#d6d0bf", ruleSoft: "#e6e1d1", qing: "#2e6f80", zhu: "#c0392b", zhe: "#9a6b2f", dai: "#565a8c", bone: "#574f40" };
 
 const TABS = [
-  { k: "speedread", t: "速读 · 剧情脉络" },
-  { k: "pacing", t: "节拍 · 张力曲线" },
-  { k: "style", t: "文笔 · 声音" },
-  { k: "worldview", t: "世界观铺垫" },
-  { k: "relationship", t: "人物关系" },
-  { k: "settings", t: "设定 · 伏笔" },
-  { k: "pov", t: "视角调度" },
-  { k: "golden", t: "金手指升级" },
+  { k: "speedread", t: "速读 · 剧情脉络", i: "speedread" },
+  { k: "pacing", t: "节拍 · 张力曲线", i: "pacing" },
+  { k: "style", t: "文笔 · 声音", i: "style" },
+  { k: "worldview", t: "世界观铺垫", i: "worldview" },
+  { k: "relationship", t: "人物关系", i: "relationship" },
+  { k: "settings", t: "设定 · 伏笔", i: "settings" },
+  { k: "pov", t: "视角调度", i: "pov" },
+  { k: "golden", t: "金手指升级", i: "golden" },
 ];
 
 export default function Page() {
@@ -63,27 +65,57 @@ export default function Page() {
   }
 
   return (
-    <div className="wrap">
-      <span className="eyebrow">CRAFT · DNA</span>
-      <div className="h1">逐章拆解一本书的叙事脉象</div>
-      <div className="sub">张力节拍 · 世界观铺垫 · 视角调度 · 人物关系 · 金手指曲线 —— 把长篇小说的隐藏机理摊开成可读的刻度。</div>
+    <AppShell page="analyze" books={books} slug={slug} setSlug={setSlug} tab={tab} setTab={setTab}
+      view={view} setView={setView} load={load} loading={loading} runAnalysis={runAnalysis}
+      running={running} maxCh={maxCh} setMaxCh={setMaxCh} msg={msg}>
+      {!data ? <div className="empty">选择书籍后将展示分析结果</div> : (
+        <>
+          {tab === "speedread" && <SpeedRead d={data.speedread} slug={slug} />}
+          {tab === "pacing" && <Pacing d={data.beats} view={view} />}
+          {tab === "style" && <Style d={data.style} />}
+          {tab === "worldview" && <Worldview d={data.worldview} view={view} />}
+          {tab === "relationship" && <Relationship d={data.relationships} chars={data.characters} slug={slug} view={view} />}
+          {tab === "settings" && <Settings d={data.base} slug={slug} />}
+          {tab === "pov" && <Pov d={data.pov} view={view} />}
+          {tab === "golden" && <Golden d={data.golden} />}
+        </>
+      )}
+    </AppShell>
+  );
+}
 
-      <div className="layout">
-        <aside className="side">
-          <select value={slug} onChange={(e) => setSlug(e.target.value)} style={{ width: "100%" }}>
-            {books.map((b) => <option key={b.slug} value={b.slug}>
-              {b.analyzed ? "● " : "○ "}{b.title || b.slug}{b.analyzed ? ` (${b.n_beats}章)` : " · 未分析"}
-            </option>)}
-          </select>
+function AppShell(props: any) {
+  const { page, books, slug, setSlug, tab, setTab, view, setView,
+          load, loading, runAnalysis, running, maxCh, setMaxCh, msg, children } = props;
+  return (
+    <div className="applayout">
+      <aside className="rail">
+        <Link href="/" className="railbrand"><span className="railseal">墨</span><span>墨析</span></Link>
 
-          <nav className="sidetabs">
-            {TABS.map((x) => (
-              <div key={x.k} className={"sidetab" + (tab === x.k ? " active" : "")} onClick={() => setTab(x.k)}>{x.t}</div>
-            ))}
-          </nav>
+        <nav className="railnav">
+          <Link href="/" className={"railitem" + (page === "analyze" ? " active" : "")}><Icon k="analyze" /><span>深度分析</span></Link>
+          <Link href="/generate" className={"railitem" + (page === "compose" ? " active" : "")}><Icon k="compose" /><span>仿写 · 重组</span></Link>
+        </nav>
 
-          <div className="sidegroup">
-            <div className="sidelabel">视图</div>
+        {page === "analyze" && (
+          <>
+            <div className="railsection">书籍</div>
+            <select value={slug} onChange={(e) => setSlug(e.target.value)} style={{ width: "100%" }}>
+              {books.map((b: any) => <option key={b.slug} value={b.slug}>
+                {b.analyzed ? "● " : "○ "}{b.title || b.slug}{b.analyzed ? ` (${b.n_beats}章)` : " · 未分析"}
+              </option>)}
+            </select>
+
+            <div className="railsection">分析维度</div>
+            <nav className="railtabs">
+              {TABS.map((x) => (
+                <div key={x.k} className={"railitem" + (tab === x.k ? " active" : "")} onClick={() => setTab(x.k)}>
+                  <Icon k={x.i} /><span>{x.t}</span>
+                </div>
+              ))}
+            </nav>
+
+            <div className="railsection">视图</div>
             <div className="viewtoggle" style={{ width: "100%" }}>
               {(["chart", "text"] as const).map((v) => (
                 <span key={v} className={"vbtn" + (view === v ? " on" : "")} style={{ flex: 1, textAlign: "center" }} onClick={() => setView(v)}>
@@ -91,34 +123,23 @@ export default function Page() {
                 </span>
               ))}
             </div>
-          </div>
 
-          <div className="sidegroup">
-            <div className="sidelabel">操作</div>
+            <div className="railsection">操作</div>
             <button className="btn ghost" onClick={load} disabled={loading} style={{ width: "100%", marginBottom: 8 }}>{loading ? "加载中…" : "刷新"}</button>
             <input placeholder="限N章(留空=全书)" value={maxCh}
-              onChange={(e) => setMaxCh(e.target.value.replace(/\D/g, ""))}
-              style={{ width: "100%", marginBottom: 8 }} />
+              onChange={(e) => setMaxCh(e.target.value.replace(/\D/g, ""))} style={{ width: "100%", marginBottom: 8 }} />
             <button className="btn" onClick={runAnalysis} disabled={running} style={{ width: "100%" }}>运行分析</button>
             {msg && <div className="muted" style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.6 }}>{msg}</div>}
-          </div>
-        </aside>
+          </>
+        )}
+      </aside>
 
-        <main className="main">
-          {!data ? <div className="empty">选择书籍后将展示分析结果</div> : (
-            <>
-              {tab === "speedread" && <SpeedRead d={data.speedread} slug={slug} />}
-              {tab === "pacing" && <Pacing d={data.beats} view={view} />}
-              {tab === "style" && <Style d={data.style} />}
-              {tab === "worldview" && <Worldview d={data.worldview} view={view} />}
-              {tab === "relationship" && <Relationship d={data.relationships} chars={data.characters} slug={slug} view={view} />}
-              {tab === "settings" && <Settings d={data.base} slug={slug} />}
-              {tab === "pov" && <Pov d={data.pov} view={view} />}
-              {tab === "golden" && <Golden d={data.golden} />}
-            </>
-          )}
-        </main>
-      </div>
+      <main className="appmain">
+        <span className="eyebrow">CRAFT · DNA</span>
+        <div className="h1">逐章拆解一本书的叙事脉象</div>
+        <div className="sub">速读脉络 · 节拍张力 · 文笔声音 · 世界观铺垫 · 人物关系 · 设定伏笔 · 视角调度 · 金手指 —— 把长篇小说的隐藏机理摊开成可读的刻度。</div>
+        {children}
+      </main>
     </div>
   );
 }

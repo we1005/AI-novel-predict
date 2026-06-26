@@ -1,6 +1,5 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import Nav from "@/components/Nav";
 
 export const metadata: Metadata = {
   title: "墨析 · 跨书深度分析",
@@ -10,10 +9,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
-      <body>
-        <Nav />
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
