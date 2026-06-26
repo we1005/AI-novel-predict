@@ -34,6 +34,12 @@ ARK_BASE_URL = os.environ.get(
     "ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/coding/v3"
 )
 
+# 小米 MiMo OpenAI-compatible endpoint(token-plan 版)。密钥经 settings.json/env 配置。
+XIAOMI_API_KEY = os.environ.get("XIAOMI_API_KEY", "")
+XIAOMI_BASE_URL = os.environ.get(
+    "XIAOMI_BASE_URL", "https://token-plan-cn.xiaomimimo.com/v1"
+)
+
 # ---------------------------------------------------------------------------
 # Provider registry
 # ---------------------------------------------------------------------------
@@ -59,6 +65,12 @@ PROVIDERS: dict[str, dict[str, str]] = {
         "base_url": ARK_BASE_URL,
         "api_key": ARK_API_KEY,
         "env_key": "ARK_API_KEY",
+    },
+    "xiaomi": {
+        "label": "小米 MiMo (mimo-v2.5-pro / flash / omni)",
+        "base_url": XIAOMI_BASE_URL,
+        "api_key": XIAOMI_API_KEY,
+        "env_key": "XIAOMI_API_KEY",
     },
 }
 
@@ -88,6 +100,12 @@ PRICE_PER_MTOK = {
     "deepseek-v4-flash": {"input": 0.0, "output": 0.0},
     "deepseek-v4-pro": {"input": 0.0, "output": 0.0},
     "kimi-k2.6": {"input": 0.0, "output": 0.0},
+    # 小米 MiMo — token-plan 计费,per-token 成本列暂记 0。
+    "mimo-v2.5-pro": {"input": 0.0, "output": 0.0},
+    "mimo-v2-pro": {"input": 0.0, "output": 0.0},
+    "mimo-v2.5": {"input": 0.0, "output": 0.0},
+    "mimo-v2-omni": {"input": 0.0, "output": 0.0},
+    "mimo-v2-flash": {"input": 0.0, "output": 0.0},
 }
 
 BATCH_SIZE_CHAPTERS = 50

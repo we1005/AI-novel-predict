@@ -116,6 +116,20 @@ KNOWN_MODELS: list[dict[str, Any]] = [
     {"id": "deepseek-v4-flash", "label": "DeepSeek-V4-Flash", "provider": "volc",
      "tier": "flash", "tag": "快速", "price_in": 0.0, "price_out": 0.0,
      "desc": "DeepSeek V4 轻量快速版"},
+
+    # ── 小米 MiMo(OpenAI 兼容;额度充裕;支持 response_format=json_object,无 json_schema strict)──
+    {"id": "mimo-v2.5-pro", "label": "MiMo-v2.5-Pro", "provider": "xiaomi",
+     "tier": "max", "tag": "强推理", "price_in": 0.0, "price_out": 0.0,
+     "desc": "小米 MiMo 2.5 Pro：1M 上下文/128K 输出,复杂推理/长文"},
+    {"id": "mimo-v2-pro", "label": "MiMo-v2-Pro", "provider": "xiaomi",
+     "tier": "max", "tag": "强推理", "price_in": 0.0, "price_out": 0.0, "desc": "小米 MiMo 2 Pro"},
+    {"id": "mimo-v2.5", "label": "MiMo-v2.5 (Omni)", "provider": "xiaomi",
+     "tier": "plus", "tag": "全模态", "price_in": 0.0, "price_out": 0.0, "desc": "小米 MiMo 2.5 全模态"},
+    {"id": "mimo-v2-omni", "label": "MiMo-v2-Omni", "provider": "xiaomi",
+     "tier": "plus", "tag": "全模态", "price_in": 0.0, "price_out": 0.0, "desc": "小米 MiMo 2 全模态"},
+    {"id": "mimo-v2-flash", "label": "MiMo-v2-Flash", "provider": "xiaomi",
+     "tier": "flash", "tag": "快速", "price_in": 0.0, "price_out": 0.0,
+     "desc": "小米 MiMo 2 Flash：256K 上下文,低成本快速响应"},
 ]
 
 # model id → provider id（路由 base_url + api_key 用）。

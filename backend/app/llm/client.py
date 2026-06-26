@@ -123,9 +123,12 @@ def estimate_cost_usd(model: str, usage: dict[str, int]) -> float:
     return round(inp + out, 6)
 
 
-# 实测确认支持 response_format(json_object + json_schema strict 均合规)的模型白名单。
-# 火山其余模型 400 拒绝或吐空(见 docs/火山引擎-结构化输出-response_format.md 矩阵)。
+# 支持 json_schema strict(连结构都保证)的模型白名单(实测:火山 doubao-seed-2.0-pro/lite)。
 RESPONSE_FORMAT_MODELS = {"doubao-seed-2.0-pro", "doubao-seed-2.0-lite"}
+# 仅支持 json_object(只保证合法 JSON、不强结构)的模型:小米 MiMo 全系。
+# 传入 json_schema 时对这些模型**降级**为 json_object(见下)。
+JSON_OBJECT_ONLY_MODELS = {"mimo-v2.5-pro", "mimo-v2-pro", "mimo-v2.5",
+                           "mimo-v2-omni"}
 
 
 @dataclass
@@ -255,6 +258,16 @@ def call(
     if response_format and model in RESPONSE_FORMAT_MODELS:
         rf = {"type": "json_object"} if isinstance(response_format, str) else response_format
         kwargs["response_format"] = rf
+    elif response_format and model in JSON_OBJECT_ONLY_MODELS:
+        # 小米只支持 json_object:无论传 json_object 还是 json_schema,统一降级为 json_object
+        # (结构靠提示词里贴的 schema 引导 + json_repair 兜底)。
+        kwargs["response_format"] = {"type": "json_object"}
+    # 小米 MiMo 默认禁用深度思考(thinking 经 extra_body;我们的结构化/抽取任务不需推理,
+    # 且开思考会吞输出预算/变慢)。
+    if provider_for_model(model) == "xiaomi":
+        eb = kwargs.get("extra_body") or {}
+        eb["thinking"] = {"type": "disabled"}
+        kwargs["extra_body"] = eb
 
     t0 = time.perf_counter()
     try:
