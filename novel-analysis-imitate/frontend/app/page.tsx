@@ -67,48 +67,56 @@ export default function Page() {
       <div className="h1">逐章拆解一本书的叙事脉象</div>
       <div className="sub">张力节拍 · 世界观铺垫 · 视角调度 · 人物关系 · 金手指曲线 —— 把长篇小说的隐藏机理摊开成可读的刻度。</div>
 
-      <div className="card">
-        <div className="row">
-          <select value={slug} onChange={(e) => setSlug(e.target.value)}>
+      <div className="layout">
+        <aside className="side">
+          <select value={slug} onChange={(e) => setSlug(e.target.value)} style={{ width: "100%" }}>
             {books.map((b) => <option key={b.slug} value={b.slug}>
               {b.analyzed ? "● " : "○ "}{b.title || b.slug}{b.analyzed ? ` (${b.n_beats}章)` : " · 未分析"}
             </option>)}
           </select>
-          <button className="btn ghost" onClick={load} disabled={loading}>{loading ? "加载中…" : "刷新"}</button>
-          <span style={{ flex: 1 }} />
-          <input placeholder="限N章(留空=全书)" value={maxCh}
-            onChange={(e) => setMaxCh(e.target.value.replace(/\D/g, ""))}
-            style={{ width: 150 }} />
-          <button className="btn" onClick={runAnalysis} disabled={running}>运行分析</button>
-        </div>
-        {msg && <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>{msg}</div>}
-      </div>
 
-      <div className="tabs">
-        {TABS.map((x) => (
-          <div key={x.k} className={"tab" + (tab === x.k ? " active" : "")} onClick={() => setTab(x.k)}>{x.t}</div>
-        ))}
-        <span style={{ flex: 1 }} />
-        <div className="viewtoggle">
-          {(["chart", "text"] as const).map((v) => (
-            <span key={v} className={"vbtn" + (view === v ? " on" : "")} onClick={() => setView(v)}>
-              {v === "chart" ? "图表" : "文字"}
-            </span>
-          ))}
-        </div>
-      </div>
+          <nav className="sidetabs">
+            {TABS.map((x) => (
+              <div key={x.k} className={"sidetab" + (tab === x.k ? " active" : "")} onClick={() => setTab(x.k)}>{x.t}</div>
+            ))}
+          </nav>
 
-      {!data ? <div className="empty">选择书籍后将展示分析结果</div> : (
-        <>
-          {tab === "speedread" && <SpeedRead d={data.speedread} slug={slug} />}
-          {tab === "pacing" && <Pacing d={data.beats} view={view} />}
-          {tab === "style" && <Style d={data.style} />}
-          {tab === "worldview" && <Worldview d={data.worldview} view={view} />}
-          {tab === "relationship" && <Relationship d={data.relationships} view={view} />}
-          {tab === "pov" && <Pov d={data.pov} view={view} />}
-          {tab === "golden" && <Golden d={data.golden} />}
-        </>
-      )}
+          <div className="sidegroup">
+            <div className="sidelabel">视图</div>
+            <div className="viewtoggle" style={{ width: "100%" }}>
+              {(["chart", "text"] as const).map((v) => (
+                <span key={v} className={"vbtn" + (view === v ? " on" : "")} style={{ flex: 1, textAlign: "center" }} onClick={() => setView(v)}>
+                  {v === "chart" ? "图表" : "文字"}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="sidegroup">
+            <div className="sidelabel">操作</div>
+            <button className="btn ghost" onClick={load} disabled={loading} style={{ width: "100%", marginBottom: 8 }}>{loading ? "加载中…" : "刷新"}</button>
+            <input placeholder="限N章(留空=全书)" value={maxCh}
+              onChange={(e) => setMaxCh(e.target.value.replace(/\D/g, ""))}
+              style={{ width: "100%", marginBottom: 8 }} />
+            <button className="btn" onClick={runAnalysis} disabled={running} style={{ width: "100%" }}>运行分析</button>
+            {msg && <div className="muted" style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.6 }}>{msg}</div>}
+          </div>
+        </aside>
+
+        <main className="main">
+          {!data ? <div className="empty">选择书籍后将展示分析结果</div> : (
+            <>
+              {tab === "speedread" && <SpeedRead d={data.speedread} slug={slug} />}
+              {tab === "pacing" && <Pacing d={data.beats} view={view} />}
+              {tab === "style" && <Style d={data.style} />}
+              {tab === "worldview" && <Worldview d={data.worldview} view={view} />}
+              {tab === "relationship" && <Relationship d={data.relationships} view={view} />}
+              {tab === "pov" && <Pov d={data.pov} view={view} />}
+              {tab === "golden" && <Golden d={data.golden} />}
+            </>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
