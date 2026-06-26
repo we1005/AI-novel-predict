@@ -19,6 +19,9 @@ export const api = {
   // ---- 生成(Phase 2+)----
   composeList: () => j("/compose"),
   uc2: (body: any) => j("/compose/uc2", { method: "POST", body: JSON.stringify(body) }),
+  uc1: (body: any) => j("/compose/uc1", { method: "POST", body: JSON.stringify(body) }),
+  uc3: (body: any) => j("/compose/uc3", { method: "POST", body: JSON.stringify(body) }),
+  uc4: (body: any) => j("/compose/uc4", { method: "POST", body: JSON.stringify(body) }),
   generate: (cslug: string, chapter_index: number, skip_reviews = false) =>
     j(`/compose/${encodeURIComponent(cslug)}/generate`, {
       method: "POST", body: JSON.stringify({ chapter_index, skip_reviews }),

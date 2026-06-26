@@ -2,15 +2,28 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
+const UCS = [
+  { k: "uc2", t: "UC2 · 用A文风写我的故事" },
+  { k: "uc1", t: "UC1 · 融合多书世界观+文风" },
+  { k: "uc4", t: "UC4 · 江南技法注入(自动蒸馏)" },
+  { k: "uc3", t: "UC3 · 跨书剧情移植到新世界观" },
+];
+
 export default function GeneratePage() {
   const [books, setBooks] = useState<any[]>([]);
   const [composeList, setComposeList] = useState<any[]>([]);
+  const [uc, setUc] = useState("uc2");
   const [voice, setVoice] = useState("");
   const [cslug, setCslug] = useState("");
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [must, setMust] = useState("");
   const [wordTarget, setWordTarget] = useState("2000");
+  const [fuse, setFuse] = useState<string[]>([]);       // UC1 融合源
+  const [plot, setPlot] = useState<string[]>([]);       // UC3 剧情源
+  const [techSrc, setTechSrc] = useState("");           // UC4 技法源
+  const [anchor, setAnchor] = useState("");             // UC3 目标世界观
+  const [nCh, setNCh] = useState("2");                  // UC3 章数
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [exportText, setExportText] = useState("");
@@ -22,22 +35,28 @@ export default function GeneratePage() {
     refreshCompose();
   }, []);
 
+  const oneChapter = () => ([{
+    chapter_index: 1, title: title || "第1章", summary,
+    must_include: must.split(/[,，\s]+/).filter(Boolean),
+    word_target: Number(wordTarget) || 2000,
+  }]);
+  const toggle = (arr: string[], set: any, v: string) =>
+    set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
   async function run() {
-    if (!cslug || !voice || !summary) { setMsg("请填写:产物名、文风源、本章梗概"); return; }
+    if (!cslug || !voice) { setMsg("请填写产物名与文风源"); return; }
+    const needSummary = uc !== "uc3";
+    if (needSummary && !summary) { setMsg("请填写本章梗概"); return; }
+    if (uc === "uc3" && !anchor) { setMsg("UC3 需填目标世界观"); return; }
     setBusy(true); setMsg("① 建虚拟书 + 落大纲…"); setExportText("");
     try {
-      await api.uc2({
-        cslug, voice_source: voice, overwrite: true,
-        chapters: [{
-          chapter_index: 1, title: title || "第1章", summary,
-          must_include: must.split(/[,，\s]+/).filter(Boolean),
-          word_target: Number(wordTarget) || 2000,
-        }],
-      });
-      setMsg("② 后台生成中(数十秒,小米 mimo-v2.5-pro 仿写 + 三审一编辑)…");
+      if (uc === "uc2") await api.uc2({ cslug, voice_source: voice, overwrite: true, chapters: oneChapter() });
+      else if (uc === "uc1") await api.uc1({ cslug, voice_source: voice, fuse_sources: fuse.length ? fuse : [voice], overwrite: true, chapters: oneChapter() });
+      else if (uc === "uc4") await api.uc4({ cslug, voice_source: voice, technique_source: techSrc || voice, overwrite: true, chapters: oneChapter() });
+      else if (uc === "uc3") await api.uc3({ cslug, voice_source: voice, plot_sources: plot.length ? plot : [voice], anchor_world: anchor, n_chapters: Number(nCh) || 2, overwrite: true });
+      setMsg("② 后台生成第1章中(数十秒,小米 mimo-v2.5-pro)…");
       await api.generate(cslug, 1, false);
-      // 轮询导出
-      for (let i = 0; i < 40; i++) {
+      for (let i = 0; i < 45; i++) {
         await new Promise((r) => setTimeout(r, 4000));
         const ex = await api.exportCompose(cslug);
         if (ex.text && ex.text.length > 50) { setExportText(ex.text); setMsg("✓ 生成完成"); break; }
@@ -57,29 +76,72 @@ export default function GeneratePage() {
   return (
     <div className="wrap">
       <div className="h1">仿写 / 重组生成</div>
-      <div className="sub">UC2:用某书的文风写你的故事(声音迁移、内容不串)。UC1/3/4 见后端 API。</div>
+      <div className="sub">compose 虚拟书 → 复用续写内核(仿写文风 + 三审一编辑)。四类用例共用一条生成路径。</div>
+
+      <div className="tabs">
+        {UCS.map((x) => <div key={x.k} className={"tab" + (uc === x.k ? " active" : "")} onClick={() => setUc(x.k)}>{x.t}</div>)}
+      </div>
 
       <div className="card">
-        <h2>用 A 的文风写我的故事</h2>
         <div className="row" style={{ marginBottom: 10 }}>
-          <label className="muted" style={{ width: 70 }}>文风源</label>
+          <label className="muted" style={{ width: 80 }}>文风源</label>
           <select value={voice} onChange={(e) => setVoice(e.target.value)}>
             {books.map((b) => <option key={b.slug} value={b.slug}>{b.title || b.slug}</option>)}
           </select>
-          <input placeholder="产物书名(英数中文皆可)" value={cslug} onChange={(e) => setCslug(e.target.value)}
-            style={inp} />
+          <input placeholder="产物书名" value={cslug} onChange={(e) => setCslug(e.target.value)} style={inp} />
         </div>
-        <div className="row" style={{ marginBottom: 10 }}>
-          <label className="muted" style={{ width: 70 }}>本章标题</label>
-          <input placeholder="第1章 标题" value={title} onChange={(e) => setTitle(e.target.value)} style={{ ...inp, flex: 1 }} />
-          <input placeholder="目标字数" value={wordTarget} onChange={(e) => setWordTarget(e.target.value.replace(/\D/g, ""))} style={{ ...inp, width: 100 }} />
-        </div>
-        <textarea placeholder="本章梗概(你的故事剧情)" value={summary} onChange={(e) => setSummary(e.target.value)}
-          style={{ ...inp, width: "100%", height: 90, marginBottom: 10 }} />
-        <div className="row">
-          <input placeholder="must_include 关键词(逗号分隔)" value={must} onChange={(e) => setMust(e.target.value)} style={{ ...inp, flex: 1 }} />
-          <button className="btn" onClick={run} disabled={busy}>{busy ? "生成中…" : "生成本章"}</button>
-        </div>
+
+        {uc === "uc1" && (
+          <div style={{ marginBottom: 10 }}>
+            <label className="muted">融合文风源(多选)</label>
+            <div>{books.map((b) => (
+              <span key={b.slug} className="pill" style={{ cursor: "pointer", borderColor: fuse.includes(b.slug) ? "var(--accent)" : undefined }}
+                onClick={() => toggle(fuse, setFuse, b.slug)}>{fuse.includes(b.slug) ? "✓ " : ""}{b.title || b.slug}</span>
+            ))}</div>
+          </div>
+        )}
+        {uc === "uc4" && (
+          <div className="row" style={{ marginBottom: 10 }}>
+            <label className="muted" style={{ width: 80 }}>技法源</label>
+            <select value={techSrc || voice} onChange={(e) => setTechSrc(e.target.value)}>
+              {books.map((b) => <option key={b.slug} value={b.slug}>{b.title || b.slug}</option>)}
+            </select>
+            <span className="muted" style={{ fontSize: 12 }}>从该书分析层自动蒸馏导演手册(需先跑分析)</span>
+          </div>
+        )}
+        {uc === "uc3" && (
+          <>
+            <div style={{ marginBottom: 10 }}>
+              <label className="muted">剧情母核源(多选,抽取去设定剧情)</label>
+              <div>{books.map((b) => (
+                <span key={b.slug} className="pill" style={{ cursor: "pointer", borderColor: plot.includes(b.slug) ? "var(--accent)" : undefined }}
+                  onClick={() => toggle(plot, setPlot, b.slug)}>{plot.includes(b.slug) ? "✓ " : ""}{b.title || b.slug}</span>
+              ))}</div>
+            </div>
+            <textarea placeholder="目标世界观设定(剧情母核将重锚定到此世界)" value={anchor} onChange={(e) => setAnchor(e.target.value)}
+              style={{ ...inp, width: "100%", height: 70, marginBottom: 10 }} />
+            <div className="row" style={{ marginBottom: 10 }}>
+              <label className="muted" style={{ width: 80 }}>生成章数</label>
+              <input value={nCh} onChange={(e) => setNCh(e.target.value.replace(/\D/g, ""))} style={{ ...inp, width: 80 }} />
+              <span className="muted" style={{ fontSize: 12 }}>大纲由模型从母核重锚定自动生成</span>
+            </div>
+          </>
+        )}
+
+        {uc !== "uc3" && (
+          <>
+            <div className="row" style={{ marginBottom: 10 }}>
+              <label className="muted" style={{ width: 80 }}>本章标题</label>
+              <input placeholder="第1章 标题" value={title} onChange={(e) => setTitle(e.target.value)} style={{ ...inp, flex: 1 }} />
+              <input placeholder="字数" value={wordTarget} onChange={(e) => setWordTarget(e.target.value.replace(/\D/g, ""))} style={{ ...inp, width: 90 }} />
+            </div>
+            <textarea placeholder="本章梗概(你的故事剧情)" value={summary} onChange={(e) => setSummary(e.target.value)}
+              style={{ ...inp, width: "100%", height: 84, marginBottom: 10 }} />
+            <input placeholder="must_include 关键词(逗号分隔)" value={must} onChange={(e) => setMust(e.target.value)} style={{ ...inp, width: "100%", marginBottom: 10 }} />
+          </>
+        )}
+
+        <button className="btn" onClick={run} disabled={busy}>{busy ? "生成中…" : "建虚拟书并生成第1章"}</button>
         {msg && <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>{msg}</div>}
       </div>
 
@@ -91,7 +153,7 @@ export default function GeneratePage() {
       )}
 
       <div className="card">
-        <h2>已生成的产物书 <span className="tag">点击查看</span></h2>
+        <h2>已生成的产物书 <span className="tag">点击查看正文</span></h2>
         {!composeList.length ? <div className="muted">暂无</div> :
           <table><thead><tr><th>产物</th><th>用例</th><th>文风源</th><th>章</th></tr></thead>
             <tbody>{composeList.map((c) => (
