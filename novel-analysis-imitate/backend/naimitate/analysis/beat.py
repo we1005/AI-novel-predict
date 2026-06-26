@@ -61,7 +61,13 @@ _SYS = (
     f"- plot_function 取其一:{'/'.join(PLOT_FUNCS)}(铺垫/升级/兑现/反转/喘息)。\n"
     "- hook_type:章末钩子类型(悬念/反转/危机/情感/信息揭示/无 等);cliffhanger_strength 0-100。\n"
     "- summary:一句话概括本章节拍。\n"
-    "为给定的每一章各产出一条,chapter_number 必须是给定章节号之一。"
+    "为给定的每一章各产出一条,chapter_number 必须是给定章节号之一。\n\n"
+    "# 输出格式(严格遵守)\n"
+    "只输出一个 JSON 对象,形如:\n"
+    '{"beats":[{"chapter_number":1,"tension_level":60,"scene_type":"铺垫",'
+    '"pov_holder":"主角名","is_protagonist_pov":true,"plot_function":"setup",'
+    '"hook_type":"悬念","cliffhanger_strength":50,"summary":"……"}]}\n'
+    "不要输出任何解释、Markdown 围栏或多余文本。"
 )
 
 
@@ -132,8 +138,7 @@ def tag_beats(slug: str, *, batch_size: int = 8, max_chapters: int | None = None
         body = "\n\n".join(f"【第{c['chapter']}章 {c['title']}】\n{c['text']}" for c in batch)
         try:
             resp = llm.call(agent="analysis.beat", model=MODEL_FAST,
-                            system=[{"type": "text", "text": _SYS
-                                     + "\n\n# 输出格式\n只输出一个 JSON 对象,符合给定 schema。"}],
+                            system=[{"type": "text", "text": _SYS}],
                             messages=[{"role": "user", "content":
                                        f"为第 {nums} 章逐章判定节拍。\n\n{body}"}],
                             max_tokens=4000, temperature=0.2, response_format=_beat_rf())
@@ -171,6 +176,7 @@ def tag_beats(slug: str, *, batch_size: int = 8, max_chapters: int | None = None
                     s.merge(r)
             total += len(rows)
         print(f"[analysis.beat] {slug} batch {bi+1}/{len(batches)} ch{batch[0]['chapter']}-{batch[-1]['chapter']}: +{len(rows)} (累计 {total})", flush=True)
+    beat_summary(slug)  # 抽完即聚合 pacing 卡,保持与其它层一致
     return {"beats": total, "batches": len(batches), "cost_usd": round(cost, 4)}
 
 

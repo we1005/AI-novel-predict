@@ -261,6 +261,20 @@ AGENT_REGISTRY: list[dict[str, Any]] = [
     {"id": "sim.report",         "group": "仿真", "lane": LANE_STRONG,
      "temperature": 0.7, "max_tokens": 8000, "top_p": None,
      "desc": "ReportAgent：综合成章"},
+
+    # ── 深度分析层（novel-analysis-imitate 项目 · Phase 1）──
+    {"id": "analysis.beat",         "group": "深度分析", "lane": LANE_FAST,
+     "temperature": 0.2, "max_tokens": 4000, "top_p": None,
+     "desc": "逐章节拍(张力/场景/POV/钩子)，逐批扫全书"},
+    {"id": "analysis.worldview",    "group": "深度分析", "lane": LANE_FAST,
+     "temperature": 0.2, "max_tokens": 4000, "top_p": None,
+     "desc": "世界观揭示事件(铺垫手法/信息倾倒/埋设跨度)"},
+    {"id": "analysis.relationship", "group": "深度分析", "lane": LANE_FAST,
+     "temperature": 0.2, "max_tokens": 4000, "top_p": None,
+     "desc": "人物关系演变事件(状态转变轨迹)"},
+    {"id": "analysis.golden",       "group": "深度分析", "lane": LANE_FAST,
+     "temperature": 0.2, "max_tokens": 4000, "top_p": None,
+     "desc": "主角金手指升级台阶(升级斜率)"},
 ]
 
 

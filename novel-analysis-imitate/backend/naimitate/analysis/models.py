@@ -30,6 +30,64 @@ class ChapterBeat(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class WorldviewReveal(Base):
+    """世界观/设定的『揭示事件』(江南式反信息倾倒铺垫的最小单元)。
+
+    一章可有 0..N 条:某设定概念第一次被投喂给读者时,用什么手法、是否生硬倾倒、
+    埋设到兑现隔了多远。聚合出『铺垫节奏卡』。
+    """
+    __tablename__ = "worldview_reveal"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chapter = Column(Integer, index=True)              # 出现章节号
+    concept = Column(String)                           # 被揭示的设定/概念(如『序列体系』『真名』)
+    reveal_method = Column(String)                     # 揭示手法:对话/情节体验/旁白直述/文献档案/回忆/环境暗示/角色独白
+    is_infodump = Column(Integer, default=0)           # 是否信息倾倒(生硬大段解释)0/1
+    setup_payoff_gap = Column(Integer, default=0)      # 埋设→兑现间隔章数(0=同章兑现/未知)
+    importance = Column(Integer, default=50)           # 该设定对世界观的重要度 0-100
+    excerpt = Column(Text)                             # 逐字依据(<=200字)
+    summary = Column(Text)                             # 一句话:揭示了什么、怎么揭示
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PovEvent(Base):
+    """视角切换事件(POV 调度规则)。"""
+    __tablename__ = "pov_event"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chapter = Column(Integer, index=True)              # 切到新视角的章节
+    from_pov = Column(String)
+    to_pov = Column(String)
+    why_switch = Column(String)                        # 切换动机:制造悬念/补全信息/平行叙事/反派视角/情感铺垫
+    return_after = Column(Integer, default=0)          # 几章后切回主视角(0=未切回/未知)
+    summary = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class GoldenFingerStep(Base):
+    """主角『金手指/外挂』升级台阶(升级斜率)。"""
+    __tablename__ = "golden_finger_step"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chapter = Column(Integer, index=True)
+    power_tier = Column(String)                        # 当前境界/层级名
+    new_capability = Column(String)                    # 本台阶解锁的新能力
+    trigger = Column(String)                           # 触发方式:奇遇/苦修/危机逼出/反派馈赠/血脉觉醒
+    gap_vs_antagonist = Column(String)                 # 与当前主要对手的实力差:碾压/略胜/持平/落后/悬殊
+    summary = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class RelationshipEvent(Base):
+    """人物关系演变轨迹(关系状态的时间序列)。"""
+    __tablename__ = "relationship_event"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chapter = Column(Integer, index=True)
+    a = Column(String)                                 # 关系一方
+    b = Column(String)                                 # 关系另一方
+    state = Column(String)                             # 萍水/结盟/恋人/反目/背叛/忠贞/宿敌/师徒/亲情/竞争
+    trigger = Column(Text)                             # 导致此状态的事件
+    summary = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class AnalysisCard(Base):
     """各分析层的聚合卡(per book,一类一行)。"""
     __tablename__ = "analysis_card"
