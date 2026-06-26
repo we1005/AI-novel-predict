@@ -31,9 +31,30 @@ def health():
 
 
 @app.get("/books")
-def books():
-    """复用现有书库(backend/data/books)——分析的成员书从这里挑。"""
-    return library.list_books()
+def books(include_compose: bool = False):
+    """真实源书列表(默认排除 compose 生成的虚拟书),并标注是否已分析。"""
+    from app.db import get_engine
+    from sqlalchemy import text as _t
+    compose_slugs = {c["cslug"] for c in project_store.list_compose()}
+    out = []
+    for b in library.list_books():
+        slug = b.get("slug")
+        if not include_compose and slug in compose_slugs:
+            continue
+        # 轻量探测:该书 novel.db 是否有 chapter_beat 行(=已分析)
+        analyzed = False
+        n_beats = 0
+        try:
+            library.set_active(slug)
+            with get_engine().begin() as c:
+                n_beats = c.execute(_t("SELECT COUNT(*) FROM chapter_beat")).scalar() or 0
+            analyzed = n_beats > 0
+        except Exception:
+            pass
+        out.append({**b, "analyzed": analyzed, "n_beats": n_beats})
+    # 已分析的排前面
+    out.sort(key=lambda x: (not x["analyzed"], x.get("slug") or ""))
+    return out
 
 
 class CreateProject(BaseModel):

@@ -32,7 +32,9 @@ export default function Page() {
   useEffect(() => {
     api.books().then((bs) => {
       setBooks(bs);
-      if (bs[0]) setSlug(bs[0].slug);
+      // 默认选第一本「已分析」的书,避免一进来就是空页
+      const first = bs.find((b: any) => b.analyzed) || bs[0];
+      if (first) setSlug(first.slug);
     }).catch((e) => setMsg("无法连接后端 :8100 — " + e.message));
   }, []);
 
@@ -63,7 +65,9 @@ export default function Page() {
       <div className="card">
         <div className="row">
           <select value={slug} onChange={(e) => setSlug(e.target.value)}>
-            {books.map((b) => <option key={b.slug} value={b.slug}>{b.title || b.slug}</option>)}
+            {books.map((b) => <option key={b.slug} value={b.slug}>
+              {b.analyzed ? "● " : "○ "}{b.title || b.slug}{b.analyzed ? ` (${b.n_beats}章)` : " · 未分析"}
+            </option>)}
           </select>
           <button className="btn ghost" onClick={load} disabled={loading}>{loading ? "加载中…" : "刷新"}</button>
           <span style={{ flex: 1 }} />
