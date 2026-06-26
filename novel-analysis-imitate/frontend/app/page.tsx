@@ -19,6 +19,7 @@ const TABS = [
   { k: "style", t: "文笔 · 声音" },
   { k: "worldview", t: "世界观铺垫" },
   { k: "relationship", t: "人物关系" },
+  { k: "settings", t: "设定 · 伏笔" },
   { k: "pov", t: "视角调度" },
   { k: "golden", t: "金手指升级" },
 ];
@@ -111,6 +112,7 @@ export default function Page() {
               {tab === "style" && <Style d={data.style} />}
               {tab === "worldview" && <Worldview d={data.worldview} view={view} />}
               {tab === "relationship" && <Relationship d={data.relationships} chars={data.characters} slug={slug} view={view} />}
+              {tab === "settings" && <Settings d={data.base} slug={slug} />}
               {tab === "pov" && <Pov d={data.pov} view={view} />}
               {tab === "golden" && <Golden d={data.golden} />}
             </>
@@ -570,6 +572,56 @@ function Style({ d }: { d: any }) {
         ))}</div>}
       {!!d.n_craft_cards && <div className="card"><h2>笔法拆解 <span className="tag">{d.n_craft_cards} 类</span></h2>
         <div>{d.craft_cards.map((c: any, i: number) => <span key={i} className="pill">{c.category} ({c.snippet_count})</span>)}</div></div>}
+    </>
+  );
+}
+
+function Settings({ d, slug }: { d: any; slug: string }) {
+  const world = d?.world_rules || [];
+  const fore = d?.foreshadowings || [];
+  const plot = d?.plot_points || [];
+  const [msg, setMsg] = useState("");
+  async function run() {
+    setMsg("已后台跑基础抽取(实体/伏笔/剧情点/世界规则/关系,复用主项目6 agent,较久)。稍后侧栏『刷新』。");
+    try { await fetch(`/api/books/${encodeURIComponent(slug)}/base`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); }
+    catch (e: any) { setMsg("启动失败: " + e.message); }
+  }
+  if (!world.length && !fore.length && !plot.length) return (
+    <div className="card">
+      <h2>设定 · 伏笔 · 剧情点</h2>
+      <div className="muted" style={{ marginBottom: 10 }}>还没有基础抽取数据 — 复用主项目的实体/伏笔/剧情/世界规则抽取。</div>
+      <button className="btn" onClick={run}>运行基础抽取</button>
+      {msg && <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>{msg}</div>}
+    </div>
+  );
+  return (
+    <>
+      {!!world.length && <div className="card">
+        <h2>世界设定词条 <span className="tag">{world.length} 条 · 出现章序</span></h2>
+        <div className="tablescroll"><table>
+          <thead><tr><th>词条</th><th>释义</th><th>首现</th></tr></thead>
+          <tbody>{world.map((w: any, i: number) => (
+            <tr key={i}><td><b>{w.term}</b></td><td className="muted">{w.definition}</td><td>{w.first_chapter}</td></tr>
+          ))}</tbody></table></div>
+      </div>}
+      {!!fore.length && <div className="card">
+        <h2>伏笔 <span className="tag">{fore.length} 条 · 埋设→回收</span></h2>
+        <div className="tablescroll"><table>
+          <thead><tr><th>埋设章</th><th>回收章</th><th>状态</th><th>类型</th><th>描述</th></tr></thead>
+          <tbody>{fore.map((f: any, i: number) => (
+            <tr key={i}><td>{f.planted_chapter}</td>
+              <td>{f.resolved_chapter || <span className="pill dump">未回收</span>}</td>
+              <td>{f.status}</td><td className="muted">{f.type}</td><td className="muted">{f.description}</td></tr>
+          ))}</tbody></table></div>
+      </div>}
+      {!!plot.length && <div className="card">
+        <h2>剧情点 <span className="tag">{plot.length} 条 · 按章</span></h2>
+        <div className="tablescroll"><table>
+          <thead><tr><th>章</th><th>重要度</th><th>剧情</th></tr></thead>
+          <tbody>{plot.map((p: any, i: number) => (
+            <tr key={i}><td>{p.chapter}</td><td>{p.importance}</td><td className="muted">{p.summary}</td></tr>
+          ))}</tbody></table></div>
+      </div>}
     </>
   );
 }

@@ -222,6 +222,7 @@ def book_analysis(slug: str):
         "pov": pov.get_events(slug),
         "style": style.get_style(slug),
         "speedread": speedread.get_speedread(slug),
+        "base": base.get_base(slug),
     }
 
 
