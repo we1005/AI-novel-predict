@@ -1,0 +1,14 @@
+{
+  "name": "mobi-arch-video-pipeline",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "墨析架构解析视频:headless Chrome 逐帧捕获 + ffmpeg 编码(render.mjs / check.mjs)",
+  "scripts": {
+    "check": "node check.mjs",
+    "render": "node render.mjs"
+  },
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  }
+}
