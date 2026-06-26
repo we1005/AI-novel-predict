@@ -396,9 +396,27 @@ def render_spec(slug: str, genome: dict, cards: dict) -> str:
     if tr.get("most_likely_next"):
         L.append("\n## 场景递进倾向(上一拍→最可能的下一拍)")
         L.append("；".join(f"{a}→{b}" for a, b in list(tr["most_likely_next"].items())[:8]))
-    L.append("\n## 硬性输出约束")
-    L.append("- 直接写正文,不要输出章节标题、小标题、Markdown(如 # / ## / 第X幕)、作者注或任何元信息。")
-    L.append("- 严格按场景类型路由对应的用词密度/句式/调度,避免全程一个腔;弱断言(似乎/仿佛)勿超原作频率。")
+    # 评委盲评后补:命中真实人物名单(供群像多机位强制),与时代穿帮黑名单
+    roster = []
+    try:
+        with session_scope() as s:
+            roster = [r.name for r in s.execute(
+                select(M.CharacterCard).order_by(M.CharacterCard.importance.desc())).scalars().all()][:10]
+    except Exception:
+        pass
+    L.append("\n## 硬性输出约束(经盲评校准)")
+    L.append("- 直接写正文。**禁止**输出章节标题、小标题、Markdown(# / ## / 第X幕)、作者注、元信息。")
+    L.append("- **去仪表盘化**:本作者不播报数据,禁止『同步率97.3%/侵蚀度XX%/临界值30%』式量化播报,"
+             "改为感官化弱断言或删去。")
+    L.append("- **禁止自拆比喻**:不要写『那不是比喻』『这不是夸张』这类自我点破,让喻体直接成立。")
+    L.append("- **时代/世界观保真**:禁用现代地球与科学术语(第三次世界大战/核冬天/意识形态/熵增/神经同步/"
+             "DNA 等),一律换成本世界观的在地等价说法,勿撞破架空外壳。")
+    L.append("- **段落颗粒度**:群像/高潮场用长段铺陈(忌每句独立成段的短视频节奏);近距独白用中等段落。")
+    if roster:
+        L.append(f"- **群像多机位**:群像/战争/高潮场须扫到多个视角而非压成双人对谈,可用的人物机位:"
+                 f"{'、'.join(roster)};每个出场机位给足篇幅,勿一句带过。")
+    L.append("- 严格按场景类型路由用词密度/句式/调度,避免全程一个腔;弱断言(似乎/仿佛)勿超原作频率。")
+    L.append("- 结局态由本章 brief 指定(未决/崩溃/反转),不要擅自写成『成功/融合成功』的正向收束。")
     return "\n".join(L)
 
 
