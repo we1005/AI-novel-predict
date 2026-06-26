@@ -22,9 +22,9 @@ from ..bootstrap import ensure_app_importable
 
 ensure_app_importable()
 
-from sqlalchemy import select  # noqa: E402
+from sqlalchemy import select, text as _sql  # noqa: E402
 from app.config import MODEL_STRONG  # noqa: E402
-from app.db import session_scope, book_scope  # noqa: E402
+from app.db import session_scope, book_scope, get_engine  # noqa: E402
 from app.llm import client as llm  # noqa: E402
 from app.memory.schema_init import init_schema  # noqa: E402
 from . import models as M  # noqa: E402
