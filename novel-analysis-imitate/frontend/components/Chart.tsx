@@ -6,10 +6,10 @@ const ReactECharts = dynamic(() => import("echarts-for-react"), { ssr: false });
 export function dark(option: any) {
   return {
     backgroundColor: "transparent",
-    textStyle: { color: "#b9ad96", fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" },
+    textStyle: { color: "#574f40", fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" },
     tooltip: {
-      backgroundColor: "#1b1711", borderColor: "#3a3022",
-      textStyle: { color: "#ece3d2", fontFamily: "-apple-system, 'PingFang SC', sans-serif" },
+      backgroundColor: "#fbfaf4", borderColor: "#d6d0bf",
+      textStyle: { color: "#211d16", fontFamily: "-apple-system, 'PingFang SC', sans-serif" },
       ...(option.tooltip || {}),
     },
     ...option,

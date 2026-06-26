@@ -3,13 +3,13 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import Chart from "@/components/Chart";
 
-// 颜料盘:铺垫=赭石,高潮系=朱砂深浅,悬疑=黛,煽情=石青,日常/转场=暗赭灰
+// 颜料盘(亮底):铺垫=赭石,高潮系=朱砂深浅,悬疑=黛,煽情=石青,日常/转场=暖灰
 const SCENE_COLORS: Record<string, string> = {
-  铺垫: "#be8a3c", 小高潮: "#d76b52", 大高潮: "#c8442e", 热血: "#cf5a36",
-  悬疑惊悚: "#7d80b4", 煽情: "#4e8597", 日常: "#8c806a", 转场: "#5a4f3c", 其他: "#6b5f49",
+  铺垫: "#9a6b2f", 小高潮: "#cf6b4a", 大高潮: "#c0392b", 热血: "#c8552f",
+  悬疑惊悚: "#565a8c", 煽情: "#2e6f80", 日常: "#8a8270", 转场: "#b3a98f", 其他: "#a0957c",
 };
-const POV_PALETTE = ["#4e8597", "#be8a3c", "#7d80b4", "#c8442e", "#8c806a", "#5a8a72", "#a8763a", "#9a8e76"];
-const C = { ink: "#14110d", rule: "#3a3022", ruleSoft: "#2c2419", qing: "#4e8597", zhu: "#c8442e", zhe: "#be8a3c", dai: "#7d80b4", bone: "#b9ad96" };
+const POV_PALETTE = ["#2e6f80", "#9a6b2f", "#565a8c", "#c0392b", "#7a8a6a", "#8a8270", "#b07a35", "#6b7b8a"];
+const C = { paper: "#f1efe5", rule: "#d6d0bf", ruleSoft: "#e6e1d1", qing: "#2e6f80", zhu: "#c0392b", zhe: "#9a6b2f", dai: "#565a8c", bone: "#574f40" };
 
 const TABS = [
   { k: "pacing", t: "节拍 · 张力曲线" },
@@ -110,7 +110,7 @@ function Pacing({ d }: { d: any }) {
       trigger: "axis",
       formatter: (ps: any[]) => {
         const i = ps[0].dataIndex; const b = beats[i];
-        return `第${b.chapter}章 [${b.scene_type}]<br/>张力 ${b.tension} · 钩子 ${b.cliffhanger}<br/>POV: ${b.pov_holder}${b.is_protagonist_pov ? "(主角)" : ""}<br/><span style="color:#8b96a8">${b.summary || ""}</span>`;
+        return `第${b.chapter}章 [${b.scene_type}]<br/>张力 ${b.tension} · 钩子 ${b.cliffhanger}<br/>POV: ${b.pov_holder}${b.is_protagonist_pov ? "(主角)" : ""}<br/><span style="color:#8a8270">${b.summary || ""}</span>`;
       },
     },
     xAxis: { type: "category", data: xs, name: "章", axisLine: { lineStyle: { color: C.rule } } },
@@ -169,7 +169,7 @@ function Worldview({ d }: { d: any }) {
       trigger: "item",
       formatter: (p: any) => {
         const r = rv[p.dataIndex];
-        return `第${r.chapter}章 · ${r.concept}<br/>手法: ${r.reveal_method}${r.is_infodump ? " · ⚠信息倾倒" : ""}<br/>重要度 ${r.importance}<br/><span style="color:#8b96a8">${r.summary || ""}</span>`;
+        return `第${r.chapter}章 · ${r.concept}<br/>手法: ${r.reveal_method}${r.is_infodump ? " · ⚠信息倾倒" : ""}<br/>重要度 ${r.importance}<br/><span style="color:#8a8270">${r.summary || ""}</span>`;
       },
     },
     xAxis: { type: "value", name: "章", axisLine: { lineStyle: { color: C.rule } } },

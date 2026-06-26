@@ -168,6 +168,6 @@ export default function GeneratePage() {
 }
 
 const inp: React.CSSProperties = {
-  background: "var(--ink-2)", color: "var(--bone)", border: "1px solid var(--rule)",
+  background: "#fff", color: "var(--ink)", border: "1px solid var(--rule)",
   borderRadius: 2, padding: "9px 12px", fontSize: 13,
 };
