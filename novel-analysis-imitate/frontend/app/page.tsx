@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import Chart from "@/components/Chart";
+import dynamic from "next/dynamic";
+const RelationGraph = dynamic(() => import("@/components/RelationGraph"), { ssr: false });
 
 // 颜料盘(亮底):铺垫=赭石,高潮系=朱砂深浅,悬疑=黛,煽情=石青,日常/转场=暖灰
 const SCENE_COLORS: Record<string, string> = {
@@ -100,7 +102,7 @@ export default function Page() {
           {tab === "pacing" && <Pacing d={data.beats} view={view} />}
           {tab === "style" && <Style d={data.style} />}
           {tab === "worldview" && <Worldview d={data.worldview} view={view} />}
-          {tab === "relationship" && <Relationship d={data.relationships} />}
+          {tab === "relationship" && <Relationship d={data.relationships} view={view} />}
           {tab === "pov" && <Pov d={data.pov} view={view} />}
           {tab === "golden" && <Golden d={data.golden} />}
         </>
@@ -260,7 +262,7 @@ function Worldview({ d, view }: { d: any; view: string }) {
   );
 }
 
-function Relationship({ d }: { d: any }) {
+function Relationship({ d, view }: { d: any; view: string }) {
   const ev = d?.events || [];
   const tracks = d?.tracks || {};
   const card = d?.relationship_card;
@@ -268,35 +270,48 @@ function Relationship({ d }: { d: any }) {
   return (
     <>
       <div className="card">
-        <h2>关系演变概览</h2>
+        <h2>关系演变概览 <span className="tag">{view === "chart" ? "节点=人物,边=关系(色:红=对立/青=亲密),可缩放拖拽" : "逐条表格"}</span></h2>
         {card && <div className="stat-row" style={{ marginBottom: 8 }}>
           <Stat v={card.n_events} k="转变事件数" />
           <Stat v={card.n_pairs} k="涉及关系对" />
         </div>}
         <div style={{ marginTop: 6 }}>
-          {(card?.most_dynamic_pairs || []).map((p: any, i: number) => (
-            <span key={i} className="pill">{p.pair} · {p.changes}次转变</span>
+          {(card?.most_dynamic_pairs || []).slice(0, 8).map((p: any, i: number) => (
+            <span key={i} className="pill">{p.pair} · {p.changes}次</span>
           ))}
         </div>
       </div>
-      <div className="card">
-        <h2>关系轨迹</h2>
-        {Object.entries(tracks).map(([pair, evs]: any, i: number) => (
-          <div key={i} style={{ marginBottom: 10 }}>
-            <b style={{ fontSize: 13 }}>{pair}</b>{" "}
-            {evs.map((e: any, j: number) => (
-              <span key={j} className="pill">第{e.chapter}章→{e.state}</span>
-            ))}
+
+      {view === "chart" ? (
+        <div className="card">
+          <h2>关系网络图</h2>
+          <RelationGraph tracks={tracks} />
+        </div>
+      ) : (
+        <>
+          <div className="card">
+            <h2>关系轨迹 <span className="tag">{Object.keys(tracks).length} 对</span></h2>
+            <div className="tablescroll" style={{ padding: "4px 10px" }}>
+              {Object.entries(tracks).map(([pair, evs]: any, i: number) => (
+                <div key={i} style={{ marginBottom: 9 }}>
+                  <b style={{ fontSize: 13 }}>{pair}</b>{" "}
+                  {evs.map((e: any, j: number) => (
+                    <span key={j} className="pill">第{e.chapter}章→{e.state}</span>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
-      </div>
-      <div className="card">
-        <h2>转变明细</h2>
-        <table><thead><tr><th>章</th><th>关系</th><th>新状态</th><th>触发</th></tr></thead>
-          <tbody>{ev.map((e: any, i: number) => (
-            <tr key={i}><td>{e.chapter}</td><td>{e.a} — {e.b}</td><td>{e.state}</td><td className="muted">{e.trigger}</td></tr>
-          ))}</tbody></table>
-      </div>
+          <div className="card">
+            <h2>转变明细 <span className="tag">{ev.length}</span></h2>
+            <div className="tablescroll"><table>
+              <thead><tr><th>章</th><th>关系</th><th>新状态</th><th>触发</th></tr></thead>
+              <tbody>{ev.map((e: any, i: number) => (
+                <tr key={i}><td>{e.chapter}</td><td>{e.a} — {e.b}</td><td>{e.state}</td><td className="muted">{e.trigger}</td></tr>
+              ))}</tbody></table></div>
+          </div>
+        </>
+      )}
     </>
   );
 }
