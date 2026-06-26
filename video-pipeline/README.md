@@ -1,7 +1,10 @@
 # 架构解析视频合成管线
 
-把 `../architecture-video.html`(时间驱动的 GSAP 动画)合成为带中文旁白解说的 MP4
-(`../architecture.mp4`)。旁白用小米 MiMo TTS(`mimo-v2.5-tts`,白桦音色)合成,
+> 位置:仓库根 `video-pipeline/`。动画源与成片在 `novel-analysis-imitate/docs/`
+> (`architecture-video.html` / `architecture.mp4`)。
+
+把 `../novel-analysis-imitate/docs/architecture-video.html`(时间驱动的 GSAP 动画)
+合成为带中文旁白解说的 MP4(`../novel-analysis-imitate/docs/architecture.mp4`)。旁白用小米 MiMo TTS(`mimo-v2.5-tts`,白桦音色)合成,
 渲染借鉴 [nexu-io/html-video](https://github.com/nexu-io/html-video) 的 Hyperframes
 范式 —— 单文件动画 HTML → headless Chrome 逐帧定格 → ffmpeg 编码,但直接用本机系统
 Chrome 跑通,无需自行 build 那个 TS monorepo。
@@ -21,9 +24,9 @@ HTML 内部据此推算各幕起止;`mux.py` 用相同公式把每段旁白 `ade
 | 步骤 | 脚本 | 作用 |
 | --- | --- | --- |
 | 1 | `narrate.py` | 7 段解说词 → MiMo TTS → `_build/seg{0..6}.wav` + `durations.json` |
-| 2 | `bake_timeline.py` | 把旁白时长写进 `../architecture-video.html` 的 `const NARR=[...]` |
+| 2 | `bake_timeline.py` | 把旁白时长写进 `architecture-video.html` 的 `const NARR=[...]` |
 | 3 | `render.mjs` | headless Chrome 逐帧截图 → ffmpeg → `_build/silent.mp4`(无声) |
-| 4 | `mux.py` | 按各幕时刻 `adelay+amix` 合成音轨 → 与无声视频混流 → `../architecture.mp4` |
+| 4 | `mux.py` | 按各幕时刻 `adelay+amix` 合成音轨 → 与无声视频混流 → `architecture.mp4`(产物在 novel-analysis-imitate/docs/) |
 
 `check.mjs` 是可选的快速校验:全量渲染(数千帧、数分钟)前,先确认 `__ready`、
 `__duration`、无 `pageerror`,并抽几帧到 `_build/check_*.png` 肉眼核对。
@@ -41,7 +44,7 @@ HTML 内部据此推算各幕起止;`mux.py` 用相同公式把每段旁白 `ade
 ## 用法
 
 ```bash
-cd novel-analysis-imitate/docs/video-pipeline
+cd video-pipeline   # 仓库根目录下
 npm install            # 仅首次:装 puppeteer-core
 ./build.sh             # 一键四步;产物在 ../architecture.mp4
 ```

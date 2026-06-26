@@ -9,7 +9,7 @@ import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const HTML = path.resolve(process.argv[2] || path.join(HERE, "..", "architecture-video.html"));
+const HTML = path.resolve(process.argv[2] || path.join(HERE, "..", "novel-analysis-imitate", "docs", "architecture-video.html"));
 const CHROME = process.env.CHROME ||
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const BUILD = path.join(HERE, "_build");

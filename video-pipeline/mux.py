@@ -23,7 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.path.join(HERE, "_build")
 SILENT = os.path.join(BUILD, "silent.mp4")
 VOICE = os.path.join(BUILD, "voice.wav")
-OUT = os.path.abspath(os.environ.get("VIDEO_OUT", os.path.join(HERE, "..", "architecture.mp4")))
+OUT = os.path.abspath(os.environ.get("VIDEO_OUT", os.path.join(HERE, "..", "novel-analysis-imitate", "docs", "architecture.mp4")))
 
 
 def main():

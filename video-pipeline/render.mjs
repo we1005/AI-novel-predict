@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const HTML = path.resolve(process.argv[2] || path.join(HERE, "..", "architecture-video.html"));
+const HTML = path.resolve(process.argv[2] || path.join(HERE, "..", "novel-analysis-imitate", "docs", "architecture-video.html"));
 const OUT = path.resolve(process.argv[3] || path.join(HERE, "_build", "silent.mp4"));
 const FPS = Number(process.env.FPS || 30);
 const FRAMES = path.join(HERE, "_build", "frames");

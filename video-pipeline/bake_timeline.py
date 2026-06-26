@@ -14,7 +14,7 @@
 import os, re, json
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-HTML = os.path.join(HERE, "..", "architecture-video.html")
+HTML = os.path.join(HERE, "..", "novel-analysis-imitate", "docs", "architecture-video.html")
 DUR = os.path.join(HERE, "_build", "durations.json")
 
 

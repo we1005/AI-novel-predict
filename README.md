@@ -365,6 +365,9 @@ cp ~/Downloads/我的小说.txt backend/data/library/
 - **book_scope 进程级绑定**(contextvar):多进程并发分析/生成时锁定当前书,无视共享 active 指针 → **不写串库**
 - 结构化输出 JSON-in-text + json_repair;小米仅 json_object,传 json_schema 自动降级
 - **架构动画**:[`novel-analysis-imitate/docs/architecture-animation.html`](novel-analysis-imitate/docs/architecture-animation.html) —— GSAP scrollytelling 自包含单文件,7 幕讲解整条管线(浏览器直接打开)
+- **架构解析视频**:[`novel-analysis-imitate/docs/architecture.mp4`](novel-analysis-imitate/docs/architecture.mp4) —— 同 7 幕 + **小米 MiMo TTS(白桦音色)中文旁白解说**(148s · 1080p · 节奏由旁白时长驱动)。合成管线见仓库根 [`video-pipeline/`](video-pipeline/):旁白合成 → 烘焙时间轴 → headless Chrome 逐帧 → ffmpeg 混流
+
+> **致谢 · 视频合成依赖**:逐帧渲染范式借鉴 [nexu-io/html-video](https://github.com/nexu-io/html-video)(Hyperframes:单文件动画 HTML → 无头浏览器逐帧捕获 → ffmpeg 编码);滚动/时间轴动画遵循 [greensock/gsap-skills](https://github.com/greensock/gsap-skills) 的 GSAP + ScrollTrigger 最佳实践。
 
 ### 🚀 启动墨析
 ```bash
@@ -428,8 +431,14 @@ cd novel-analysis-imitate/frontend && npm install && npm run dev   # http://loca
 │   │   └── project/                     # project.db + 跨书编排 + compose_book/fused_product
 │   ├── frontend/                        # Next.js :3200(深度分析/仿写重组/架构 + 文风基因组专页)
 │   ├── docs/architecture-animation.html # GSAP scrollytelling 架构动画(自包含)
+│   ├── docs/architecture-video.html     # 时间驱动版动画(供逐帧渲染成视频)
+│   ├── docs/architecture.mp4            # 架构解析视频(含 MiMo TTS 旁白解说)
 │   ├── 分析和设计.md                     # 总体设计 + 实现状态
 │   └── 文风基因组-设计.md                # 基因组规格 + 7维盲评结果
+├── video-pipeline/                      # 🎬 架构视频合成管线(MiMo TTS 旁白 + 逐帧渲染 + ffmpeg)
+│   ├── narrate.py  bake_timeline.py     #   旁白合成 → 烘焙时间轴
+│   ├── render.mjs  mux.py  build.sh     #   逐帧渲染 → 合成音轨+混流 → 一键全流程
+│   └── README.md                        #   含 MiMo TTS 接口踩坑备忘
 ├── MiroFish/                            # 角色仿真灵感来源（git submodule 风格）
 ├── 末法王座.txt                          # 示例语料（1472 章）
 └── 需求.md                              # 原始需求

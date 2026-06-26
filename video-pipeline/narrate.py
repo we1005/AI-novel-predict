@@ -18,7 +18,7 @@
 import os, sys, json, time, base64, subprocess, urllib.request, urllib.error
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
+REPO = os.path.abspath(os.path.join(HERE, ".."))   # video-pipeline 在仓库根下
 SETTINGS = os.environ.get("MOBI_SETTINGS", os.path.join(REPO, "backend", "data", "settings.json"))
 OUT = os.path.join(HERE, "_build")
 
