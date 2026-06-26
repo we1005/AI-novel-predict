@@ -6,8 +6,12 @@ const ReactECharts = dynamic(() => import("echarts-for-react"), { ssr: false });
 export function dark(option: any) {
   return {
     backgroundColor: "transparent",
-    textStyle: { color: "#c7cedb" },
-    tooltip: { backgroundColor: "#1f2630", borderColor: "#2a3240", textStyle: { color: "#e6e9ef" }, ...(option.tooltip || {}) },
+    textStyle: { color: "#b9ad96", fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" },
+    tooltip: {
+      backgroundColor: "#1b1711", borderColor: "#3a3022",
+      textStyle: { color: "#ece3d2", fontFamily: "-apple-system, 'PingFang SC', sans-serif" },
+      ...(option.tooltip || {}),
+    },
     ...option,
   };
 }

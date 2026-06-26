@@ -75,8 +75,9 @@ export default function GeneratePage() {
 
   return (
     <div className="wrap">
-      <div className="h1">仿写 / 重组生成</div>
-      <div className="sub">compose 虚拟书 → 复用续写内核(仿写文风 + 三审一编辑)。四类用例共用一条生成路径。</div>
+      <span className="eyebrow">COMPOSE · 借声成文</span>
+      <div className="h1">借一本书的笔法,写另一个故事</div>
+      <div className="sub">虚拟书载入源书的声音与笔法,沿用三审一编辑的续写内核。四类重组共用一条生成路径。</div>
 
       <div className="tabs">
         {UCS.map((x) => <div key={x.k} className={"tab" + (uc === x.k ? " active" : "")} onClick={() => setUc(x.k)}>{x.t}</div>)}
@@ -95,7 +96,7 @@ export default function GeneratePage() {
           <div style={{ marginBottom: 10 }}>
             <label className="muted">融合文风源(多选)</label>
             <div>{books.map((b) => (
-              <span key={b.slug} className="pill" style={{ cursor: "pointer", borderColor: fuse.includes(b.slug) ? "var(--accent)" : undefined }}
+              <span key={b.slug} className="pill" style={{ cursor: "pointer", borderColor: fuse.includes(b.slug) ? "var(--zhu)" : undefined }}
                 onClick={() => toggle(fuse, setFuse, b.slug)}>{fuse.includes(b.slug) ? "✓ " : ""}{b.title || b.slug}</span>
             ))}</div>
           </div>
@@ -114,7 +115,7 @@ export default function GeneratePage() {
             <div style={{ marginBottom: 10 }}>
               <label className="muted">剧情母核源(多选,抽取去设定剧情)</label>
               <div>{books.map((b) => (
-                <span key={b.slug} className="pill" style={{ cursor: "pointer", borderColor: plot.includes(b.slug) ? "var(--accent)" : undefined }}
+                <span key={b.slug} className="pill" style={{ cursor: "pointer", borderColor: plot.includes(b.slug) ? "var(--zhu)" : undefined }}
                   onClick={() => toggle(plot, setPlot, b.slug)}>{plot.includes(b.slug) ? "✓ " : ""}{b.title || b.slug}</span>
               ))}</div>
             </div>
@@ -167,6 +168,6 @@ export default function GeneratePage() {
 }
 
 const inp: React.CSSProperties = {
-  background: "var(--panel-2)", color: "var(--text)", border: "1px solid var(--border)",
-  borderRadius: 8, padding: "8px 12px", fontSize: 13,
+  background: "var(--ink-2)", color: "var(--bone)", border: "1px solid var(--rule)",
+  borderRadius: 2, padding: "9px 12px", fontSize: 13,
 };

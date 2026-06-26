@@ -6,15 +6,19 @@ export default function Nav() {
   const p = usePathname();
   const items = [
     { href: "/", t: "深度分析" },
-    { href: "/generate", t: "仿写/重组生成" },
+    { href: "/generate", t: "仿写 · 重组" },
   ];
   return (
-    <div style={{ borderBottom: "1px solid var(--border)", background: "var(--panel)" }}>
-      <div className="wrap" style={{ padding: "12px 20px", display: "flex", gap: 18, alignItems: "center" }}>
-        <b style={{ fontSize: 15 }}>墨析</b>
+    <div className="masthead">
+      <div className="masthead-in">
+        <span className="seal">墨析</span>
+        <span style={{ flex: 1 }} />
         {items.map((it) => (
-          <Link key={it.href} href={it.href}
-            style={{ color: p === it.href ? "var(--accent)" : "var(--muted)", fontWeight: p === it.href ? 700 : 400 }}>
+          <Link key={it.href} href={it.href} className="navlink"
+            style={{
+              color: p === it.href ? "var(--zhu-soft)" : "var(--muted)",
+              borderBottom: p === it.href ? "2px solid var(--zhu)" : "2px solid transparent",
+            }}>
             {it.t}
           </Link>
         ))}

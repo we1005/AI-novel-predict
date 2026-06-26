@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import Chart from "@/components/Chart";
 
+// 颜料盘:铺垫=赭石,高潮系=朱砂深浅,悬疑=黛,煽情=石青,日常/转场=暗赭灰
 const SCENE_COLORS: Record<string, string> = {
-  铺垫: "#6ea8fe", 小高潮: "#ffb454", 大高潮: "#ff6b6b", 热血: "#ff8c42",
-  悬疑惊悚: "#b18cff", 煽情: "#5fd08a", 日常: "#8b96a8", 转场: "#4a5568", 其他: "#667085",
+  铺垫: "#be8a3c", 小高潮: "#d76b52", 大高潮: "#c8442e", 热血: "#cf5a36",
+  悬疑惊悚: "#7d80b4", 煽情: "#4e8597", 日常: "#8c806a", 转场: "#5a4f3c", 其他: "#6b5f49",
 };
-const POV_PALETTE = ["#6ea8fe", "#ffb454", "#5fd08a", "#ff6b6b", "#b18cff", "#43c6db", "#ff8c42", "#9aa5b1"];
+const POV_PALETTE = ["#4e8597", "#be8a3c", "#7d80b4", "#c8442e", "#8c806a", "#5a8a72", "#a8763a", "#9a8e76"];
+const C = { ink: "#14110d", rule: "#3a3022", ruleSoft: "#2c2419", qing: "#4e8597", zhu: "#c8442e", zhe: "#be8a3c", dai: "#7d80b4", bone: "#b9ad96" };
 
 const TABS = [
   { k: "pacing", t: "节拍 · 张力曲线" },
@@ -54,8 +56,9 @@ export default function Page() {
 
   return (
     <div className="wrap">
-      <div className="h1">墨析 · 跨书深度分析</div>
-      <div className="sub">技法 / 文笔 / 世界观铺垫 / 节奏 / 人物关系 的逐章拆解 — Phase 1 多书深度分析地基</div>
+      <span className="eyebrow">CRAFT · DNA</span>
+      <div className="h1">逐章拆解一本书的叙事脉象</div>
+      <div className="sub">张力节拍 · 世界观铺垫 · 视角调度 · 人物关系 · 金手指曲线 —— 把长篇小说的隐藏机理摊开成可读的刻度。</div>
 
       <div className="card">
         <div className="row">
@@ -66,7 +69,7 @@ export default function Page() {
           <span style={{ flex: 1 }} />
           <input placeholder="限N章(留空=全书)" value={maxCh}
             onChange={(e) => setMaxCh(e.target.value.replace(/\D/g, ""))}
-            style={{ width: 130, background: "var(--panel-2)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px" }} />
+            style={{ width: 150 }} />
           <button className="btn" onClick={runAnalysis} disabled={running}>运行分析</button>
         </div>
         {msg && <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>{msg}</div>}
@@ -102,7 +105,7 @@ function Pacing({ d }: { d: any }) {
   const xs = beats.map((b: any) => b.chapter);
   const option = {
     grid: { left: 45, right: 20, top: 30, bottom: 40 },
-    legend: { data: ["张力", "章末钩子"], textStyle: { color: "#c7cedb" }, top: 0 },
+    legend: { data: ["张力", "章末钩子"], textStyle: { color: C.bone }, top: 0 },
     tooltip: {
       trigger: "axis",
       formatter: (ps: any[]) => {
@@ -110,28 +113,28 @@ function Pacing({ d }: { d: any }) {
         return `第${b.chapter}章 [${b.scene_type}]<br/>张力 ${b.tension} · 钩子 ${b.cliffhanger}<br/>POV: ${b.pov_holder}${b.is_protagonist_pov ? "(主角)" : ""}<br/><span style="color:#8b96a8">${b.summary || ""}</span>`;
       },
     },
-    xAxis: { type: "category", data: xs, name: "章", axisLine: { lineStyle: { color: "#2a3240" } } },
-    yAxis: { type: "value", max: 100, splitLine: { lineStyle: { color: "#222a35" } } },
+    xAxis: { type: "category", data: xs, name: "章", axisLine: { lineStyle: { color: C.rule } } },
+    yAxis: { type: "value", max: 100, splitLine: { lineStyle: { color: C.ruleSoft } } },
     series: [
       {
         name: "张力", type: "line", smooth: true, data: beats.map((b: any) => b.tension),
-        lineStyle: { width: 2, color: "#6ea8fe" }, areaStyle: { color: "rgba(110,168,254,0.12)" },
-        itemStyle: { color: (p: any) => SCENE_COLORS[beats[p.dataIndex].scene_type] || "#6ea8fe" }, symbolSize: 6,
+        lineStyle: { width: 2, color: C.qing }, areaStyle: { color: "rgba(78,133,151,0.13)" },
+        itemStyle: { color: (p: any) => SCENE_COLORS[beats[p.dataIndex].scene_type] || C.qing }, symbolSize: 6,
       },
       {
         name: "章末钩子", type: "bar", data: beats.map((b: any) => b.cliffhanger),
-        itemStyle: { color: "rgba(255,180,84,0.45)" }, barWidth: "40%",
+        itemStyle: { color: "rgba(200,68,46,0.42)" }, barWidth: "40%",
       },
     ],
   };
   const dist = card?.scene_distribution || {};
   const pie = {
     tooltip: { trigger: "item" },
-    legend: { type: "scroll", bottom: 0, textStyle: { color: "#c7cedb" } },
+    legend: { type: "scroll", bottom: 0, textStyle: { color: C.bone } },
     series: [{
       type: "pie", radius: ["35%", "65%"], center: ["50%", "45%"],
       data: Object.entries(dist).map(([k, v]) => ({ name: k, value: v, itemStyle: { color: SCENE_COLORS[k] } })),
-      label: { color: "#c7cedb" },
+      label: { color: C.bone },
     }],
   };
   return (
@@ -169,22 +172,22 @@ function Worldview({ d }: { d: any }) {
         return `第${r.chapter}章 · ${r.concept}<br/>手法: ${r.reveal_method}${r.is_infodump ? " · ⚠信息倾倒" : ""}<br/>重要度 ${r.importance}<br/><span style="color:#8b96a8">${r.summary || ""}</span>`;
       },
     },
-    xAxis: { type: "value", name: "章", axisLine: { lineStyle: { color: "#2a3240" } } },
-    yAxis: { type: "value", name: "重要度", max: 100, splitLine: { lineStyle: { color: "#222a35" } } },
+    xAxis: { type: "value", name: "章", axisLine: { lineStyle: { color: C.rule } } },
+    yAxis: { type: "value", name: "重要度", max: 100, splitLine: { lineStyle: { color: C.ruleSoft } } },
     series: [{
       type: "scatter",
       data: rv.map((r: any) => [r.chapter, r.importance]),
       symbolSize: (_: any, p: any) => 8 + (rv[p.dataIndex].importance / 12),
-      itemStyle: { color: (p: any) => rv[p.dataIndex].is_infodump ? "#ffb454" : "#6ea8fe", opacity: 0.85 },
+      itemStyle: { color: (p: any) => rv[p.dataIndex].is_infodump ? C.zhu : C.qing, opacity: 0.9 },
     }],
   };
   const md = card?.reveal_method_distribution || {};
   const bar = {
     grid: { left: 70, right: 20, top: 10, bottom: 30 },
     tooltip: { trigger: "axis" },
-    xAxis: { type: "value", splitLine: { lineStyle: { color: "#222a35" } } },
-    yAxis: { type: "category", data: Object.keys(md), axisLine: { lineStyle: { color: "#2a3240" } } },
-    series: [{ type: "bar", data: Object.values(md), itemStyle: { color: "#b18cff" }, barWidth: "55%" }],
+    xAxis: { type: "value", splitLine: { lineStyle: { color: C.ruleSoft } } },
+    yAxis: { type: "category", data: Object.keys(md), axisLine: { lineStyle: { color: C.rule } } },
+    series: [{ type: "bar", data: Object.values(md), itemStyle: { color: C.dai }, barWidth: "55%" }],
   };
   return (
     <>
