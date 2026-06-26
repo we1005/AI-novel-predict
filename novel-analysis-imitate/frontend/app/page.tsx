@@ -116,7 +116,7 @@ function AppShell(props: any) {
             </nav>
 
             <div className="railsection">视图</div>
-            <div className="viewtoggle" style={{ width: "100%" }}>
+            <div className="viewtoggle railctl" style={{ width: "100%" }}>
               {(["chart", "text"] as const).map((v) => (
                 <span key={v} className={"vbtn" + (view === v ? " on" : "")} style={{ flex: 1, textAlign: "center" }} onClick={() => setView(v)}>
                   {v === "chart" ? "图表" : "文字"}
@@ -125,11 +125,13 @@ function AppShell(props: any) {
             </div>
 
             <div className="railsection">操作</div>
-            <button className="btn ghost" onClick={load} disabled={loading} style={{ width: "100%", marginBottom: 8 }}>{loading ? "加载中…" : "刷新"}</button>
-            <input placeholder="限N章(留空=全书)" value={maxCh}
-              onChange={(e) => setMaxCh(e.target.value.replace(/\D/g, ""))} style={{ width: "100%", marginBottom: 8 }} />
-            <button className="btn" onClick={runAnalysis} disabled={running} style={{ width: "100%" }}>运行分析</button>
-            {msg && <div className="muted" style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.6 }}>{msg}</div>}
+            <input className="railctl" placeholder="限N章(留空=全书)" value={maxCh}
+              onChange={(e) => setMaxCh(e.target.value.replace(/\D/g, ""))} style={{ width: "100%", marginBottom: 6 }} />
+            <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+              <button className="btn ghost railctl" onClick={load} disabled={loading} style={{ flex: 1 }}>{loading ? "…" : "刷新"}</button>
+              <button className="btn railctl" onClick={runAnalysis} disabled={running} style={{ flex: 2 }}>运行分析</button>
+            </div>
+            {msg && <div className="muted" style={{ marginTop: 8, fontSize: 12, lineHeight: 1.55 }}>{msg}</div>}
           </>
         )}
       </aside>

@@ -142,7 +142,11 @@ tbody tr:hover { background: var(--paper); }
 .railitem:hover { background: var(--paper); color: var(--ink); }
 .railitem.active { background: rgba(192,57,43,.10); color: var(--zhu); font-weight: 600; }
 .railitem.active svg { opacity: 1; }
-.railsection { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--zhe); margin: 14px 6px 4px; }
+.railsection { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--zhe); margin: 12px 6px 4px; }
+/* 左栏紧凑控件 */
+.railctl { padding-top: 6px !important; padding-bottom: 6px !important; font-size: 12.5px !important; }
+.rail .railitem { padding: 7px 11px; font-size: 13.5px; }
+.rail .railsection { margin: 10px 6px 3px; }
 .appmain { margin-left: 232px; padding: 28px 30px 90px; max-width: 1080px; }
 
 @media (max-width: 860px) {
