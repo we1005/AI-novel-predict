@@ -26,6 +26,29 @@ from openai import OpenAI
 from sqlalchemy.orm import Session
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 
+# 限流类错误(账号级频率限制)需要远比"瞬时抖动"更长的退避——20s 窗口内根本不会解除。
+_RATE_LIMIT_MARKERS = ("429", "ratelimit", "rate limit", "toomanyrequests",
+                       "accountratelimitexceeded", "too frequent", "requests are too")
+
+
+def _is_rate_limit(exc: BaseException | None) -> bool:
+    return bool(exc) and any(m in str(exc).lower() for m in _RATE_LIMIT_MARKERS)
+
+
+def _adaptive_wait(retry_state):
+    """限流错误:长退避(initial 15s, max 120s);其它瞬时错误:短退避(2s/max20s)。"""
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    if _is_rate_limit(exc):
+        return wait_exponential_jitter(initial=15, max=120)(retry_state)
+    return wait_exponential_jitter(initial=2, max=20)(retry_state)
+
+
+def _adaptive_stop(retry_state):
+    """限流错误:最多 7 次(熬过频率窗口);其它错误:3 次即止。"""
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    limit = 7 if _is_rate_limit(exc) else 3
+    return retry_state.attempt_number >= limit
+
 from ..config import (
     DEFAULT_PROVIDER,
     MODEL_FAST,
@@ -180,7 +203,7 @@ def _normalize_messages(system: Any, messages: list[dict[str, Any]]) -> list[dic
     return out
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential_jitter(initial=2, max=20), reraise=True)
+@retry(stop=_adaptive_stop, wait=_adaptive_wait, reraise=True)
 def call(
     *,
     agent: str,
