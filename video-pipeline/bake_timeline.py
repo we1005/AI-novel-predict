@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-墨析 · 架构解析视频 —— 把旁白时长烘焙进时间轴(第 2 步)
-
-读 _build/durations.json,替换 architecture-video.html 里的
-    const NARR=[...];
-这一行。HTML 内部用 NARR[] + (LEAD/TAIL/XF/X) 自行推算各幕起止时刻
-(见该文件 master timeline 注释),所以这里只需要更新 NARR 数组。
-
-⚠️ 时间轴常数必须与 mux.py / architecture-video.html 保持一致:
-    LEAD=0.45  TAIL=0.95  XF=0.15  X(淡出)=0.45
+墨析 · 解析视频 —— 把旁白时长烘焙进时间轴(第 2 步,多视频)
+用法:python3 bake_timeline.py [video]
+读 _build/<video>/durations.json,替换该视频 HTML 里的 `const NARR=[...]` 一行。
+HTML 内部用 NARR[] + (LEAD/TAIL/XF/X) 自行推算各幕起止。
+⚠️ 时间轴常数须与 specs.json 的 timing、对应 *-video.html 一致。
 """
-import os, re, json
+import os, re, sys, json
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-HTML = os.path.join(HERE, "..", "novel-analysis-imitate", "docs", "architecture-video.html")
-DUR = os.path.join(HERE, "_build", "durations.json")
+SPECS = json.load(open(os.path.join(HERE, "specs.json"), encoding="utf-8"))
+VIDEO = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("VIDEO", "architecture"))
+SPEC = SPECS[VIDEO]
+HTML = os.path.normpath(os.path.join(HERE, SPEC["html"]))
+DUR = os.path.join(HERE, "_build", VIDEO, "durations.json")
 
 
 def main():
@@ -24,9 +23,9 @@ def main():
     new_line = "const NARR=" + json.dumps(durs) + ";"
     html2, n = re.subn(r"const NARR=\[[^\]]*\];", new_line, html, count=1)
     if n != 1:
-        raise SystemExit("未找到可替换的 `const NARR=[...]`;请确认 architecture-video.html 时间轴块存在。")
+        raise SystemExit(f"未找到可替换的 `const NARR=[...]`(video={VIDEO})")
     open(HTML, "w", encoding="utf-8").write(html2)
-    print(f"已写入 NARR={durs} → {os.path.relpath(HTML, HERE)}")
+    print(f"[{VIDEO}] NARR={durs} → {os.path.relpath(HTML, HERE)}")
 
 
 if __name__ == "__main__":

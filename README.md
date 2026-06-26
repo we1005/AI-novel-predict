@@ -352,6 +352,7 @@ cp ~/Downloads/我的小说.txt backend/data/library/
 - 双档复用:静态 spec(`compose.seed_genome` 拼进 writer) / 动态逐章 brief(L7 当采样器)
 - **对照评测**:同章大纲 基线(单段总结) vs 基因组(分层 spec)各生成 → 7 维盲评 + 指纹对账 → **基因组全面胜出(整体 65.25 vs 56.75,场景调度 +10.75)**
 - 专页 `/genome`:保姆级讲解 + **KaTeX 公式渲染** + L1 密度热力条 + L7 转移图 + 真实抽取样例
+- **解析视频** [`novel-analysis-imitate/docs/genome.mp4`](novel-analysis-imitate/docs/genome.mp4):七层结构与核心公式逐层讲透 —— L1 密度 ρ、L2 弱断言红线、L6 张力峰判据、L7 马尔可夫转移、保真度的余弦 / KL / 相对误差,**MathML 原生公式 + 小米 MiMo TTS 旁白**(约 5min · 1080p),合成同 [`video-pipeline/`](video-pipeline/)
 - 设计与评测全文见 [`novel-analysis-imitate/文风基因组-设计.md`](novel-analysis-imitate/文风基因组-设计.md)
 
 ### ✍️ 四类生成用例(compose 虚拟书 · 复用墨笔生成内核)
@@ -431,13 +432,16 @@ cd novel-analysis-imitate/frontend && npm install && npm run dev   # http://loca
 │   │   └── project/                     # project.db + 跨书编排 + compose_book/fused_product
 │   ├── frontend/                        # Next.js :3200(深度分析/仿写重组/架构 + 文风基因组专页)
 │   ├── docs/architecture-animation.html # GSAP scrollytelling 架构动画(自包含)
-│   ├── docs/architecture-video.html     # 时间驱动版动画(供逐帧渲染成视频)
+│   ├── docs/architecture-video.html     # 架构 · 时间驱动版动画(供逐帧渲染成视频)
 │   ├── docs/architecture.mp4            # 架构解析视频(含 MiMo TTS 旁白解说)
+│   ├── docs/genome-video.html           # 文风基因组 · 时间驱动版动画(MathML 公式)
+│   ├── docs/genome.mp4                  # 文风基因组解析视频(7层结构+公式+TTS旁白)
 │   ├── 分析和设计.md                     # 总体设计 + 实现状态
 │   └── 文风基因组-设计.md                # 基因组规格 + 7维盲评结果
-├── video-pipeline/                      # 🎬 架构视频合成管线(MiMo TTS 旁白 + 逐帧渲染 + ffmpeg)
-│   ├── narrate.py  bake_timeline.py     #   旁白合成 → 烘焙时间轴
-│   ├── render.mjs  mux.py  build.sh     #   逐帧渲染 → 合成音轨+混流 → 一键全流程
+├── video-pipeline/                      # 🎬 解析视频合成管线(架构 / 文风基因组 · specs.json 驱动)
+│   ├── specs.json                       #   每支视频:旁白文本 + html/out 路径 + 节奏常数
+│   ├── narrate.py  bake_timeline.py     #   旁白合成(MiMo TTS) → 烘焙时间轴
+│   ├── render.mjs  mux.py  build.sh     #   逐帧渲染(headless Chrome) → 合成音轨+混流 → 一键
 │   └── README.md                        #   含 MiMo TTS 接口踩坑备忘
 ├── MiroFish/                            # 角色仿真灵感来源（git submodule 风格）
 ├── 末法王座.txt                          # 示例语料（1472 章）

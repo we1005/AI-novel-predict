@@ -1,7 +1,8 @@
-# 架构解析视频合成管线
+# 解析视频合成管线
 
-> 位置:仓库根 `video-pipeline/`。动画源与成片在 `novel-analysis-imitate/docs/`
-> (`architecture-video.html` / `architecture.mp4`)。
+> 位置:仓库根 `video-pipeline/`。一套脚本按 `specs.json` 里的 **video key** 产出多支视频:
+> `architecture`(系统架构)与 `genome`(文风基因组 · 七层结构与公式)。
+> 动画源与成片都在 `novel-analysis-imitate/docs/`(`<video>-video.html` / `<video>.mp4`)。
 
 把 `../novel-analysis-imitate/docs/architecture-video.html`(时间驱动的 GSAP 动画)
 合成为带中文旁白解说的 MP4(`../novel-analysis-imitate/docs/architecture.mp4`)。旁白用小米 MiMo TTS(`mimo-v2.5-tts`,白桦音色)合成,
@@ -23,9 +24,9 @@ HTML 内部据此推算各幕起止;`mux.py` 用相同公式把每段旁白 `ade
 
 | 步骤 | 脚本 | 作用 |
 | --- | --- | --- |
-| 1 | `narrate.py` | 7 段解说词 → MiMo TTS → `_build/seg{0..6}.wav` + `durations.json` |
-| 2 | `bake_timeline.py` | 把旁白时长写进 `architecture-video.html` 的 `const NARR=[...]` |
-| 3 | `render.mjs` | headless Chrome 逐帧截图 → ffmpeg → `_build/silent.mp4`(无声) |
+| 1 | `narrate.py [video]` | 取 `specs.json` 该视频的解说词 → MiMo TTS → `_build/<video>/seg*.wav` + `durations.json` |
+| 2 | `bake_timeline.py [video]` | 把旁白时长写进该视频 HTML 的 `const NARR=[...]` |
+| 3 | `render.mjs [video]` | headless Chrome 逐帧截图 → ffmpeg → `_build/<video>/silent.mp4`(无声) |
 | 4 | `mux.py` | 按各幕时刻 `adelay+amix` 合成音轨 → 与无声视频混流 → `architecture.mp4`(产物在 novel-analysis-imitate/docs/) |
 
 `check.mjs` 是可选的快速校验:全量渲染(数千帧、数分钟)前,先确认 `__ready`、
@@ -44,18 +45,20 @@ HTML 内部据此推算各幕起止;`mux.py` 用相同公式把每段旁白 `ade
 ## 用法
 
 ```bash
-cd video-pipeline   # 仓库根目录下
+cd video-pipeline      # 仓库根目录下
 npm install            # 仅首次:装 puppeteer-core
-./build.sh             # 一键四步;产物在 ../architecture.mp4
+./build.sh architecture   # 系统架构视频 → ../novel-analysis-imitate/docs/architecture.mp4
+./build.sh genome         # 文风基因组视频 → ../novel-analysis-imitate/docs/genome.mp4
+# 省略参数默认 architecture
 ```
 
-或分步:`python3 narrate.py` → `python3 bake_timeline.py` →
-`node render.mjs` → `python3 mux.py`。
+或分步(都接 `[video]`):`python3 narrate.py genome` → `python3 bake_timeline.py genome` →
+`node render.mjs genome` → `python3 mux.py genome`。
 
 ## 自定义
 
-- **改旁白文字**:编辑 `narrate.py` 的 `NARR`(7 段,顺序对应 序→墨滴→切分→分析簇→
-  基因组→compose→评测)。改完重跑全流程即可。
+- **改旁白文字**:编辑 `specs.json` 里对应视频的 `narr` 数组(顺序对应各幕)。改完重跑该视频全流程即可。
+- **加一支新视频**:在 `specs.json` 加一个 key(html/out/voice/timing/narr),配一个时间驱动的 `*-video.html`(暴露 `__seek/__duration/__ready` 钩子)即可复用全套脚本。
 - **换音色**:`TTS_VOICE=苏打 python3 narrate.py`(可选 mimo_default / 冰糖 / 茉莉 /
   苏打 / 白桦 / Mia / Chloe / Milo / Dean)。
 - **改帧率**:`FPS=24 node render.mjs`。
