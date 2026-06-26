@@ -396,6 +396,9 @@ def render_spec(slug: str, genome: dict, cards: dict) -> str:
     if tr.get("most_likely_next"):
         L.append("\n## 场景递进倾向(上一拍→最可能的下一拍)")
         L.append("；".join(f"{a}→{b}" for a, b in list(tr["most_likely_next"].items())[:8]))
+    L.append("\n## 硬性输出约束")
+    L.append("- 直接写正文,不要输出章节标题、小标题、Markdown(如 # / ## / 第X幕)、作者注或任何元信息。")
+    L.append("- 严格按场景类型路由对应的用词密度/句式/调度,避免全程一个腔;弱断言(似乎/仿佛)勿超原作频率。")
     return "\n".join(L)
 
 
