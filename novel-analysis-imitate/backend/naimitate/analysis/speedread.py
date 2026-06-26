@@ -62,49 +62,75 @@ def _chapter_text(chapter: int, head: int = 900, tail: int = 300) -> str:
 
 # ---- 1. 切阶段 ----
 
-def segment(slug: str, *, target_stages: int = 24) -> list[dict]:
-    beats = _beats(slug)
-    if not beats:
-        return []
-    compact = "\n".join(f"{b['chapter']} [{b['scene']}|张力{b['tension']}] {b['summary']}" for b in beats)
+def _num(v) -> int:
+    m = re.search(r"\d+", str(v or ""))
+    return int(m.group()) if m else 0
+
+
+def _segment_block(block: list[dict], n_stages: int) -> list[dict]:
+    """对一段连续章节切 n_stages 个阶段。"""
+    c0, c1 = block[0]["chapter"], block[-1]["chapter"]
+    compact = "\n".join(f"{b['chapter']} [{b['scene']}|张力{b['tension']}] {b['summary']}" for b in block)
     sys = (
-        "你是中文小说的『速读编目员』。下面是一本书的逐章节拍(章号 [场景|张力] 摘要)。\n"
-        f"把它按剧情自然断点切成约 {target_stages} 个**连续不重叠**的阶段(合并多章),覆盖第一章到最后一章。\n"
-        "- title:阶段小标题(概括该段主线)。\n"
-        "- chapter_start/chapter_end:本阶段起止章号(必须连续衔接、不留空洞)。\n"
-        "- importance 1-5:该阶段在全书的重要度(大高潮/重大转折=5,日常过渡=1-2)。\n"
-        "- one_liner:一句话说清这段发生了什么。\n"
-        '只输出 JSON {"stages":[...]}。'
+        f"你是中文小说的『速读编目员』。下面是第 {c0}~{c1} 章的逐章节拍(章号 [场景|张力] 摘要)。\n"
+        f"把这 {c1-c0+1} 章按剧情自然断点切成 {n_stages} 个**连续不重叠**的阶段(合并多章)。\n"
+        f"硬性要求:第一个阶段 chapter_start={c0},最后一个阶段 chapter_end={c1},"
+        "中间各阶段首尾相接、不留空洞、不重叠、章号单调递增。\n"
+        "- title:阶段小标题;importance 1-5(大高潮/重大转折=5,日常过渡=1-2);one_liner:一句话发生了什么。\n"
+        '只输出 JSON {"stages":[{"title","chapter_start","chapter_end","importance","one_liner"}]}。'
     )
     resp = llm.call(agent="analysis.worldview", model=MODEL_STRONG,
                     system=[{"type": "text", "text": sys}],
                     messages=[{"role": "user", "content": compact[:120000]}],
-                    max_tokens=6000, temperature=0.3, response_format={"type": "json_object"})
-    stages = _loads(resp, "stages")
-    # 规整 + 落库
+                    max_tokens=4000, temperature=0.3, response_format={"type": "json_object"})
+    out = []
+    for st in _loads(resp, "stages"):
+        if isinstance(st, dict) and _num(st.get("chapter_start")):
+            out.append(st)
+    return out
+
+
+def segment(slug: str, *, target_stages: int = 24, block_chapters: int = 180) -> list[dict]:
+    """分块切再拼接,保证覆盖到最后一章(避免模型一次切全书只切开头)。"""
+    beats = _beats(slug)
+    if not beats:
+        return []
     bt = {b["chapter"]: b for b in beats}
     maxch = beats[-1]["chapter"]
+    # 按章分块
+    blocks = [beats[i:i + block_chapters] for i in range(0, len(beats), block_chapters)]
+    per = max(3, round(target_stages / len(blocks)))
+    raw = []
+    for blk in blocks:
+        try:
+            raw.extend(_segment_block(blk, per))
+        except Exception as e:  # noqa: BLE001
+            print(f"[speedread] 块 {blk[0]['chapter']}-{blk[-1]['chapter']} 切分失败: {str(e)[:100]}", flush=True)
+    # 规整:按 start 排序,end 兜底为下一段 start-1,保证全覆盖
+    raw = [r for r in raw if _num(r.get("chapter_start"))]
+    raw.sort(key=lambda r: _num(r.get("chapter_start")))
     out = []
     with session_scope() as s:
         s.execute(delete(M.SpeedReadStage))
-        for i, st in enumerate(stages):
-            if not isinstance(st, dict):
-                continue
-            cs = int(re.search(r"\d+", str(st.get("chapter_start") or 0)).group() or 0) if re.search(r"\d+", str(st.get("chapter_start") or "")) else 0
-            ce = int(re.search(r"\d+", str(st.get("chapter_end") or 0)).group() or 0) if re.search(r"\d+", str(st.get("chapter_end") or "")) else 0
-            if not cs:
-                continue
-            ce = ce or cs
+        for i, st in enumerate(raw):
+            cs = _num(st.get("chapter_start"))
+            ce = _num(st.get("chapter_end")) or cs
+            # 用下一段起点修正本段终点,消除空洞/重叠
+            if i + 1 < len(raw):
+                nxt = _num(raw[i + 1].get("chapter_start"))
+                if nxt > cs:
+                    ce = nxt - 1
+            ce = min(max(ce, cs), maxch)
             peak = max((bt[c]["tension"] for c in range(cs, ce + 1) if c in bt), default=0)
             row = M.SpeedReadStage(
-                stage_index=i + 1, chapter_start=cs, chapter_end=min(ce, maxch),
+                stage_index=i + 1, chapter_start=cs, chapter_end=ce,
                 title=(st.get("title") or f"阶段{i+1}")[:80],
-                importance=max(1, min(5, int(st.get("importance") or 3))),
+                importance=max(1, min(5, int(_num(st.get("importance")) or 3))),
                 peak_tension=peak, one_liner=(st.get("one_liner") or "")[:400],
                 detail_json=None, created_at=datetime.utcnow())
-            s.add(row); out.append({"stage_index": row.stage_index, "chapter_start": cs,
-                                    "chapter_end": row.chapter_end, "importance": row.importance,
-                                    "title": row.title})
+            s.add(row)
+            out.append({"stage_index": row.stage_index, "chapter_start": cs,
+                        "chapter_end": ce, "importance": row.importance, "title": row.title})
     return out
 
 
