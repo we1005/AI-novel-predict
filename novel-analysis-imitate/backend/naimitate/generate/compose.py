@@ -105,6 +105,28 @@ def overlay_fused_voice(cslug: str, source_slugs: list[str]) -> dict:
     return {"cslug": cslug, "fused_from": source_slugs, "summary_chars": len(summary)}
 
 
+def seed_genome(cslug: str, source_slug: str) -> dict:
+    """把源书的文风基因组 system-prompt 注入虚拟书 StyleProfile.summary,
+    让 writer 用"分层范式 spec"而非"单段总结"仿写(基因组驱动生成)。"""
+    from ..analysis import style_genome
+    g = style_genome.get_genome(source_slug)
+    spec = (g or {}).get("system_prompt") or ""
+    if not spec:
+        return {"cslug": cslug, "seeded_genome": False, "reason": "源书无基因组,先抽取"}
+    library.set_active(cslug)
+    init_schema()
+    from app.memory.models import StyleProfile
+    with session_scope() as s:
+        row = s.query(StyleProfile).order_by(StyleProfile.id.desc()).first()
+        if not row:
+            row = StyleProfile(); s.add(row)
+        row.mimic_enabled = 1
+        # 基因组 spec 置于最前(优先级最高),保留原总结作补充
+        base = row.summary or ""
+        row.summary = (spec + "\n\n【附:原始文风总结】\n" + base)[:12000]
+    return {"cslug": cslug, "seeded_genome": True, "spec_chars": len(spec)}
+
+
 def export_chapters(cslug: str) -> dict:
     """导出该虚拟书已生成章节的 final_text 拼合。"""
     library.set_active(cslug)

@@ -80,15 +80,19 @@ def inject_technique(chapters: list[dict], template: dict) -> list[dict]:
 
 def uc2_voice_transfer(*, cslug: str, voice_source: str, chapters: list[dict],
                        project_slug: str = "", user_hints: str = "",
-                       overwrite: bool = False) -> dict:
-    """用 voice_source 的文风写用户给定剧情。"""
+                       overwrite: bool = False, use_genome: bool = True) -> dict:
+    """用 voice_source 的文风写用户给定剧情。use_genome=True 时优先用文风基因组 spec 驱动。"""
     compose.create_from_source(cslug, voice_source, overwrite=overwrite)
     _ensure_mimic(cslug)
+    seeded = None
+    if use_genome:
+        seeded = compose.seed_genome(cslug, voice_source)   # 基因组无则自动回退到原总结
     run_id = make_outline_run(cslug, chapters, phase_name="UC2", user_hints=user_hints)
     project_store.record_compose(cslug, project_slug=project_slug, use_case="uc2",
                                  source_slugs=[voice_source], voice_source=voice_source,
-                                 outline_run_id=run_id)
-    return {"cslug": cslug, "outline_run_id": run_id, "use_case": "uc2", "voice": voice_source}
+                                 outline_run_id=run_id, meta={"genome": seeded})
+    return {"cslug": cslug, "outline_run_id": run_id, "use_case": "uc2", "voice": voice_source,
+            "genome": seeded}
 
 
 def uc1_fused_world_voice(*, cslug: str, voice_source: str, fuse_sources: list[str],
