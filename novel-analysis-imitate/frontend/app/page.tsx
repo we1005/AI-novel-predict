@@ -14,6 +14,7 @@ const POV_PALETTE = ["#2e6f80", "#9a6b2f", "#565a8c", "#c0392b", "#7a8a6a", "#8a
 const C = { paper: "#f1efe5", rule: "#d6d0bf", ruleSoft: "#e6e1d1", qing: "#2e6f80", zhu: "#c0392b", zhe: "#9a6b2f", dai: "#565a8c", bone: "#574f40" };
 
 const TABS = [
+  { k: "speedread", t: "速读 · 剧情脉络" },
   { k: "pacing", t: "节拍 · 张力曲线" },
   { k: "style", t: "文笔 · 声音" },
   { k: "worldview", t: "世界观铺垫" },
@@ -99,6 +100,7 @@ export default function Page() {
 
       {!data ? <div className="empty">选择书籍后将展示分析结果</div> : (
         <>
+          {tab === "speedread" && <SpeedRead d={data.speedread} slug={slug} />}
           {tab === "pacing" && <Pacing d={data.beats} view={view} />}
           {tab === "style" && <Style d={data.style} />}
           {tab === "worldview" && <Worldview d={data.worldview} view={view} />}
@@ -395,6 +397,85 @@ function Golden({ d }: { d: any }) {
               <td>{s.trigger}</td><td>{s.gap_vs_antagonist}</td></tr>
           ))}</tbody></table>
       </div>
+    </>
+  );
+}
+
+function SpeedRead({ d, slug }: { d: any; slug: string }) {
+  const stages = d?.stages || [];
+  const [open, setOpen] = useState<Record<number, boolean>>({});
+  const [msg, setMsg] = useState("");
+  async function run() {
+    setMsg("已在后台启动速读(切阶段+重要阶段详写,约数分钟)。稍后点上方『刷新』查看。");
+    try { await api.runSpeedread(slug); } catch (e: any) { setMsg("启动失败: " + e.message); }
+  }
+  if (!stages.length) return (
+    <div className="card"><div className="empty">还没有速读 — 需先有节拍层,然后生成速读。</div>
+      <div style={{ textAlign: "center" }}><button className="btn" onClick={run}>生成速读</button></div>
+      {msg && <div className="muted" style={{ marginTop: 10, fontSize: 13, textAlign: "center" }}>{msg}</div>}
+    </div>
+  );
+  const fld = (v: any) => Array.isArray(v) ? v : (v ? [v] : []);
+  const DETAIL: [string, string][] = [
+    ["what_happened", "发生了什么"], ["plot", "主线推进"], ["turns", "转折 / 高潮"],
+    ["foreshadowing", "伏笔"], ["character_inner", "人物内心"], ["interactions", "互动 / 关系"], ["threads", "长期线索"],
+  ];
+  return (
+    <>
+      <div className="card">
+        <span className="eyebrow">SPEED READ</span>
+        <h2>剧情脉络速读 <span className="tag">{stages.length} 个阶段 · 朱砂=重要阶段(已详写)</span></h2>
+        <div className="muted" style={{ fontSize: 13 }}>按章序通读全书走向;重要阶段展开看发生/铺垫/内心/转折。</div>
+        <div style={{ textAlign: "right" }}><button className="btn ghost" onClick={run}>重跑速读</button></div>
+        {msg && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>{msg}</div>}
+      </div>
+      {stages.map((s: any) => {
+        const hot = (s.importance || 0) >= 4;
+        const hasDetail = s.detail && Object.keys(s.detail).length > 0;
+        return (
+          <div key={s.stage_index} className="card"
+            style={{ borderLeft: `3px solid ${hot ? "var(--zhu)" : s.importance >= 3 ? "var(--zhe)" : "var(--rule)"}` }}>
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+              <h2 style={{ margin: 0 }}>
+                <span className="muted" style={{ fontFamily: "var(--mono)", fontSize: 13 }}>
+                  第{s.chapter_start}-{s.chapter_end}章
+                </span>{"  "}{s.title}
+                <span style={{ color: "var(--zhu)", marginLeft: 8, fontSize: 13 }}>{"●".repeat(s.importance || 1)}</span>
+              </h2>
+              <span className="muted" style={{ fontSize: 12 }}>峰值张力 {s.peak_tension}</span>
+            </div>
+            <p style={{ margin: "8px 0 0", lineHeight: 1.75, fontSize: 14 }}>{s.one_liner}</p>
+            {hasDetail && (
+              <>
+                <div style={{ marginTop: 8 }}>
+                  <span className="vbtn on" style={{ cursor: "pointer", borderRadius: 2 }}
+                    onClick={() => setOpen({ ...open, [s.stage_index]: !open[s.stage_index] })}>
+                    {open[s.stage_index] ? "收起精读 ▲" : "展开精读 ▼"}
+                  </span>
+                </div>
+                {open[s.stage_index] && (
+                  <div style={{ marginTop: 12, borderTop: "1px solid var(--rule-soft)", paddingTop: 12 }}>
+                    {DETAIL.map(([k, label]) => {
+                      const items = fld(s.detail[k]);
+                      if (!items.length) return null;
+                      return (
+                        <div key={k} style={{ marginBottom: 12 }}>
+                          <div className="eyebrow" style={{ marginBottom: 4 }}>{label}</div>
+                          {items.length > 1
+                            ? <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.75, fontSize: 13.5 }}>
+                                {items.map((x: any, i: number) => <li key={i}>{typeof x === "string" ? x : JSON.stringify(x)}</li>)}
+                              </ul>
+                            : <div style={{ lineHeight: 1.75, fontSize: 13.5 }}>{typeof items[0] === "string" ? items[0] : JSON.stringify(items[0])}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })}
     </>
   );
 }

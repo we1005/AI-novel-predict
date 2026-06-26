@@ -16,6 +16,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  speedread: (slug: string) => j(`/books/${encodeURIComponent(slug)}/speedread`),
+  runSpeedread: (slug: string) =>
+    j(`/books/${encodeURIComponent(slug)}/speedread`, { method: "POST", body: JSON.stringify({}) }),
   // ---- 生成(Phase 2+)----
   composeList: () => j("/compose"),
   uc2: (body: any) => j("/compose/uc2", { method: "POST", body: JSON.stringify(body) }),

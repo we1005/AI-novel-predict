@@ -17,7 +17,7 @@ from fastapi import BackgroundTasks  # noqa: E402
 from app.books import library  # 复用现有多书库
 from .project import store as project_store
 from .project import orchestrate
-from .analysis import beat, worldview, relationship, golden, pov, style
+from .analysis import beat, worldview, relationship, golden, pov, style, speedread
 from .generate import usecases, compose, transplant, fusion
 from .generate import technique as tech
 
@@ -167,6 +167,24 @@ def run_book_style(slug: str, background: BackgroundTasks):
     return {"status": "started", "book": slug}
 
 
+class SpeedReadReq(BaseModel):
+    target_stages: int = 24
+    detail_threshold: int = 3
+
+
+@app.get("/books/{slug}/speedread")
+def book_speedread(slug: str):
+    return speedread.get_speedread(slug)
+
+
+@app.post("/books/{slug}/speedread")
+def run_book_speedread(slug: str, body: SpeedReadReq, background: BackgroundTasks):
+    """后台跑速读(切阶段 + 重要阶段详写)。需先有节拍层。"""
+    background.add_task(speedread.run_speedread, slug,
+                        target_stages=body.target_stages, detail_threshold=body.detail_threshold)
+    return {"status": "started", "book": slug}
+
+
 @app.get("/books/{slug}/analysis")
 def book_analysis(slug: str):
     """汇总一本书的全部分析层,供前端一次拉取渲染。"""
@@ -178,6 +196,7 @@ def book_analysis(slug: str):
         "golden": golden.get_steps(slug),
         "pov": pov.get_events(slug),
         "style": style.get_style(slug),
+        "speedread": speedread.get_speedread(slug),
     }
 
 

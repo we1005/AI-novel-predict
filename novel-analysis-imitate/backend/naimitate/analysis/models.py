@@ -88,6 +88,20 @@ class RelationshipEvent(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class SpeedReadStage(Base):
+    """速读阶段:把全书按章序切成若干阶段(合并多章),重要阶段详写、次要一句带过。"""
+    __tablename__ = "speed_read_stage"
+    stage_index = Column(Integer, primary_key=True)
+    chapter_start = Column(Integer)
+    chapter_end = Column(Integer)
+    title = Column(String)
+    importance = Column(Integer, default=3)            # 1-5,越高越详
+    peak_tension = Column(Integer, default=0)
+    one_liner = Column(Text)                            # 一句话本阶段
+    detail_json = Column(JSON)                          # 重要阶段才有:发生/铺垫/剧情/内心/互动/转折/线索
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class AnalysisCard(Base):
     """各分析层的聚合卡(per book,一类一行)。"""
     __tablename__ = "analysis_card"
