@@ -29,6 +29,7 @@ from app.llm import client as llm  # noqa: E402
 from app.memory.schema_init import init_schema  # noqa: E402
 from . import models as M  # noqa: E402
 from . import _sampling as S  # noqa: E402
+from . import _fingerprint as FP  # noqa: E402
 
 
 def _strip(s: str) -> str:
@@ -69,14 +70,27 @@ def _blocks(samples: list[dict], n_text: int = 9999) -> str:
 # ───────────────────────── 微观范式 ─────────────────────────
 
 def layer_lexicon(slug: str) -> dict:
-    sm = S.spread_sample(n=12)
+    # 分桶取样(每场景类型取代表章),让模型看到"不同场景的用词差异"
+    by = S.sample_by_scene(per_type=2)
+    blocks = []
+    for st, reps in by.items():
+        for r in reps[:2]:
+            blocks.append(f"【{st}·第{r['chapter']}章】\n{r.get('text','')[:1400]}")
     sys = (
-        "你是文体计量分析师。阅读多章节选,提炼该作者的**词汇范式**(不要泛泛,要可复用)。\n"
-        "输出 JSON:{categories:[{name(如 器物/机械/不可名状/感官/情绪/宗教/军事/身体), "
-        "signature_words:[高频标志词], example_phrases:[3-5 个含该类词的原文短语], note(使用偏好)}], "
-        "diction(用词总体倾向:文白/雅俗/冷硬/华丽…), avoid(作者明显回避的词类)}。只输出 JSON。"
+        "你是语料文体学家。阅读分场景的多章节选,提炼该作者的**分层词汇指纹**(可复用调色盘,"
+        "不要泛泛,只收原文真出现的词、不许编造)。\n"
+        "输出 JSON:{strata:[{layer(语义场id,如 cthulhu_unnameable/steampunk_machine/religion/"
+        "sensory_body/military_detective/victorian_daily/emotion), gloss(中文说明), "
+        "signature_words:[标志词], collocations:[{head:词, with:[常见搭配]}], "
+        "trigger_context(什么场景/时机才用)}], diction(文白雅俗冷硬总体坐标), "
+        "avoid:[作者明显回避的廉价/网文词]}。只输出 JSON。"
     )
-    card = _ask(sys, _blocks(sm))
+    card = _ask(sys, "\n\n".join(blocks))
+    # 确定性兜底:每层在每种 scene_type 桶里的每千字密度(避免 LLM 估值漂移)
+    try:
+        card["density_by_scene"] = FP.lexical_density_by_scene(card.get("strata") or [])
+    except Exception as e:  # noqa: BLE001
+        print(f"[genome.lexicon] density 兜底失败: {str(e)[:80]}", flush=True)
     _save("genome.lexicon", card)
     return card
 
@@ -161,15 +175,33 @@ def layer_macro_arch(slug: str) -> dict:
     # 张力调制:大高潮间距
     climax = [i for i, b in enumerate(beats) if b.scene_type == "大高潮" or (b.tension_level or 0) >= 85]
     climax_gap = round(statistics.mean([climax[i+1]-climax[i] for i in range(len(climax)-1)]), 1) if len(climax) > 1 else None
+    bdicts = [{"chapter": b.chapter, "scene": b.scene_type, "tension": b.tension_level or 0,
+               "is_protagonist_pov": b.is_protagonist_pov} for b in beats]
+    # 伏笔账本:直接复用既有 foreshadowings 表(planted/resolved/type/status)做确定性聚合
+    fore_stats = {}
+    try:
+        with get_engine().begin() as c:
+            rows = c.execute(_sql("SELECT planted_chapter,resolved_chapter,type,status FROM foreshadowings")).mappings().all()
+        spans = [(r["resolved_chapter"] - r["planted_chapter"]) for r in rows
+                 if r["resolved_chapter"] and r["planted_chapter"] and r["resolved_chapter"] > r["planted_chapter"]]
+        spans.sort()
+        fore_stats = {
+            "n": len(rows),
+            "resolved": sum(1 for r in rows if r["resolved_chapter"]),
+            "open": sum(1 for r in rows if not r["resolved_chapter"]),
+            "median_span": (spans[len(spans)//2] if spans else None),
+            "long_line_ratio": round(sum(1 for s in spans if s >= 100) / len(spans), 2) if spans else 0,
+            "type_dist": dict(Counter((r["type"] or "?") for r in rows).most_common(8)),
+        }
+    except Exception as e:  # noqa: BLE001
+        print(f"[genome.macro_arch] 伏笔聚合失败: {str(e)[:80]}", flush=True)
     determ = {
-        "tension_modulation": {
-            "avg": round(statistics.mean(tens), 1) if tens else 0,
-            "range": [min(tens), max(tens)] if tens else [0, 0],
-            "climax_interval": climax_gap,
-            "curve_shape": "升–抑–扬" if tens else None,
-        },
-        "info_metering": (cards.get("worldview") or {}),   # 信息倾倒率/前载比/手法 已在 worldview 卡
+        "tension_law": FP.tension_metrics(bdicts),       # 峰检测/斜率/回落/峰间距/分段趋势
+        "pov_schedule": FP.pov_schedule_metrics(),
+        "foreshadow": fore_stats,
+        "info_metering": (cards.get("worldview") or {}),  # 信息倾倒率/前载比/手法
         "scene_mix": dict(Counter(b.scene_type for b in beats if b.scene_type)),
+        "_legacy_climax_interval": climax_gap,
     }
     # LLM 归纳"段落编排模板"(用速读阶段 + 节拍曲线描述)
     stages = []
@@ -247,13 +279,58 @@ def run_genome(slug: str, *, layers: list[str] | None = None) -> dict:
     return {"slug": slug, "layers": done}
 
 
+def build_fingerprint(slug: str, genome: dict, cards: dict) -> dict:
+    """把基因组压成可计算的指纹向量(标量+分布),供客观评测逐维 diff。"""
+    fp: dict = {}
+    lex = genome.get("lexicon") or {}
+    if lex.get("density_by_scene"):
+        fp["lexical_density"] = lex["density_by_scene"]
+    rhe = genome.get("rhetoric") or {}
+    mm = (rhe.get("metaphor_map") or {}).get("vehicle_dist") or rhe.get("vehicle_dist")
+    if isinstance(mm, dict):
+        fp["metaphor_vehicle_dist"] = mm
+    ma = genome.get("macro_arch") or {}
+    met = ma.get("metrics") or {}
+    fp["scene_mix"] = met.get("scene_mix") or {}
+    fp["infodump_ratio"] = (met.get("info_metering") or {}).get("infodump_ratio")
+    tl = met.get("tension_law") or {}
+    fp["tension_profile"] = tl.get("profile")
+    fp["tension_avg"] = tl.get("avg")
+    # 全局确定性标量(直接量原文)
+    try:
+        corpus = FP.full_corpus_text()
+        fp["hedge_per_kchar"] = FP.regex_per_kchar(FP.HEDGE, corpus)
+        fp["reduplication_per_kchar"] = FP.regex_per_kchar(FP.REDUP, corpus)
+    except Exception:
+        pass
+    sr = genome.get("scene_routine") or {}
+    hooks = Counter()
+    blunt = []
+    for r in (sr.get("routines") or []):
+        ex = r.get("exit") or {}
+        if ex.get("hook_grammar"):
+            hooks[ex["hook_grammar"]] += 1
+        if isinstance(r.get("bluntness"), (int, float)):
+            blunt.append(r["bluntness"])
+    if hooks:
+        fp["hook_grammar_dist"] = dict(hooks)
+    if blunt:
+        fp["bluntness"] = round(sum(blunt) / len(blunt), 1)
+    tr = genome.get("transition") or {}
+    if tr.get("most_likely_next"):
+        fp["scene_transition_topk"] = tr["most_likely_next"]
+    return fp
+
+
 def assemble(slug: str) -> dict:
-    """汇总各层 + 渲染成可喂给别的 LLM 的 system-prompt spec。"""
+    """汇总各层 + 指纹向量 + 渲染成可喂给别的 LLM 的 system-prompt spec。"""
     with session_scope() as s:
         cards = {c.category: c.card_json for c in s.execute(select(M.AnalysisCard)).scalars().all()}
     genome = {ly: cards.get(f"genome.{ly}") for ly in LAYERS if cards.get(f"genome.{ly}")}
+    fingerprint = build_fingerprint(slug, genome, cards)
     spec = render_spec(slug, genome, cards)
-    agg = {"layers_present": list(genome.keys()), "genome": genome, "system_prompt": spec}
+    agg = {"layers_present": list(genome.keys()), "genome": genome,
+           "fingerprint_vector": fingerprint, "system_prompt": spec}
     _save("genome", agg)
     return agg
 
@@ -330,4 +407,5 @@ def get_genome(slug: str) -> dict:
         genome = {ly: cards.get(f"genome.{ly}") for ly in LAYERS}
         agg = cards.get("genome") or {}
         return {"slug": slug, "genome": genome, "system_prompt": agg.get("system_prompt"),
+                "fingerprint_vector": agg.get("fingerprint_vector"),
                 "layers_present": [ly for ly in LAYERS if cards.get(f"genome.{ly}")]}

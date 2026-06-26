@@ -18,6 +18,7 @@ from app.books import library  # 复用现有多书库
 from .project import store as project_store
 from .project import orchestrate
 from .analysis import beat, worldview, relationship, golden, pov, style, speedread, character, base
+from .analysis import style_genome
 from .generate import usecases, compose, transplant, fusion
 from .generate import technique as tech
 
@@ -206,6 +207,18 @@ def run_book_speedread(slug: str, body: SpeedReadReq, background: BackgroundTask
     """后台跑速读(切阶段 + 重要阶段详写)。需先有节拍层。"""
     background.add_task(speedread.run_speedread, slug,
                         target_stages=body.target_stages, detail_threshold=body.detail_threshold)
+    return {"status": "started", "book": slug}
+
+
+@app.get("/books/{slug}/genome")
+def book_genome(slug: str):
+    return style_genome.get_genome(slug)
+
+
+@app.post("/books/{slug}/genome")
+def run_book_genome(slug: str, background: BackgroundTasks):
+    """抽取文风基因组(7层:词汇/句式/修辞/氛围/场景套路/宏观架构/转移)+ 指纹 + system-prompt。"""
+    background.add_task(style_genome.run_genome, slug)
     return {"status": "started", "book": slug}
 
 
