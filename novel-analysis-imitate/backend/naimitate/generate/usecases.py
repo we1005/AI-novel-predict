@@ -107,17 +107,27 @@ def uc1_fused_world_voice(*, cslug: str, voice_source: str, fuse_sources: list[s
 
 
 def uc4_technique_injected(*, cslug: str, voice_source: str, chapters: list[dict],
-                           technique_template: dict, project_slug: str = "",
+                           technique_template: dict | None = None,
+                           technique_source: str = "", project_slug: str = "",
                            user_hints: str = "", overwrite: bool = False) -> dict:
-    """江南式技法注入:在 voice_source 文风之上,按 technique_template 约束逐章节奏/POV/铺垫。"""
+    """江南式技法注入:在 voice_source 文风之上,按 technique_template 约束逐章节奏/POV/铺垫。
+
+    technique_template 可直接给;也可只给 technique_source(从该书分析层**自动蒸馏**模板)。
+    """
+    from . import technique as tech
+    if not technique_template:
+        src = technique_source or voice_source
+        technique_template = tech.build_template(src, n_chapters=len(chapters) or 6)
     compose.create_from_source(cslug, voice_source, overwrite=overwrite)
     _ensure_mimic(cslug)
-    chs = inject_technique(_pre := chapters, technique_template)
+    chs = inject_technique(chapters, technique_template)
     run_id = make_outline_run(cslug, chs, phase_name="UC4", user_hints=user_hints)
     project_store.record_compose(cslug, project_slug=project_slug, use_case="uc4",
                                  source_slugs=[voice_source], voice_source=voice_source,
-                                 outline_run_id=run_id, meta={"technique": True})
-    return {"cslug": cslug, "outline_run_id": run_id, "use_case": "uc4", "voice": voice_source}
+                                 outline_run_id=run_id,
+                                 meta={"technique_source": technique_source or voice_source})
+    return {"cslug": cslug, "outline_run_id": run_id, "use_case": "uc4", "voice": voice_source,
+            "technique": {k: technique_template.get(k) for k in ("rhythm", "pov_rule", "worldview_rule")}}
 
 
 def _ensure_mimic(cslug: str) -> None:

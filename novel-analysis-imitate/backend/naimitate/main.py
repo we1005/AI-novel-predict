@@ -19,6 +19,7 @@ from .project import store as project_store
 from .project import orchestrate
 from .analysis import beat, worldview, relationship, golden, pov
 from .generate import usecases, compose, transplant
+from .generate import technique as tech
 
 app = FastAPI(title="novel-analysis-imitate")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -172,7 +173,8 @@ class UC1Req(UC2Req):
 
 
 class UC4Req(UC2Req):
-    technique_template: dict = {}
+    technique_template: dict | None = None
+    technique_source: str = ""   # 留空=用 voice_source;从该书分析层自动蒸馏技法模板
 
 
 class GenReq(BaseModel):
@@ -206,8 +208,19 @@ def compose_uc4(body: UC4Req):
     return usecases.uc4_technique_injected(
         cslug=body.cslug, voice_source=body.voice_source,
         chapters=[c.model_dump() for c in body.chapters],
-        technique_template=body.technique_template,
+        technique_template=body.technique_template, technique_source=body.technique_source,
         project_slug=body.project_slug, user_hints=body.user_hints, overwrite=body.overwrite)
+
+
+@app.post("/books/{slug}/technique")
+def build_technique(slug: str, n_chapters: int = 6):
+    """从该书分析层蒸馏 technique_template(导演手册)。"""
+    return tech.build_template(slug, n_chapters=n_chapters)
+
+
+@app.get("/books/{slug}/technique")
+def get_technique(slug: str):
+    return tech.get_template(slug) or {"error": "未蒸馏 — 先 POST /books/{slug}/technique"}
 
 
 class UC3Req(BaseModel):
