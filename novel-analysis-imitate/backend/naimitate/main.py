@@ -17,7 +17,7 @@ from fastapi import BackgroundTasks  # noqa: E402
 from app.books import library  # 复用现有多书库
 from .project import store as project_store
 from .project import orchestrate
-from .analysis import beat, worldview, relationship, golden, pov, style, speedread
+from .analysis import beat, worldview, relationship, golden, pov, style, speedread, character
 from .generate import usecases, compose, transplant, fusion
 from .generate import technique as tech
 
@@ -145,6 +145,18 @@ def book_relationships(slug: str):
     return relationship.get_events(slug)
 
 
+@app.get("/books/{slug}/characters")
+def book_characters(slug: str):
+    return character.get_cards(slug)
+
+
+@app.post("/books/{slug}/characters")
+def run_book_characters(slug: str, background: BackgroundTasks):
+    """据关系/POV/提及判定主要人物并生成简介卡(需先有节拍+关系层)。"""
+    background.add_task(character.build_cards, slug)
+    return {"status": "started", "book": slug}
+
+
 @app.get("/books/{slug}/golden")
 def book_golden(slug: str):
     return golden.get_steps(slug)
@@ -193,6 +205,7 @@ def book_analysis(slug: str):
         "beats": beat.get_beats(slug),
         "worldview": worldview.get_reveals(slug),
         "relationships": relationship.get_events(slug),
+        "characters": character.get_cards(slug),
         "golden": golden.get_steps(slug),
         "pov": pov.get_events(slug),
         "style": style.get_style(slug),

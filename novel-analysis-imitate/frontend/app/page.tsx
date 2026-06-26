@@ -110,7 +110,7 @@ export default function Page() {
               {tab === "pacing" && <Pacing d={data.beats} view={view} />}
               {tab === "style" && <Style d={data.style} />}
               {tab === "worldview" && <Worldview d={data.worldview} view={view} />}
-              {tab === "relationship" && <Relationship d={data.relationships} view={view} />}
+              {tab === "relationship" && <Relationship d={data.relationships} chars={data.characters} slug={slug} view={view} />}
               {tab === "pov" && <Pov d={data.pov} view={view} />}
               {tab === "golden" && <Golden d={data.golden} />}
             </>
@@ -272,13 +272,60 @@ function Worldview({ d, view }: { d: any; view: string }) {
   );
 }
 
-function Relationship({ d, view }: { d: any; view: string }) {
+function CharCards({ chars, slug }: { chars: any; slug: string }) {
+  const list = chars?.characters || [];
+  const [msg, setMsg] = useState("");
+  async function run() {
+    setMsg("已后台生成人物卡(据关系/出场判定主要人物,约1-2分钟)。稍后点侧栏『刷新』。");
+    try { await fetch(`/api/books/${encodeURIComponent(slug)}/characters`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); }
+    catch (e: any) { setMsg("启动失败: " + e.message); }
+  }
+  if (!list.length) return (
+    <div className="card">
+      <h2>主要人物</h2>
+      <div className="muted" style={{ marginBottom: 10 }}>还没有人物卡 — 据关系/出场自动判定重要人物并生成简介。</div>
+      <button className="btn" onClick={run}>生成人物卡</button>
+      {msg && <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>{msg}</div>}
+    </div>
+  );
+  return (
+    <div className="card">
+      <span className="eyebrow">DRAMATIS PERSONAE</span>
+      <h2>主要人物 <span className="tag">{list.length} 位 · 按重要度</span></h2>
+      <div className="charscroll">
+        {list.map((c: any) => (
+          <div key={c.name} className="charcard">
+            <div className="charhead">
+              <span className="charname">{c.name}</span>
+              {c.role && <span className="rolebadge">{c.role}</span>}
+            </div>
+            <div className="impbar"><span style={{ width: `${c.importance}%` }} /></div>
+            {c.one_line && <div className="charone">{c.one_line}</div>}
+            {c.description && <p className="chardesc">{c.description}</p>}
+            {c.personality && <p className="chardesc"><b>性格动机</b>:{c.personality}</p>}
+            {c.arc && <p className="chardesc" style={{ color: "var(--zhu-deep)" }}><b>弧光</b>:{c.arc}</p>}
+            {!!(c.key_relations || []).length && (
+              <div style={{ marginTop: 6 }}>
+                {c.key_relations.slice(0, 5).map((r: any, i: number) => (
+                  <span key={i} className="pill">{typeof r === "string" ? r : `${r.who}·${r.relation}`}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Relationship({ d, chars, slug, view }: { d: any; chars: any; slug: string; view: string }) {
   const ev = d?.events || [];
   const tracks = d?.tracks || {};
   const card = d?.relationship_card;
   if (!ev.length) return <Empty layer="关系演变" />;
   return (
     <>
+      <CharCards chars={chars} slug={slug} />
       <div className="card">
         <h2>关系演变概览 <span className="tag">{view === "chart" ? "节点=人物,边=关系(色:红=对立/青=亲密),可缩放拖拽" : "逐条表格"}</span></h2>
         {card && <div className="stat-row" style={{ marginBottom: 8 }}>

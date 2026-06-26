@@ -144,6 +144,18 @@ tbody tr:hover { background: var(--paper); }
   .stat { min-width: 100px; flex: 1; }
 }
 
+/* 人物卡 */
+.charscroll { display: grid; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 14px; }
+.charcard { border: 1px solid var(--rule); border-radius: 3px; padding: 13px 15px; background: var(--paper); }
+.charhead { display: flex; align-items: baseline; gap: 8px; }
+.charname { font-family: var(--serif); font-size: 17px; font-weight: 700; color: var(--ink); }
+.rolebadge { font-family: var(--mono); font-size: 11px; color: var(--zhu-deep); border: 1px solid var(--zhu); border-radius: 2px; padding: 1px 6px; }
+.impbar { height: 3px; background: var(--rule-soft); border-radius: 2px; margin: 8px 0 10px; overflow: hidden; }
+.impbar span { display: block; height: 100%; background: var(--zhu); }
+.charone { font-size: 13px; color: var(--ink-dim); font-weight: 600; margin-bottom: 6px; }
+.chardesc { font-size: 12.8px; line-height: 1.7; margin: 5px 0 0; color: var(--ink); }
+.chardesc b { color: var(--zhe); font-weight: 600; }
+
 /* 图表/文字视图切换 */
 .viewtoggle { display: inline-flex; border: 1px solid var(--rule); border-radius: 2px; overflow: hidden; margin-bottom: 4px; }
 .vbtn { padding: 6px 14px; font-size: 12.5px; cursor: pointer; color: var(--muted); font-family: var(--mono); letter-spacing: 1px; }

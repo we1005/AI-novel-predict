@@ -88,6 +88,21 @@ class RelationshipEvent(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class CharacterCard(Base):
+    """主要人物简介卡(重要度由关系度数+POV出场+提及频次综合判定)。"""
+    __tablename__ = "character_card"
+    name = Column(String, primary_key=True)
+    role = Column(String)                               # 主角/配角/反派/导师/盟友...
+    importance = Column(Integer, default=50)           # 0-100
+    one_line = Column(String)                           # 一句话定位
+    description = Column(Text)                          # 简介
+    personality = Column(Text)                          # 性格/动机
+    arc = Column(Text)                                  # 人物弧光(从…到…)
+    key_relations_json = Column(JSON)                   # [{who, relation}]
+    first_chapter = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class SpeedReadStage(Base):
     """速读阶段:把全书按章序切成若干阶段(合并多章),重要阶段详写、次要一句带过。"""
     __tablename__ = "speed_read_stage"
