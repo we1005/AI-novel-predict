@@ -64,8 +64,9 @@ def recommend_batch():
 
     TARGET_CHARS_PER_BATCH = 22000
     batch_size = max(1, min(12, round(TARGET_CHARS_PER_BATCH / median)))
-    # 并发:长章批次重→压低避免火山额度突刺与跨批写竞争;短章可略高。
-    workers = 2 if median > 12000 else (4 if median < 4000 else 3)
+    # 并发:账号级频率限制(AccountRateLimitExceeded)是真正的上限,高并发必爆 429,
+    # 故保守封顶——长章 1、其余 2(配合 429 长退避足够稳;要更快可手动调高自担风险)。
+    workers = 1 if median > 12000 else 2
     est_batches = max(1, -(-total // batch_size))  # ceil
     rationale = (
         f"全书 {total} 章、中位 {median} 字/章 → 每批 {batch_size} 章(约 "
