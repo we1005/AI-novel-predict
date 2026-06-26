@@ -117,59 +117,62 @@ const segs=[...document.querySelectorAll('.seg')];
 
 function num(el,to,dec){const o={v:0};return {targets:o,vars:{v:to,onUpdate:()=>el.textContent=dec?o.v.toFixed(dec):Math.round(o.v).toLocaleString()}};}
 
-// ── master timeline(暂停,供逐帧 seek)──
+// ── 旁白时长(秒)→ 数据驱动时间轴(每幕停留 = 前导 + 旁白 + 收尾)──
+const NARR=[15.04, 12.48, 17.44, 24.96, 28.32, 15.84, 25.44];
+const LEAD=0.45, TAIL=0.95, XF=0.15, X=0.45;
+const AD=NARR.map(d=>LEAD+d+TAIL);
+const S=[]; { let c=0; for(let i=0;i<7;i++){S.push(c); c+=AD[i]-XF;} }
+const END=S[6]+AD[6];
+const A=(i,o)=>S[i]+(o||0);        // 幕内绝对时刻
+const OUT=(i)=>S[i]+AD[i]-X;       // 幕淡出时刻
 const tl=gsap.timeline({paused:true,defaults:{ease:"power3.out"}});
-const HOLD=1.1, T=0.7, X=0.45;
 // 序
-tl.set("#a0",{opacity:1})
-  .from(".bigseal",{scale:.3,rotate:-12,opacity:0,duration:.6,ease:"back.out(2)"},0)
-  .from("#a0 h2",{y:18,opacity:0,duration:.7},.2).from("#a0 .data",{opacity:0,duration:.7},.4)
-  .to({},{duration:HOLD})
-  .to("#a0",{opacity:0,duration:X});
+tl.set("#a0",{opacity:1},A(0))
+  .from(".bigseal",{scale:.3,rotate:-12,opacity:0,duration:.6,ease:"back.out(2)"},A(0))
+  .from("#a0 h2",{y:18,opacity:0,duration:.7},A(0,.2)).from("#a0 .data",{opacity:0,duration:.7},A(0,.5))
+  .to("#a0",{opacity:0,duration:X},OUT(0));
 // 幕1 墨滴
-tl.set("#a1",{opacity:1},">-.1").from("#drop",{y:-300,scale:0,duration:.9,ease:"power4.out"},"<")
-  .fromTo("#blf",{attr:{stdDeviation:12}},{attr:{stdDeviation:0},duration:.6},"<")
-  .from("#a1 h2,#a1 .msg",{y:16,opacity:0,duration:.5,stagger:.12},"-=.3")
-  .add(seg(0)).to({},{duration:HOLD}).to("#a1",{opacity:0,duration:X});
+tl.set("#a1",{opacity:1},A(1))
+  .from("#drop",{y:-300,scale:0,duration:.9,ease:"power4.out"},A(1))
+  .fromTo("#blf",{attr:{stdDeviation:12}},{attr:{stdDeviation:0},duration:.6},A(1))
+  .from("#a1 h2,#a1 .msg",{y:16,opacity:0,duration:.5,stagger:.12},A(1,.6))
+  .add(seg(0),A(1,1.2)).to("#a1",{opacity:0,duration:X},OUT(1));
 // 幕2 切分
-tl.set("#a2",{opacity:1},">-.1")
-  .to(".col",{scaleY:1,duration:.7,stagger:{each:.03,from:"center"},ease:"expo.out"},"<")
-  .to((window._cA={v:0}),{v:1247,duration:.8,ease:"none",onUpdate:()=>document.getElementById("a2c").textContent=Math.round(window._cA.v).toLocaleString()},"<")
-  .add(()=>document.getElementById('a2c').textContent="1,247 段 · FTS5 索引就绪 · BM25 召回")
-  .add(seg(1)).to({},{duration:HOLD}).to("#a2",{opacity:0,duration:X});
+tl.set("#a2",{opacity:1},A(2))
+  .to(".col",{scaleY:1,duration:.7,stagger:{each:.03,from:"center"},ease:"expo.out"},A(2))
+  .to((window._cA={v:0}),{v:1247,duration:1.0,ease:"none",onUpdate:()=>document.getElementById("a2c").textContent=Math.round(window._cA.v).toLocaleString()},A(2,.2))
+  .add(()=>document.getElementById('a2c').textContent="1,247 段 · FTS5 索引就绪 · BM25 召回",A(2,1.3))
+  .add(seg(1),A(2,1.6)).to("#a2",{opacity:0,duration:X},OUT(2));
 // 幕3 分析簇
-tl.set("#a3",{opacity:1},">-.1").to(core,{scale:1,duration:.5})
-  .to(".bp",{x:(i,t)=>+t.dataset.x,y:(i,t)=>+t.dataset.y,scale:1,duration:.6,stagger:.05},"<.1")
-  .to(".ac",{x:(i,t)=>+t.dataset.x,y:(i,t)=>+t.dataset.y,scale:1,duration:.7,stagger:{each:.05,from:"center"}},">-.2")
-  .add(seg(2)).to({},{duration:HOLD}).to("#a3",{opacity:0,duration:X});
+tl.set("#a3",{opacity:1},A(3)).to(core,{scale:1,duration:.5},A(3))
+  .to(".bp",{x:(i,t)=>+t.dataset.x,y:(i,t)=>+t.dataset.y,scale:1,duration:.6,stagger:.05},A(3,.2))
+  .to(".ac",{x:(i,t)=>+t.dataset.x,y:(i,t)=>+t.dataset.y,scale:1,duration:.7,stagger:{each:.05,from:"center"}},A(3,.7))
+  .add(seg(2),A(3,2.0)).to("#a3",{opacity:0,duration:X},OUT(3));
 // 幕4 棱镜分光
-tl.set("#a4",{opacity:1},">-.1")
-  .to(".band",{opacity:1,duration:.4,stagger:.07},"<").to(".bb",{scaleX:1,duration:.6,stagger:.07,ease:"expo.out"},"<")
-  .to((window._cR={v:0}),{v:0.42,duration:.9,ease:"none",onUpdate:()=>document.getElementById("rho").textContent=window._cR.v.toFixed(2)},"<")
-  .from(mcells,{scale:0,duration:.5,stagger:{each:.01,grid:[N,N],from:"edges"}},"<.2")
-  // 确定性矩阵采样高亮(可 seek)
-  .to([mcells[7],mcells[14],mcells[21],mcells[28]],{backgroundColor:"#c0392b",duration:.25,stagger:.18},">-.1")
-  .add(seg(3)).to({},{duration:HOLD}).to("#a4",{opacity:0,duration:X});
+tl.set("#a4",{opacity:1},A(4))
+  .to(".band",{opacity:1,duration:.4,stagger:.07},A(4)).to(".bb",{scaleX:1,duration:.6,stagger:.07,ease:"expo.out"},A(4))
+  .to((window._cR={v:0}),{v:0.42,duration:1.4,ease:"none",onUpdate:()=>document.getElementById("rho").textContent=window._cR.v.toFixed(2)},A(4,.3))
+  .from(mcells,{scale:0,duration:.5,stagger:{each:.01,grid:[N,N],from:"edges"}},A(4,.6))
+  .to([mcells[7],mcells[14],mcells[21],mcells[28]],{backgroundColor:"#c0392b",duration:.3,stagger:.6},A(4,2.0))
+  .add(seg(3),A(4,4.0)).to("#a4",{opacity:0,duration:X},OUT(4));
 // 幕5 compose+内核
-tl.set("#a5",{opacity:1},">-.1")
-  .to(".pn",{opacity:1,y:0,duration:.4,stagger:.16},"<").to(".par",{opacity:1,duration:.3,stagger:.16},"<.1")
-  .to(".stp",{opacity:1,scale:1,duration:.4,stagger:.26,ease:"back.out(1.8)"},">-.1")
-  .add(seg(4)).to({},{duration:HOLD}).to("#a5",{opacity:0,duration:X});
-// 幕6 评测+盖印
-tl.set("#a6",{opacity:1},">-.1")
-  .to((window._cSA={v:0}),{v:56.75,duration:1,ease:"none",onUpdate:()=>document.getElementById("sA").textContent=window._cSA.v.toFixed(2)},"<")
-  .to("#sA",{opacity:.55,duration:.3},">")
-  .to((window._cSB={v:0}),{v:65.25,duration:1,ease:"none",onUpdate:()=>document.getElementById("sB").textContent=window._cSB.v.toFixed(2)},"<")
-  .add(seg(5))
-  .fromTo("#seal",{opacity:0,scale:2.6,rotate:-12},{opacity:1,scale:1,rotate:-5,duration:.55,ease:"back.out(2)"},">.1")
-  .to("#seal",{scale:.95,duration:.1,yoyo:true,repeat:1})
-  .to({},{duration:HOLD+.6});
-
+tl.set("#a5",{opacity:1},A(5))
+  .to(".pn",{opacity:1,y:0,duration:.4,stagger:.16},A(5)).to(".par",{opacity:1,duration:.3,stagger:.16},A(5,.1))
+  .to(".stp",{opacity:1,scale:1,duration:.4,stagger:.26,ease:"back.out(1.8)"},A(5,1.0))
+  .add(seg(4),A(5,2.2)).to("#a5",{opacity:0,duration:X},OUT(5));
+// 幕6 评测+盖印(末幕,盖印落在旁白收束处)
+tl.set("#a6",{opacity:1},A(6))
+  .to((window._cSA={v:0}),{v:56.75,duration:1.3,ease:"none",onUpdate:()=>document.getElementById("sA").textContent=window._cSA.v.toFixed(2)},A(6,.5))
+  .to("#sA",{opacity:.55,duration:.3},A(6,1.9))
+  .to((window._cSB={v:0}),{v:65.25,duration:1.3,ease:"none",onUpdate:()=>document.getElementById("sB").textContent=window._cSB.v.toFixed(2)},A(6,1.9))
+  .add(seg(5),A(6,3.4))
+  .fromTo("#seal",{opacity:0,scale:2.6,rotate:-12},{opacity:1,scale:1,rotate:-5,duration:.6,ease:"back.out(2)"},END-2.6)
+  .to("#seal",{scale:.95,duration:.12,yoyo:true,repeat:1},END-1.9)
+  .to({},{duration:0.02},END-0.02);
 function seg(i){return ()=>{segs.forEach((s,k)=>{if(k<=i){const ii=s.querySelector('i');gsap.set(ii,{scaleX:1});}});};}
-
 // seek 钩子(渲染器用)
-window.__duration = tl.duration();
-window.__seek = (t)=>{ tl.time(Math.max(0,Math.min(t, tl.duration()))); };
+window.__duration = END;
+window.__seek = (t)=>{ tl.time(Math.max(0,Math.min(t, END))); };
 window.__ready = true;
 tl.time(0);
 </script>
