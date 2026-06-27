@@ -125,6 +125,15 @@ def build_fused_style(project_slug: str, source_slugs: list[str]) -> dict:
                     messages=[{"role": "user", "content": payload}],
                     max_tokens=3000, temperature=0.5, response_format={"type": "json_object"})
     card = _loads(resp)
+    # 修复 F7(红蓝对抗):键漂移检测。LLM 可能输出不同键名(尤其小米/非白名单模型 json_object 降级时),
+    # seed_compose_from_fusion 按固定英文键死读会静默写 None。缺键即告警(不再无声),便于定位融合质量塌陷。
+    _missing = [k for k in ("fused_voice", "sentence_rhythm", "register", "signature_devices",
+                            "shared_vocabulary", "do", "dont") if not card.get(k)]
+    if _missing:
+        import logging
+        logging.getLogger(__name__).warning(
+            "build_fused_style(%s): 融合卡缺键 %s(键漂移/解析降级)→ seed 时该些维度将为空;建议重跑或换更强 STRONG 模型",
+            project_slug, _missing)
     card["scene_exemplar_pool"] = exemplar_pool          # 跨书范文池(原文,供 writer few-shot)
     return project_store.save_fused(project_slug, "fused_style", card,
                                     source_slugs=source_slugs, cost_usd=resp.cost_usd or 0.0)
