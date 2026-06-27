@@ -356,6 +356,7 @@ cp ~/Downloads/我的小说.txt backend/data/library/
 - 设计与评测全文见 [`novel-analysis-imitate/文风基因组-设计.md`](novel-analysis-imitate/文风基因组-设计.md)
 - **"数字 vs 自然语言:是过度设计吗?"** —— 用三轮可复现实验(项目自带的确定性尺子)回答"把占比数字喂给 LLM 是否真比自然语言更好":结论是**prompt 侧不更好且 LLM 不精确兑现,数字的正当性在测量/评测/闭环侧**,并据此修掉一处死数字代码。全文见 [`novel-analysis-imitate/docs/数字vs自然语言-为何不是过度设计.md`](novel-analysis-imitate/docs/数字vs自然语言-为何不是过度设计.md)
 - **架构红蓝对抗(自我攻击闭环)** —— 用多 agent 红蓝对抗主动找出对整体架构最狠的 10 个质疑(评测循环论证/无人类真值/格式塔/窗口期/题材过拟合…),逐个查真实代码→给方案→独立复核验证。一轮即**修掉 2 个被确认的真实硬伤**(render_spec 词汇层死分支、craft 后台抽取跨书污染),并揭示评测 65.25 这个数字需用更硬实验重新赢回。全文见 [`novel-analysis-imitate/docs/架构红蓝对抗-质疑与验证.md`](novel-analysis-imitate/docs/架构红蓝对抗-质疑与验证.md)
+- **评测可信度 · 实测(65.25 有几分真?谁当裁判?)** —— 用真实语料实验:① 客观尺子判别力 AUC 从 0.73→**0.91**(加入与基因组无关的结构维,同书 fidelity 92.6 vs 跨书 44,已落地);② 评委可靠性——更强的裁判把"原作真文 vs 他书"分得更开,实锤"裁判能力决定结论",给出「确定性指纹兜底 + 最强模型主观评(去偏)+ 人工抽检锚定」的分层裁决方案。全文见 [`novel-analysis-imitate/docs/评测可信度-实测.md`](novel-analysis-imitate/docs/评测可信度-实测.md)
 
 ### ✍️ 四类生成用例(compose 虚拟书 · 复用墨笔生成内核)
 统一收敛到「**compose 虚拟书 → set_active → OutlineRun → draft.write_chapter(三审一编辑)**」,差别只在塞什么:
