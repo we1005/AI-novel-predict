@@ -120,8 +120,12 @@ class RecallRequest(BaseModel):
 @router.post("/recall")
 def recall(req: RecallRequest):
     fts_hits = fts_recall.search(req.query, limit=req.k, before_chapter=req.before_chapter)
+    vec_err = None
     try:
         vec_hits = vec_recall.query(req.query, k=req.k, before_chapter=req.before_chapter)
-    except Exception as exc:  # vector index may be empty
+    except Exception as exc:  # 修复 E2(红蓝对抗):不再把错误写死 None 掩盖"向量层未启用/异常"
         vec_hits = []
-    return {"fts": fts_hits, "vector": vec_hits, "vector_error": None}
+        vec_err = str(exc) or exc.__class__.__name__
+    # 注:向量层 index_chapters 当前零调用点(死代码),vector 多为空且 vec_err 暴露真因;
+    #     启用或清理见 docs/架构红蓝对抗-质疑与验证.md(E2)。
+    return {"fts": fts_hits, "vector": vec_hits, "vector_error": vec_err}

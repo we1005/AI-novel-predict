@@ -275,14 +275,18 @@ def _persist_states(session, items: list[dict[str, Any]]) -> None:
         change = it.get("change", {}) or {}
         if "realm" in change and change["realm"]:
             new_state["realm"] = change["realm"]
-        if change.get("items_gained"):
+        # 修复 E8(红蓝对抗):类型守卫——LLM 偶把 items_gained 给成字符串,旧代码 list+str 会抛异常被上层吞掉。
+        def _as_list(v):
+            return v if isinstance(v, list) else ([v] if isinstance(v, str) and v else [])
+        ig, il, sg = _as_list(change.get("items_gained")), _as_list(change.get("items_lost")), _as_list(change.get("skills_gained"))
+        if ig:
             new_state.setdefault("items", [])
-            new_state["items"] = sorted(set((new_state["items"] or []) + change["items_gained"]))
-        if change.get("items_lost"):
-            new_state["items"] = [x for x in new_state.get("items", []) if x not in change["items_lost"]]
-        if change.get("skills_gained"):
+            new_state["items"] = sorted(set((new_state["items"] or []) + ig))
+        if il:
+            new_state["items"] = [x for x in new_state.get("items", []) if x not in il]
+        if sg:
             new_state.setdefault("skills", [])
-            new_state["skills"] = sorted(set((new_state["skills"] or []) + change["skills_gained"]))
+            new_state["skills"] = sorted(set((new_state["skills"] or []) + sg))
         if "alive" in change:
             new_state["alive"] = change["alive"]
         s = EntityState(
@@ -605,6 +609,10 @@ def run_batch(start: int, end: int, *, finalize: bool = True) -> dict[str, Any]:
             )
 
     try:
+        # 修复 E1(红蓝对抗):记录"有响应但解析为空"的 agent。cost>0 却得到空 dict,
+        # 极可能是 _extract_loads_json 对截断/超长章 JSON 修复失败→{},旧代码会静默写空、
+        # 批次照样 done、被 run_all 永久跳过 → 数据无声丢失且无法自愈。至少要"有告警"。
+        failed_agents: list[str] = []
         # mystery agent runs LAST so it can reference whatever entity / fs /
         # plot rows the previous five just wrote.
         for name in ["entity", "foreshadow", "state", "plot", "world", "mystery"]:
@@ -621,9 +629,17 @@ def run_batch(start: int, end: int, *, finalize: bool = True) -> dict[str, Any]:
                 system_text=agents[name]["system"],
             )
             total_cost += cost
+            if cost > 0 and not out:
+                failed_agents.append(name)
 
             with session_scope() as s:
                 _persist_for(name, s, out)
+
+        if failed_agents:
+            import logging
+            logging.getLogger(__name__).error(
+                "extract batch %s: agents %s 有响应但解析为空(疑似 JSON 截断/超长章),"
+                "该范围数据可能丢失,建议重跑此区间", batch_id, failed_agents)
 
         with session_scope() as s:
             b = s.get(ExtractionBatch, batch_id)
@@ -634,7 +650,8 @@ def run_batch(start: int, end: int, *, finalize: bool = True) -> dict[str, Any]:
 
         if finalize:
             _safe_backfill_importance()
-        return {"batch_id": batch_id, "status": "done", "cost_usd": total_cost}
+        return {"batch_id": batch_id, "status": "done", "cost_usd": total_cost,
+                "warnings": failed_agents}
 
     except Exception as exc:  # noqa: BLE001
         # Mark failed so the batch never hangs in "running" (which would make

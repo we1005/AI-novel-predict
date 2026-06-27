@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import pipeline
 from . import suggest as _suggest
@@ -13,7 +13,8 @@ class WriteRequest(BaseModel):
     outline_run_id: int
     chapter_index: int
     skip_reviews: bool = False
-    max_attempts: int = 3
+    # 修复 E5(红蓝对抗):钳制上限防"惊喜账单"(每章 ≥(1写+3审+1编)×attempts 次调用)
+    max_attempts: int = Field(3, ge=1, le=10)
 
 
 @router.post("/write")
