@@ -389,9 +389,12 @@ def render_spec(slug: str, genome: dict, cards: dict) -> str:
         L.append(f"升级逻辑:{t.get('escalation_logic','')}")
         if t.get("reusable_skeleton"):
             L.append("可套用骨架:" + " → ".join(map(str, t["reusable_skeleton"][:10])))
-        met = ma.get("metrics", {}).get("tension_modulation", {})
-        if met:
-            L.append(f"张力:均{met.get('avg')}、约每{met.get('climax_interval')}章一个大高潮。")
+        # 实测:LLM 不能精确兑现 prompt 里的数字(非单调/高方差),故此处用【定性走势】而非原始均值/峰间距;
+        # 张力的数值(avg/peak_gap/slope)留在 fingerprint_vector 供 eval/compare 对账。
+        # 论证见 docs/数字vs自然语言-为何不是过度设计.md。(原 tension_modulation 键不存在,是死分支)
+        met = ma.get("metrics", {}).get("tension_law", {})
+        if met.get("profile"):
+            L.append(f"张力走势:{met.get('profile')}(按此节律安排铺垫与高潮的疏密,勿均匀堆砌)。")
     tr = genome.get("transition") or {}
     if tr.get("most_likely_next"):
         L.append("\n## 场景递进倾向(上一拍→最可能的下一拍)")

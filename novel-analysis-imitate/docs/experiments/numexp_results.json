@@ -1,0 +1,315 @@
+{
+  "model": "mimo-v2.5",
+  "baseline": {
+    "hedge": [
+      6.47,
+      1.93,
+      3.12
+    ],
+    "lex": [
+      0.0,
+      0.0,
+      1.56
+    ]
+  },
+  "rows": [
+    {
+      "axis": "hedge",
+      "cond": "numeric",
+      "level": "low",
+      "target": 1,
+      "val": 6.09,
+      "len": 821
+    },
+    {
+      "axis": "hedge",
+      "cond": "numeric",
+      "level": "low",
+      "target": 1,
+      "val": 0.0,
+      "len": 0
+    },
+    {
+      "axis": "hedge",
+      "cond": "numeric",
+      "level": "low",
+      "target": 1,
+      "val": 0.0,
+      "len": 719
+    },
+    {
+      "axis": "hedge",
+      "cond": "numeric",
+      "level": "mid",
+      "target": 5,
+      "val": 0.0,
+      "len": 0
+    },
+    {
+      "axis": "hedge",
+      "cond": "numeric",
+      "level": "mid",
+      "target": 5,
+      "val": 0.0,
+      "len": 0
+    },
+    {
+      "axis": "hedge",
+      "cond": "numeric",
+      "level": "mid",
+      "target": 5,
+      "val": 8.71,
+      "len": 689
+    },
+    {
+      "axis": "hedge",
+      "cond": "numeric",
+      "level": "high",
+      "target": 10,
+      "val": 0.0,
+      "len": 0
+    },
+    {
+      "axis": "hedge",
+      "cond": "numeric",
+      "level": "high",
+      "target": 10,
+      "val": 22.4,
+      "len": 625
+    },
+    {
+      "axis": "hedge",
+      "cond": "numeric",
+      "level": "high",
+      "target": 10,
+      "val": 17.74,
+      "len": 620
+    },
+    {
+      "axis": "hedge",
+      "cond": "qual",
+      "level": "low",
+      "target": 1,
+      "val": 0.0,
+      "len": 555
+    },
+    {
+      "axis": "hedge",
+      "cond": "qual",
+      "level": "low",
+      "target": 1,
+      "val": 0.0,
+      "len": 776
+    },
+    {
+      "axis": "hedge",
+      "cond": "qual",
+      "level": "low",
+      "target": 1,
+      "val": 1.61,
+      "len": 621
+    },
+    {
+      "axis": "hedge",
+      "cond": "qual",
+      "level": "mid",
+      "target": 5,
+      "val": 19.51,
+      "len": 820
+    },
+    {
+      "axis": "hedge",
+      "cond": "qual",
+      "level": "mid",
+      "target": 5,
+      "val": 17.88,
+      "len": 671
+    },
+    {
+      "axis": "hedge",
+      "cond": "qual",
+      "level": "mid",
+      "target": 5,
+      "val": 26.54,
+      "len": 716
+    },
+    {
+      "axis": "hedge",
+      "cond": "qual",
+      "level": "high",
+      "target": 10,
+      "val": 39.14,
+      "len": 511
+    },
+    {
+      "axis": "hedge",
+      "cond": "qual",
+      "level": "high",
+      "target": 10,
+      "val": 24.72,
+      "len": 809
+    },
+    {
+      "axis": "hedge",
+      "cond": "qual",
+      "level": "high",
+      "target": 10,
+      "val": 22.61,
+      "len": 796
+    },
+    {
+      "axis": "lex",
+      "cond": "numeric",
+      "level": "low",
+      "target": 2,
+      "val": 0.0,
+      "len": 0
+    },
+    {
+      "axis": "lex",
+      "cond": "numeric",
+      "level": "low",
+      "target": 2,
+      "val": 11.63,
+      "len": 688
+    },
+    {
+      "axis": "lex",
+      "cond": "numeric",
+      "level": "low",
+      "target": 2,
+      "val": 18.38,
+      "len": 816
+    },
+    {
+      "axis": "lex",
+      "cond": "numeric",
+      "level": "mid",
+      "target": 8,
+      "val": 27.78,
+      "len": 864
+    },
+    {
+      "axis": "lex",
+      "cond": "numeric",
+      "level": "mid",
+      "target": 8,
+      "val": 26.79,
+      "len": 560
+    },
+    {
+      "axis": "lex",
+      "cond": "numeric",
+      "level": "mid",
+      "target": 8,
+      "val": 27.36,
+      "len": 731
+    },
+    {
+      "axis": "lex",
+      "cond": "numeric",
+      "level": "high",
+      "target": 16,
+      "val": 0.0,
+      "len": 0
+    },
+    {
+      "axis": "lex",
+      "cond": "numeric",
+      "level": "high",
+      "target": 16,
+      "val": 28.8,
+      "len": 625
+    },
+    {
+      "axis": "lex",
+      "cond": "numeric",
+      "level": "high",
+      "target": 16,
+      "val": 20.76,
+      "len": 867
+    },
+    {
+      "axis": "lex",
+      "cond": "qual",
+      "level": "low",
+      "target": 2,
+      "val": 0.0,
+      "len": 0
+    },
+    {
+      "axis": "lex",
+      "cond": "qual",
+      "level": "low",
+      "target": 2,
+      "val": 0.0,
+      "len": 557
+    },
+    {
+      "axis": "lex",
+      "cond": "qual",
+      "level": "low",
+      "target": 2,
+      "val": 1.62,
+      "len": 619
+    },
+    {
+      "axis": "lex",
+      "cond": "qual",
+      "level": "mid",
+      "target": 8,
+      "val": 21.74,
+      "len": 552
+    },
+    {
+      "axis": "lex",
+      "cond": "qual",
+      "level": "mid",
+      "target": 8,
+      "val": 45.08,
+      "len": 244
+    },
+    {
+      "axis": "lex",
+      "cond": "qual",
+      "level": "mid",
+      "target": 8,
+      "val": 21.14,
+      "len": 615
+    },
+    {
+      "axis": "lex",
+      "cond": "qual",
+      "level": "high",
+      "target": 16,
+      "val": 21.46,
+      "len": 699
+    },
+    {
+      "axis": "lex",
+      "cond": "qual",
+      "level": "high",
+      "target": 16,
+      "val": 0.0,
+      "len": 0
+    },
+    {
+      "axis": "lex",
+      "cond": "qual",
+      "level": "high",
+      "target": 16,
+      "val": 0.0,
+      "len": 0
+    }
+  ],
+  "hedge_targets": {
+    "low": 1,
+    "mid": 5,
+    "high": 10
+  },
+  "lex_targets": {
+    "low": 2,
+    "mid": 8,
+    "high": 16
+  }
+}

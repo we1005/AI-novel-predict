@@ -354,6 +354,7 @@ cp ~/Downloads/我的小说.txt backend/data/library/
 - 专页 `/genome`:保姆级讲解 + **KaTeX 公式渲染** + L1 密度热力条 + L7 转移图 + 真实抽取样例
 - **解析视频** [`novel-analysis-imitate/docs/genome.mp4`](novel-analysis-imitate/docs/genome.mp4):七层结构与核心公式逐层讲透 —— L1 密度 ρ、L2 弱断言红线、L6 张力峰判据、L7 马尔可夫转移、保真度的余弦 / KL / 相对误差,**MathML 原生公式 + 小米 MiMo TTS 旁白**(约 5min · 1080p),合成同 [`video-pipeline/`](video-pipeline/)
 - 设计与评测全文见 [`novel-analysis-imitate/文风基因组-设计.md`](novel-analysis-imitate/文风基因组-设计.md)
+- **"数字 vs 自然语言:是过度设计吗?"** —— 用三轮可复现实验(项目自带的确定性尺子)回答"把占比数字喂给 LLM 是否真比自然语言更好":结论是**prompt 侧不更好且 LLM 不精确兑现,数字的正当性在测量/评测/闭环侧**,并据此修掉一处死数字代码。全文见 [`novel-analysis-imitate/docs/数字vs自然语言-为何不是过度设计.md`](novel-analysis-imitate/docs/数字vs自然语言-为何不是过度设计.md)
 
 ### ✍️ 四类生成用例(compose 虚拟书 · 复用墨笔生成内核)
 统一收敛到「**compose 虚拟书 → set_active → OutlineRun → draft.write_chapter(三审一编辑)**」,差别只在塞什么:
