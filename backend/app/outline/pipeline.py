@@ -293,6 +293,9 @@ def _refine_stepwise(src: dict, blocks: list, extra: list, chapter_start: int,
 
         if not (isinstance(obj, dict) and obj.get("title") and obj.get("must_include")):
             # 兜底:用骨架条目拼一个最小可用章,不留空洞
+            # 修复 D5(红蓝对抗):打 is_fallback 标记,让占位章不再与正常章无法区分。
+            # 下游(bookwriter/前端)可据此告警/复跑,而非把"模型失败"静默当成"合理大纲"。
+            # 详见 docs/架构红蓝对抗-质疑与验证.md。
             obj = {
                 "title": sc.get("title"),
                 "intent": sc.get("intent", ""),
@@ -301,6 +304,8 @@ def _refine_stepwise(src: dict, blocks: list, extra: list, chapter_start: int,
                 "pacing": "（待补充）",
                 "word_target": 3000,
                 "foreshadow_ids_addressed": sc.get("foreshadow_ids", []),
+                "is_fallback": True,
+                "fallback_reason": "单章 flesh 失败或解析为空,已用骨架拼最小章——质量信号,建议复跑或人工补全",
             }
         obj["chapter_index"] = sc["chapter_index"]  # 强制对齐骨架编号
         # 列表字段强制成字符串(模型偶把条目返回成 dict,会让 join/渲染/落库崩)

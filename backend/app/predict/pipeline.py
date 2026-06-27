@@ -352,6 +352,15 @@ def stage_c_stream(
     # Pull style-reference snippets via FTS using the synopsis as query.
     query = chosen.get("synopsis", "")[:120] or chosen.get("title", "")
     style_hits = fts_recall.search(query, limit=style_chunks, before_chapter=after_chapter + 1)
+    if not style_hits:
+        # 修复 D7(红蓝对抗):FTS(中文 trigram + 别名/分词)零召回时,旧代码静默给空风格参考,
+        # 续写就失去文风锚。兜底取最近 1-2 章正文(与 draft 路径一致)。详见 docs/架构红蓝对抗-质疑与验证.md。
+        from sqlalchemy import text as _sql
+        with session_scope() as s:
+            rows = s.execute(_sql(
+                "SELECT chapter, body FROM chapter_fts WHERE chapter < :c ORDER BY chapter DESC LIMIT 2"
+            ), {"c": after_chapter + 1}).all()
+        style_hits = [{"chapter": r[0], "title": "", "snip": (r[1] or "")[:800]} for r in reversed(rows)]
     style_blob = "\n\n---\n\n".join(
         f"[{h['chapter']}章 {h.get('title', '')}] {h.get('snip', '')}" for h in style_hits
     )

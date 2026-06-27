@@ -225,19 +225,25 @@ def run_book_genome(slug: str, background: BackgroundTasks):
 @app.get("/books/{slug}/analysis")
 def book_analysis(slug: str):
     """汇总一本书的全部分析层,供前端一次拉取渲染。"""
-    return {
-        "slug": slug,
-        "beats": beat.get_beats(slug),
-        "worldview": worldview.get_reveals(slug),
-        "relationships": relationship.get_events(slug),
-        "characters": character.get_cards(slug),
-        "golden": golden.get_steps(slug),
-        "pov": pov.get_events(slug),
-        "style": style.get_style(slug),
-        "speedread": speedread.get_speedread(slug),
-        "base": base.get_base(slug),
-        "genome": style_genome.get_genome(slug),
-    }
+    # 修复 D2(红蓝对抗):本端点单请求内顺序调 10 个 get_*,每个内部都 library.set_active(全局指针)。
+    # 若并发请求或后台 compose 的 set_active(virtual) 在这 10 连读之间切走全局,后半段会读到别的书,
+    # 返回"A 的 beats + B 的 characters"混血结果。用 book_scope 进程级绑定本请求 slug,
+    # _active_slug() 优先读它,屏蔽全局指针被切的影响。详见 docs/架构红蓝对抗-质疑与验证.md。
+    from app.db import book_scope
+    with book_scope(slug):
+        return {
+            "slug": slug,
+            "beats": beat.get_beats(slug),
+            "worldview": worldview.get_reveals(slug),
+            "relationships": relationship.get_events(slug),
+            "characters": character.get_cards(slug),
+            "golden": golden.get_steps(slug),
+            "pov": pov.get_events(slug),
+            "style": style.get_style(slug),
+            "speedread": speedread.get_speedread(slug),
+            "base": base.get_base(slug),
+            "genome": style_genome.get_genome(slug),
+        }
 
 
 # ---- Phase 2+ · 生成用例(compose 虚拟书)----

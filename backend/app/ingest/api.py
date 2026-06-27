@@ -27,7 +27,15 @@ def split_endpoint(req: IngestRequest | None = None):
     from ..books.library import active_paths
 
     if req and req.path:
-        p = Path(req.path)
+        # 修复 D6(红蓝对抗):防路径穿越。旧代码对 req.path 不做限制,
+        # POST {path:"../../.env"} 既能泄露任意文件首尾,又会覆写当前活动书语料并清表。
+        # 只允许 data 目录内的文件。详见 docs/架构红蓝对抗-质疑与验证.md。
+        p = Path(req.path).resolve()
+        data_root = active_paths()["corpus_txt"].resolve().parents[2]  # .../backend/data
+        try:
+            p.relative_to(data_root)
+        except ValueError:
+            raise HTTPException(403, f"path must be inside the data directory: {data_root}")
     else:
         p = active_paths()["corpus_txt"]
     if not p.exists():

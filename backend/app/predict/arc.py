@@ -282,8 +282,11 @@ def _ensure_arc_winner(score: dict, n_arcs: int) -> dict:
     if isinstance(wi, int) and 0 <= wi < n_arcs:
         return score
     best, best_sum = 0, -1.0
-    dims = ("coherence", "foreshadow_use", "character_consistency", "novelty",
-            "macro_logic", "pacing", "payoff", "originality")
+    # 修复 D3(红蓝对抗):此处必须用 ARC_SCORING_TOOL 真实的 5 个维度名。
+    # 旧代码用的是 prediction 链路的旧维度名(coherence/foreshadow_use/…),
+    # 与 arc 评分 schema 仅 novelty 重合 → 兜底退化成"纯按新颖度选 winner",
+    # macro_coherence/evidence_quality 完全不参与。详见 docs/架构红蓝对抗-质疑与验证.md。
+    dims = ("macro_coherence", "evidence_quality", "foreshadow_coverage", "hero_arc", "novelty")
     for sc in (score.get("scores") or []):
         if not isinstance(sc, dict):
             continue
