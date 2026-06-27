@@ -103,7 +103,9 @@ def _ensure_profiles(cast: list[Entity], after_chapter: int) -> None:
             if (
                 row is None
                 or row.last_built_chapter is None
-                or abs((row.last_built_chapter or 0) - after_chapter) > 200
+                # 修复 E4(红蓝对抗):边界 `>200` 漏掉"建于150、模拟350(差正好200)"的陈旧档案 → 改 `>=`。
+                # (每轮状态快照 / 仿真产物回灌 / 未来章泄漏 属更大的仿真质量改造,见 docs 待修。)
+                or abs((row.last_built_chapter or 0) - after_chapter) >= 200
             ):
                 missing.append(ent.id)
     if missing:
