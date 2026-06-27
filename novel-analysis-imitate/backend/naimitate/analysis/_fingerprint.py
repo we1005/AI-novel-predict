@@ -154,7 +154,8 @@ def compare(fp_src: dict, fp_gen: dict) -> dict:
     """原著指纹 vs 生成稿指纹 → 逐维偏差 + 总保真度分(0-100,越高越像)。"""
     report, penalties = {}, []
     # 标量:相对误差
-    for k in ["hedge_per_kchar", "reduplication_per_kchar", "bluntness", "infodump_ratio"]:
+    for k in ["hedge_per_kchar", "reduplication_per_kchar", "bluntness", "infodump_ratio",
+              "avg_sent_len", "sent_len_cv", "para_len_mean", "dialogue_ratio", "comma_per_kchar"]:
         sv, gv = fp_src.get(k), fp_gen.get(k)
         if sv is not None and gv is not None:
             rel = abs(gv - sv) / (abs(sv) + 1e-6)
@@ -184,10 +185,37 @@ def compare(fp_src: dict, fp_gen: dict) -> dict:
     return {"fidelity_score": fidelity, "dimensions": report}
 
 
+def structural_features(text: str) -> dict:
+    """与基因组层**无关**的确定性结构指纹(句长/句长变异/段长/对白比/逗号密度)。
+    动机(红蓝对抗 C1/C5 + E1 实测):原 compare 的分布维多取自基因组自产 schema(循环);
+    且主链客观对账只用 3 个正则维,判别力弱。加入这些结构维后,'区分余烬之铳真文 vs 他书'
+    的客观 AUC 从 ~0.73 升到 ~0.91,且不依赖基因组,部分破除循环。详见 docs/评测可信度-实测.md。"""
+    if not text:
+        return {}
+    n = len(text); kk = n / 1000.0
+    sents = [s for s in re.split(r"[。!?…]", text) if s.strip()]
+    slen = [len(s) for s in sents] or [0]
+    paras = [p for p in text.split("\n") if p.strip()]
+    plen = [len(p) for p in paras] or [0]
+    dia = sum(len(m) for m in re.findall(r"“[^”]*”", text))
+    mean_s = sum(slen) / len(slen)
+    var_s = sum((x - mean_s) ** 2 for x in slen) / len(slen)
+    cv = (var_s ** 0.5 / mean_s) if mean_s else 0.0
+    return {
+        "avg_sent_len": round(mean_s, 2),
+        "sent_len_cv": round(cv, 3),
+        "para_len_mean": round(sum(plen) / len(plen), 1),
+        "dialogue_ratio": round(dia / n, 4),
+        "comma_per_kchar": round((text.count(",") + text.count("、")) / kk, 2),
+    }
+
+
 def fingerprint_from_text(text: str) -> dict:
     """对一段生成稿,只用确定性手段算出可对比的指纹子集(用于评测扫产出稿)。"""
-    return {
+    out = {
         "hedge_per_kchar": regex_per_kchar(HEDGE, text),
         "reduplication_per_kchar": regex_per_kchar(REDUP, text),
         "ellipsis_para_per_kchar": regex_per_kchar(ELLIPSIS_PARA, text),
     }
+    out.update(structural_features(text))   # 加结构维(与基因组无关,判别力更强)
+    return out

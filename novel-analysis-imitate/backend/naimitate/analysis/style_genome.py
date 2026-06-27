@@ -301,6 +301,7 @@ def build_fingerprint(slug: str, genome: dict, cards: dict) -> dict:
         corpus = FP.full_corpus_text()
         fp["hedge_per_kchar"] = FP.regex_per_kchar(FP.HEDGE, corpus)
         fp["reduplication_per_kchar"] = FP.regex_per_kchar(FP.REDUP, corpus)
+        fp.update(FP.structural_features(corpus))   # 与基因组无关的结构维(破循环+提判别力,见 E1)
     except Exception:
         pass
     sr = genome.get("scene_routine") or {}
