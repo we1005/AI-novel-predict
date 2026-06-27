@@ -691,25 +691,38 @@ def write_chapter(
     # "ship_with_warnings" / "shipped_with_warnings") — match by prefix.
     _ok = bool(final_text) and str(final_status).startswith(("approv", "ship"))
     if reingest and _ok:
-        if repo_commit:
-            # 接版本控制时**同步**回灌，确保增量 ch<N>.json 落盘后再 commit。
-            try:
-                from ..ingest.extract import extract_one_chapter
+        # 修复 G1+G6(红蓝对抗·回归核查咬到 F5/自身):
+        # G1 — 后台回灌走 threading.Thread,OS 线程**不继承 contextvar**,F5 的 book_scope 会丢失,
+        #      切书后该章实体/FTS 会写进别的书。故捕获当前 slug,在线程体内重新 with book_scope(slug)。
+        # G6 — 原 except: pass 把"记忆生长"失败静默吞掉(续写唯一的增量记忆通道),改为记录错误。
+        import logging
+        from contextlib import nullcontext
+        from ..ingest.extract import extract_one_chapter
+        from ..db import book_scope
+        from ..books import library
+        _slug = library.get_active()
+
+        def _do_reingest():
+            with (book_scope(_slug) if _slug else nullcontext()):
                 extract_one_chapter(chapter_index, final_text)
-            except Exception:  # noqa: BLE001
-                pass
+
+        if repo_commit:
+            # 接版本控制时**同步**回灌,确保增量 ch<N>.json 落盘后再 commit。
+            try:
+                _do_reingest()
+            except Exception as exc:  # noqa: BLE001
+                logging.getLogger(__name__).error("reingest(sync) ch%s 失败: %s", chapter_index, exc)
         else:
             def _reingest():
                 try:
-                    from ..ingest.extract import extract_one_chapter
-                    extract_one_chapter(chapter_index, final_text)
-                except Exception:  # noqa: BLE001
-                    pass
+                    _do_reingest()
+                except Exception as exc:  # noqa: BLE001
+                    logging.getLogger(__name__).error("reingest(thread) ch%s 失败: %s", chapter_index, exc)
             try:
                 import threading
                 threading.Thread(target=_reingest, daemon=True).start()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                logging.getLogger(__name__).error("reingest 线程启动失败 ch%s: %s", chapter_index, exc)
 
     # 双语交织（接入主流程）：中文**真过审**后，把定稿锚定生成英文版（中英对照）。
     # 同步执行，确保返回时双语已就绪；非致命，失败不影响中文成稿。

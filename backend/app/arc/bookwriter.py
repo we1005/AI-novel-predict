@@ -188,8 +188,9 @@ def repair_phase(outline_run_id: int, reingest: bool = True) -> dict:
             if reingest and (res.get("final_text") or "") and str(st).startswith(("approv", "ship")):
                 try:
                     extract_one_chapter(ci, res["final_text"])
-                except Exception:
-                    pass
+                except Exception as exc:  # 修复 G6:回灌失败不再静默吞(记忆生长通道)
+                    import logging
+                    logging.getLogger(__name__).error("bookwriter reingest ch%s 失败: %s", ci, exc)
             applied.append({"chapter": ci, "status": st, "reason": rv.get("reason")})
         except Exception as e:  # noqa: BLE001
             applied.append({"chapter": ci, "status": f"error:{str(e)[:60]}", "reason": rv.get("reason")})
