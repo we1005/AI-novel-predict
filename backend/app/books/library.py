@@ -190,18 +190,21 @@ def import_from_library(filename: str, *, title: str | None = None) -> dict[str,
 
 
 def delete_book(slug: str) -> None:
-    if get_active() == slug:
-        raise ValueError("cannot delete active book — switch first")
-    d = book_dir(slug)
-    if not d.exists():
-        return
-    # Drop any cached engines that might still hold sqlite file handles.
-    try:
-        from .. import db as _db
-        _db._invalidate_engine_cache()  # type: ignore[attr-defined]
-    except Exception:
-        pass
-    shutil.rmtree(d)
+    # 修复 G4(红蓝对抗):active 检查与 rmtree 放进 _LOCK 原子化,防并发 set_active 在
+    # "检查通过"与"删除"之间切走指针,误删一本"判定时还是 active"的书(TOCTOU 不可逆销毁)。
+    with _LOCK:
+        if get_active() == slug:
+            raise ValueError("cannot delete active book — switch first")
+        d = book_dir(slug)
+        if not d.exists():
+            return
+        # Drop any cached engines that might still hold sqlite file handles.
+        try:
+            from .. import db as _db
+            _db._invalidate_engine_cache()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        shutil.rmtree(d)
 
 
 # ---------------------------------------------------------------------------

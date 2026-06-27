@@ -277,7 +277,8 @@ def cleanup_stuck_batches(body: CleanupPayload | None = None) -> dict:
     'running' — those rows block new work via the overlap check."""
     from datetime import datetime, timedelta
 
-    threshold = (body.older_than_minutes if body else 30)
+    # 修复 G4(红蓝对抗):钳最小 5 分钟,防 older_than_minutes=0 把刚启动、线程仍在跑的批次误标 failed。
+    threshold = max(5, (body.older_than_minutes if body else 30))
     cutoff = datetime.utcnow() - timedelta(minutes=threshold)
     cleaned: list[dict] = []
     with session_scope() as s:
