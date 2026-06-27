@@ -11,6 +11,16 @@ from sqlalchemy import func, select
 from ..db import session_scope
 from ..memory.models import Chapter, ExtractionBatch
 from .extract import run_all, run_batch
+from ..books import library
+from ..db import book_scope
+
+
+def _scoped(slug, fn, *a, **k):
+    # 修复 F5(红蓝对抗):后台抽取在请求线程捕获 active slug,用 book_scope 进程级绑定,
+    # 防执行期间用户切书把抽取结果写进别的库(active_book 是共享文件,get_active 无锁)。
+    from contextlib import nullcontext
+    with (book_scope(slug) if slug else nullcontext()):
+        return fn(*a, **k)
 from .split import ingest as ingest_corpus
 
 router = APIRouter()
@@ -89,7 +99,7 @@ def recommend_batch():
 async def extract_endpoint(start: int, end: int, background: BackgroundTasks):
     if end <= start:
         raise HTTPException(400, "end must be > start")
-    background.add_task(run_batch, start, end)
+    background.add_task(_scoped, library.get_active(), run_batch, start, end)
     return {"queued": {"start": start, "end": end}}
 
 
@@ -101,7 +111,7 @@ async def extract_all_endpoint(
 ):
     """Kick off extraction for every batch that isn't already 'done' or
     overlapping with a running batch. Background. Poll /ingest/batches."""
-    background.add_task(run_all, batch_size=batch_size, workers=workers)
+    background.add_task(_scoped, library.get_active(), run_all, batch_size=batch_size, workers=workers)
     # Compute the planned work so the UI can show "N batches queued".
     with session_scope() as s:
         from sqlalchemy import func as _f
@@ -243,7 +253,7 @@ def retry_batch(batch_id: int, background: BackgroundTasks) -> dict:
 
     # Has gaps — actually re-run. run_batch creates a fresh ExtractionBatch
     # row, so the old failed row stays as historical record.
-    background.add_task(run_batch, start, end)
+    background.add_task(_scoped, library.get_active(), run_batch, start, end)
     return {
         "id": batch_id,
         "action": "retrying",

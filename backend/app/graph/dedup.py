@@ -126,19 +126,26 @@ def _judge(pairs: list[dict]) -> list[dict]:
             f" || B: id={b['id']} 名='{b['name']}' 别名={b['aliases']} 重要度={b['importance']} 简介='{b['desc']}'"
         )
     user = "候选对：\n" + "\n".join(lines) + "\n\n判断哪些是同一实体并调用 report_duplicates。"
+    # 修复 F4(红蓝对抗):去掉 forced tool_choice —— CLAUDE.md 禁令:doubao 系大上下文下强制工具会
+    # 静默吞输出,导致 dedup 零合并、图谱持续分裂。改 JSON-in-text(贴 schema + json_repair),与 arc/extract 同范式。
+    schema_hint = "\n\n只输出 JSON(不要调用工具、不要解释),严格符合此 schema:\n" + json.dumps(
+        _JUDGE_TOOL["input_schema"], ensure_ascii=False)
     resp = llm.call(
-        agent="graph.dedup", model=MODEL_STRONG, system=_JUDGE_SYSTEM,
+        agent="graph.dedup", model=MODEL_STRONG, system=_JUDGE_SYSTEM + schema_hint,
         messages=[{"role": "user", "content": user}],
-        tools=[_JUDGE_TOOL], tool_choice={"type": "tool", "name": _JUDGE_TOOL["name"]},
         max_tokens=4000, temperature=0.1,
     )
     out = (resp.tool_use or {}).get("input") or {}
-    if isinstance(out, dict) and set(out.keys()) <= {"_raw"}:
+    if not out or (isinstance(out, dict) and set(out.keys()) <= {"_raw"}):
+        raw = out.get("_raw") if isinstance(out, dict) else None
+        txt = re.sub(r"```json|```", "", (raw or resp.text or "")).strip()
         try:
             from json_repair import repair_json
-            out = json.loads(repair_json(out.get("_raw", "")))
+            out = json.loads(repair_json(txt))
         except Exception:
             out = {}
+    if not isinstance(out, dict):
+        out = {}
     return [m for m in (out.get("merges") or []) if isinstance(m, dict) and m.get("keep_id") and m.get("merge_id")]
 
 

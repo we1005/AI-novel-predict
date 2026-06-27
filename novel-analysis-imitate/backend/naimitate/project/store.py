@@ -9,12 +9,23 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, event
 
 _DATA = Path(__file__).resolve().parents[2] / "data" / "projects"
 _DATA.mkdir(parents=True, exist_ok=True)
 _DB = _DATA / "projects.db"
 _engine = create_engine(f"sqlite:///{_DB}", future=True)
+
+
+# 修复 F1(红蓝对抗):墨笔 db.py 给 per-book 库挂了 WAL+busy_timeout+FK,墨析项目库漏了,
+# 并发融合写入撞 SQLITE_BUSY 会静默丢产物。补齐同款 PRAGMA。
+@event.listens_for(_engine, "connect")
+def _enable_sqlite_features(dbapi_conn, _):
+    cur = dbapi_conn.cursor()
+    cur.execute("PRAGMA journal_mode=WAL")
+    cur.execute("PRAGMA foreign_keys=ON")
+    cur.execute("PRAGMA busy_timeout=15000")
+    cur.close()
 
 
 def init() -> None:
