@@ -212,10 +212,16 @@ def build_style_cards() -> dict[str, Any]:
     return {"cards": done, "cost_usd": round(total_cost, 4)}
 
 
-def extract_all(*, batch_size: int = _DEFAULT_BATCH, max_chapters: int | None = None) -> dict[str, Any]:
-    tagged = tag_chapters(batch_size=batch_size, max_chapters=max_chapters, replace=True)
-    cards = build_style_cards()
-    return {"tagged": tagged, "cards": cards.get("cards"), "cost_usd": round((tagged.get("cost_usd") or 0) + (cards.get("cost_usd") or 0), 4)}
+def extract_all(*, batch_size: int = _DEFAULT_BATCH, max_chapters: int | None = None,
+                slug: str | None = None) -> dict[str, Any]:
+    # 修复 C8:后台执行期间用户若切书,全局 active 指针会变。slug 由请求线程捕获,经 book_scope
+    # 进程级绑定,确保片段/风格卡写回发起抽取时的那本书,杜绝跨书污染。
+    from contextlib import nullcontext
+    from ..db import book_scope
+    with (book_scope(slug) if slug else nullcontext()):
+        tagged = tag_chapters(batch_size=batch_size, max_chapters=max_chapters, replace=True)
+        cards = build_style_cards()
+        return {"tagged": tagged, "cards": cards.get("cards"), "cost_usd": round((tagged.get("cost_usd") or 0) + (cards.get("cost_usd") or 0), 4)}
 
 
 # ---- 读取(给前端 / 写作 few-shot) ----

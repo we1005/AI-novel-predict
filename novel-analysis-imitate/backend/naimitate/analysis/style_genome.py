@@ -342,12 +342,20 @@ def render_spec(slug: str, genome: dict, cards: dict) -> str:
     L.append("你要严格模仿以下作者的文风与写作架构来创作。这是一套可执行的范式,请逐条遵循。\n")
     sm = (cards.get("style") or {}) if False else None  # style summary 可选
     lex = genome.get("lexicon") or {}
-    if lex.get("categories"):
+    # 修复 C6(红蓝对抗发现):layer_lexicon 产出的是 strata/signature_words/gloss/collocations,
+    # 旧代码读 categories/example_phrases —— 键名对不上,"用词范式"段恒为空,L1 词汇层从未进入写作 prompt。
+    if lex.get("strata"):
         L.append("## 用词范式")
-        L.append(f"总体用词:{lex.get('diction','')}。回避:{lex.get('avoid','')}")
-        for c in lex["categories"][:8]:
-            words = "、".join((c.get("signature_words") or [])[:10])
-            L.append(f"- 【{c.get('name')}】常用:{words};例:{' / '.join((c.get('example_phrases') or [])[:2])}")
+        _avoid = lex.get("avoid")
+        _avoid = "、".join(_avoid) if isinstance(_avoid, list) else (_avoid or "")
+        L.append(f"总体用词:{lex.get('diction','')}。回避:{_avoid}")
+        for st in lex["strata"][:8]:
+            words = "、".join((st.get("signature_words") or [])[:10])
+            colloc = st.get("collocations") or []
+            ex = ""
+            if colloc and isinstance(colloc[0], dict):
+                ex = f";搭配:{colloc[0].get('head','')}+{'/'.join((colloc[0].get('with') or [])[:3])}"
+            L.append(f"- 【{st.get('gloss') or st.get('layer','')}】{words};用于{st.get('trigger_context','')}{ex}")
     syn = genome.get("syntax") or {}
     if syn.get("sentence_patterns"):
         L.append("\n## 句式范式")
