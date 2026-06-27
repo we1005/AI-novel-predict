@@ -589,30 +589,36 @@ def run_batch(start: int, end: int, *, finalize: bool = True) -> dict[str, Any]:
     # outer transaction.
     chapter_range = (start, end - 1)
 
-    def _persist_for(name: str, s, out: dict) -> None:
+    def _persist_for(name: str, s, out: dict) -> int:
+        # 修复 G5(红蓝对抗·回归核查):返回"尝试落库的条数",供 run_batch 判断整批是否零产出
+        # (json_repair 把截断 JSON 修成 {"entities":[]} 这类**非空但空内容**对象时,E1 的 `not out` 判空失效)。
         if name == "entity":
-            _persist_entities(s, out.get("entities", []))
+            items = out.get("entities", []) or []
+            _persist_entities(s, items); return len(items)
         elif name == "foreshadow":
-            _persist_foreshadowings(s, out.get("planted", []), out.get("resolved", []))
+            p = out.get("planted", []) or []; r = out.get("resolved", []) or []
+            _persist_foreshadowings(s, p, r); return len(p) + len(r)
         elif name == "state":
-            _persist_states(s, out.get("states", []))
+            items = out.get("states", []) or []
+            _persist_states(s, items); return len(items)
         elif name == "plot":
-            _persist_plot(s, out.get("plot_points", []))
+            items = out.get("plot_points", []) or []
+            _persist_plot(s, items); return len(items)
         elif name == "world":
-            _persist_world(s, out.get("rules", []))
+            items = out.get("rules", []) or []
+            _persist_world(s, items); return len(items)
         elif name == "mystery":
-            _persist_mystery_actions(
-                s,
-                out.get("actions", []),
-                batch_id=batch_id,
-                chapter_range=chapter_range,
-            )
+            items = out.get("actions", []) or []
+            _persist_mystery_actions(s, items, batch_id=batch_id, chapter_range=chapter_range)
+            return len(items)
+        return 0
 
     try:
         # 修复 E1(红蓝对抗):记录"有响应但解析为空"的 agent。cost>0 却得到空 dict,
         # 极可能是 _extract_loads_json 对截断/超长章 JSON 修复失败→{},旧代码会静默写空、
         # 批次照样 done、被 run_all 永久跳过 → 数据无声丢失且无法自愈。至少要"有告警"。
         failed_agents: list[str] = []
+        total_persisted = 0            # 修复 G5:整批实际落库条数(判"非空但空内容"假完成)
         # mystery agent runs LAST so it can reference whatever entity / fs /
         # plot rows the previous five just wrote.
         for name in ["entity", "foreshadow", "state", "plot", "world", "mystery"]:
@@ -633,12 +639,17 @@ def run_batch(start: int, end: int, *, finalize: bool = True) -> dict[str, Any]:
                 failed_agents.append(name)
 
             with session_scope() as s:
-                _persist_for(name, s, out)
+                n_persist = _persist_for(name, s, out)
+            total_persisted += n_persist
 
+        # 修复 G5:整批六个 agent 全部零落库、却产生了成本 → 极可能是截断/超长章导致 json_repair
+        # 编造空内容(E1 的 `not out` 抓不到)。整批零产出是低误报信号(正常批几乎总有实体/剧情点)。
+        if total_cost > 0 and total_persisted == 0 and "batch_empty" not in failed_agents:
+            failed_agents.append("batch_empty")
         if failed_agents:
             import logging
             logging.getLogger(__name__).error(
-                "extract batch %s: agents %s 有响应但解析为空(疑似 JSON 截断/超长章),"
+                "extract batch %s: %s 有响应但解析为空/整批零落库(疑似 JSON 截断/超长章),"
                 "该范围数据可能丢失,建议重跑此区间", batch_id, failed_agents)
 
         with session_scope() as s:
