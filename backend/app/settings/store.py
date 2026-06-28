@@ -515,6 +515,16 @@ def get_extract_max_tokens(default: int = 8000) -> int:
         return default
 
 
+def get_fallback_model(default: str = "") -> str:
+    """跨 provider 降级目标模型(可在 settings.json 配 ``fallback_model``)。
+    修复 E6:主 provider 持续失败/限流时,call() 降级到此模型(应属另一 provider)。
+    默认空字符串 = 不启用降级(行为与历史完全一致)。"""
+    try:
+        return (_settings_cached().get("fallback_model") or default).strip()
+    except Exception:
+        return default
+
+
 def get_credentials(model_id: str | None = None) -> tuple[str, str]:
     """Return (api_key, base_url) for the OpenAI client.
 

@@ -95,3 +95,29 @@ def test_reconcile_items_lose_existing():
     from app.ingest.extract import reconcile_items
     items, net = reconcile_items(["剑", "盾"], [], ["盾"])
     assert items == ["剑"] and net == []
+
+
+# ---- E6:跨 provider 降级 wrapper(默认关闭;配了才降级) ----
+def test_e6_no_fallback_reraises(monkeypatch):
+    from app.llm import client
+    monkeypatch.setattr(client, "get_fallback_model", lambda default="": "")
+    def boom(**kw):
+        raise RuntimeError("429 rate limit")
+    monkeypatch.setattr(client, "_call_impl", boom)
+    import pytest
+    with pytest.raises(RuntimeError):
+        client.call(agent="t", model="m1", system="s", messages=[{"role": "user", "content": "x"}])
+
+
+def test_e6_failover_to_fallback(monkeypatch):
+    from app.llm import client
+    monkeypatch.setattr(client, "get_fallback_model", lambda default="": "fallback-m2")
+    calls = []
+    def impl(**kw):
+        calls.append(kw["model"])
+        if kw["model"] == "m1":
+            raise RuntimeError("429 rate limit")
+        return "OK-FROM-FALLBACK"
+    monkeypatch.setattr(client, "_call_impl", impl)
+    out = client.call(agent="t", model="m1", system="s", messages=[{"role": "user", "content": "x"}])
+    assert out == "OK-FROM-FALLBACK" and calls == ["m1", "fallback-m2"]

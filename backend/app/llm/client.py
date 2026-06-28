@@ -44,9 +44,17 @@ def _adaptive_wait(retry_state):
 
 
 def _adaptive_stop(retry_state):
-    """限流错误:最多 7 次(熬过频率窗口);其它错误:3 次即止。"""
+    """限流错误:最多 7 次(熬过频率窗口);其它错误:3 次即止。
+    修复 E6:若配了 fallback_model(跨 provider 降级),限流只重试 2 次就快速失败,交给 call() 降级到
+    备用 provider,不再 7×(15~120s)死等 ~14 分钟。未配降级则维持 7 次(原行为)。"""
     exc = retry_state.outcome.exception() if retry_state.outcome else None
-    limit = 7 if _is_rate_limit(exc) else 3
+    if _is_rate_limit(exc):
+        try:
+            limit = 2 if get_fallback_model() else 7
+        except Exception:
+            limit = 7
+    else:
+        limit = 3
     return retry_state.attempt_number >= limit
 
 from ..config import (
@@ -64,6 +72,7 @@ from ..settings.store import (
     apply_overrides,
     credentials_version,
     get_credentials,
+    get_fallback_model,
     provider_for_model,
 )
 
@@ -207,7 +216,7 @@ def _normalize_messages(system: Any, messages: list[dict[str, Any]]) -> list[dic
 
 
 @retry(stop=_adaptive_stop, wait=_adaptive_wait, reraise=True)
-def call(
+def _call_impl(
     *,
     agent: str,
     model: str,
@@ -329,6 +338,33 @@ def call(
         cost_usd=cost,
         elapsed_ms=elapsed,
     )
+
+
+def call(*, agent: str, model: str, system, messages, tools=None, tool_choice=None,
+         max_tokens: int = 4096, temperature: float = 0.7, top_p: float | None = None,
+         response_format=None, extra_log=None) -> LLMResponse:
+    """修复 E6:跨 provider 降级 wrapper(默认关闭)。
+    - 未配 ``fallback_model``:直接透传 _call_impl,行为与历史完全一致(except 直接 re-raise)。
+    - 配了 ``fallback_model``(应属另一 provider):主模型经重试仍失败后,降级到备用模型再试一次,
+      避免单 provider 限流/宕机时整链失败或 ~14 分钟死等(配合 _adaptive_stop 限流快速短路)。"""
+    kw = dict(agent=agent, model=model, system=system, messages=messages, tools=tools,
+              tool_choice=tool_choice, max_tokens=max_tokens, temperature=temperature,
+              top_p=top_p, response_format=response_format, extra_log=extra_log)
+    try:
+        return _call_impl(**kw)
+    except Exception as primary_exc:
+        fb = ""
+        try:
+            fb = get_fallback_model()
+        except Exception:
+            fb = ""
+        if not fb or fb == model:
+            raise
+        import logging
+        logging.getLogger(__name__).warning(
+            "LLM 主模型 %s 失败,降级到 fallback_model=%s(agent=%s):%s", model, fb, agent, primary_exc)
+        kw["model"] = fb
+        return _call_impl(**kw)
 
 
 def stream_text(
