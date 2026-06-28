@@ -143,12 +143,44 @@ def ingest(path: Path) -> dict:
                 {"c": num, "t": title, "b": body},
             )
 
+    # 修复 E3(红蓝对抗):重切章后,旧章号的派生行会变成孤儿(指向已不存在或含义已变的章)→ 静默累积+双计。
+    # 按"chapter > 新max"用原始 SQL 清理两侧 derived 表的孤儿(无需 import 模型;表/列不存在则跳过)。
+    # 完整 schema 迁移(Alembic)列为更大专项,见 docs/实验与操作台账.md。
+    new_max = max(c[0] for c in chapters)
+    _orphan_targets = [
+        ("entity_states", "chapter"), ("plot_points", "chapter"),
+        ("foreshadowings", "planted_chapter"), ("relationships", "first_chapter"),
+        ("craft_snippet", "chapter_number"),
+        ("chapter_beat", "chapter"), ("worldview_reveal", "chapter"), ("pov_event", "chapter"),
+        ("golden_finger_step", "chapter"), ("relationship_event", "chapter"), ("speed_read_stage", "chapter_start"),
+    ]
+    pruned: dict[str, int] = {}
+    with get_engine().begin() as conn:
+        for tbl, col in _orphan_targets:
+            try:
+                r = conn.execute(text(f"DELETE FROM {tbl} WHERE {col} > :mx"), {"mx": new_max})
+                if r.rowcount:
+                    pruned[tbl] = r.rowcount
+            except Exception:
+                continue  # 该书未跑该分析 / 表列不存在 → 跳过
+        # 伏笔回收点落在被删章 → 不删整条,只把回收点置空(回到"未回收")
+        try:
+            r = conn.execute(text("UPDATE foreshadowings SET resolved_chapter=NULL WHERE resolved_chapter > :mx"), {"mx": new_max})
+            if r.rowcount:
+                pruned["foreshadowings.resolved→NULL"] = r.rowcount
+        except Exception:
+            pass
+    if pruned:
+        import logging
+        logging.getLogger(__name__).info("re-split 清理孤儿行(chapter>%s): %s", new_max, pruned)
+
     return {
         "corpus_utf8": str(out_path),
         "chapters": len(chapters),
         "first_chapter": chapters[0][1],
         "last_chapter": chapters[-1][1],
         "total_chars": len(text_body),
+        "orphans_pruned": pruned,
     }
 
 
