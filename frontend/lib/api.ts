@@ -251,6 +251,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ outline_run_id: outlineRunId, chapter_index: chapterIndex, judge }),
     }),
+
+  // ----- agentic 检索 一键 A/B(#79:push 臂 vs agentic 臂)-----
+  draftAbAgenticSearch: (outlineRunId: number, chapterIndex: number, judge = true) =>
+    j<any>("/draft/ab-agentic-search", {
+      method: "POST",
+      body: JSON.stringify({ outline_run_id: outlineRunId, chapter_index: chapterIndex, judge }),
+    }),
   settingsTestKey: (payload: { api_key?: string; base_url?: string; model?: string; provider?: string } = {}) =>
     j<any>("/settings/test-key", { method: "POST", body: JSON.stringify(payload) }),
 

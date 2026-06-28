@@ -357,7 +357,7 @@ def _load_raw() -> dict[str, Any]:
     # 标量额外项:重载时一并保留(此前 extract_max_tokens / fallback_model 在重建
     # base 时被丢弃 → 进程重启即失效。vector_recall_enabled 同理,必须跨重启留存)。
     for k in ("extract_max_tokens", "fallback_model", "vector_recall_enabled",
-              "topic_push_enabled"):
+              "topic_push_enabled", "agentic_search_enabled"):
         if k in data:
             base[k] = data[k]
     return base
@@ -494,6 +494,7 @@ def get_settings() -> dict[str, Any]:
     safe_settings["extract_max_tokens"] = get_extract_max_tokens()
     safe_settings["vector_recall_enabled"] = get_vector_recall_enabled()
     safe_settings["topic_push_enabled"] = get_topic_push_enabled()
+    safe_settings["agentic_search_enabled"] = get_agentic_search_enabled()
     # Mask any per-provider keys carried in the raw settings dict.
     safe_settings["providers"] = {
         pid: {"api_key": _mask_key((v or {}).get("api_key") or ""),
@@ -530,6 +531,16 @@ def get_topic_push_enabled(default: bool = True) -> bool:
     范例片段塞进 writer;关闭=基线(仅近章正文,不做话题 push)。供 A/B 对比。"""
     try:
         return bool(_settings_cached().get("topic_push_enabled", default))
+    except Exception:
+        return default
+
+
+def get_agentic_search_enabled(default: bool = False) -> bool:
+    """agentic 检索(#79)总开关。默认**关闭**(opt-in;消融:agentic≈push 但多一次规划调用)。
+    开启=写每章前先用一次便宜调用让模型自选话题/类目查询,再据此从原著检索注入(取代 push 的话题补充段);
+    关闭=按 topic_push_enabled 走 push。供需要"模型自主决定查什么"的多主题/跨书场景 opt-in。"""
+    try:
+        return bool(_settings_cached().get("agentic_search_enabled", default))
     except Exception:
         return default
 
@@ -589,6 +600,9 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
 
         if "topic_push_enabled" in payload:
             cur["topic_push_enabled"] = bool(payload["topic_push_enabled"])
+
+        if "agentic_search_enabled" in payload:
+            cur["agentic_search_enabled"] = bool(payload["agentic_search_enabled"])
 
         def _is_masked(v: str) -> bool:
             # Treat the masked placeholder ("****...****") as "no change".

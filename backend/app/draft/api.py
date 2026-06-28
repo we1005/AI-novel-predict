@@ -50,6 +50,19 @@ def ab_topic_push(req: AbTopicPushRequest):
         raise HTTPException(400, str(e))
 
 
+@router.post("/ab-agentic-search")
+def ab_agentic_search(req: AbTopicPushRequest):
+    """#79 一键 A/B:同一章 push 臂 vs agentic 臂 + 盲评(写两遍约 60–120 秒)。"""
+    try:
+        return pipeline.ab_agentic_search(
+            outline_run_id=req.outline_run_id,
+            chapter_index=req.chapter_index,
+            judge=req.judge,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @router.get("/drafts")
 def list_drafts(limit: int = 800):
     return pipeline.list_drafts(limit=limit)

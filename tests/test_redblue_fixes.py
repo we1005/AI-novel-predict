@@ -204,3 +204,26 @@ def test_e78_ab_winner_position_debias_mapping():
     assert _map_ab_winner("乙", True) == "off"
     # 平/未知
     assert _map_ab_winner("平", False) == "平/未知"
+
+
+# ---- #79:agentic 检索 opt-in 开关(默认关 + 跨重启留存)+ 任意标签盲评映射 ----
+def test_e79_agentic_default_off_and_persists(tmp_path, monkeypatch):
+    from app.settings import store
+    monkeypatch.setattr(store, "_SETTINGS_PATH", tmp_path / "settings.json")
+    monkeypatch.setattr(store, "_CACHE", None)
+    try:
+        assert store.get_agentic_search_enabled() is False     # 默认关(opt-in)
+        store.update_settings({"agentic_search_enabled": True})
+        store._CACHE = None                                    # 模拟重启:从盘重载
+        assert store.get_agentic_search_enabled() is True
+    finally:
+        store._CACHE = None
+
+
+def test_e79_ab_winner_custom_labels():
+    from app.draft.pipeline import _map_ab_winner
+    # push 臂=prose_a(label_a), agentic 臂=prose_b(label_b)
+    assert _map_ab_winner("甲", False, "push", "agentic") == "push"
+    assert _map_ab_winner("乙", False, "push", "agentic") == "agentic"
+    assert _map_ab_winner("甲", True, "push", "agentic") == "agentic"   # swap 翻转
+    assert _map_ab_winner("乙", True, "push", "agentic") == "push"

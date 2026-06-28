@@ -269,14 +269,16 @@ function DraftPageInner() {
     }
   };
 
-  const runAbTopicPush = async () => {
+  const runAb = async (kind: "push" | "agentic") => {
     const orId = Number(outlineRunId);
     const chIdx = Number(chapterIndex);
     if (!orId || !chIdx) return;
     setAbBusy(true);
     setMsg("");
     try {
-      const r = await api.draftAbTopicPush(orId, chIdx, true);
+      const r = kind === "push"
+        ? await api.draftAbTopicPush(orId, chIdx, true)
+        : await api.draftAbAgenticSearch(orId, chIdx, true);
       setAbResult(r);
     } catch (e: any) {
       message.error("对比失败：" + String(e));
@@ -380,10 +382,15 @@ function DraftPageInner() {
           <button onClick={() => triggerWrite()} disabled={busy || !outlineRunId || !chapterIndex}>
             {busy ? `写作中… ${elapsed}s` : skipReviews ? "✍️ 写（跳过审查）" : "✍️ 写（含审查）"}
           </button>
-          <button className="ghost" onClick={runAbTopicPush}
+          <button className="ghost" onClick={() => runAb("push")}
             disabled={abBusy || busy || !outlineRunId || !chapterIndex}
             title="对同一章写两遍:话题 push 关(基线) vs 开(增强),盲评对比">
             {abBusy ? "对比中…(约 60-120s)" : "🔬 push 对比"}
+          </button>
+          <button className="ghost" onClick={() => runAb("agentic")}
+            disabled={abBusy || busy || !outlineRunId || !chapterIndex}
+            title="对同一章写两遍:push 臂 vs agentic 臂(模型自选检索),盲评对比">
+            {abBusy ? "对比中…" : "🧭 agentic 对比"}
           </button>
           <span className="muted" style={{ fontSize: 12 }}>
             带审查约 60-180 秒；跳过审查约 30-60 秒
@@ -499,31 +506,42 @@ function DraftPageInner() {
       </Drawer>
 
       <Modal
-        title="🔬 话题 push 增强 · A/B 对比"
+        title={abResult?.agentic ? "🧭 agentic 检索 · A/B 对比" : "🔬 话题 push 增强 · A/B 对比"}
         open={!!abResult}
         onCancel={() => setAbResult(null)}
         footer={null}
         width="86%"
       >
-        {abResult && <AbTopicPushResult r={abResult} />}
+        {abResult && <AbResult r={abResult} />}
       </Modal>
     </>
   );
 }
 
-function AbTopicPushResult({ r }: { r: any }) {
-  const winner = r?.judge?.winner_variant;            // "off" | "on" | "平/未知"
-  const col = (side: "off" | "on") => {
-    const d = r[side] || {};
-    const isWin = winner === side;
+function AbResult({ r }: { r: any }) {
+  // 自动识别两种模式:push A/B = {off,on};agentic A/B = {push,agentic}
+  const isAgentic = !!(r.push && r.agentic);
+  const sides: { key: string; label: string }[] = isAgentic
+    ? [{ key: "push", label: "push 臂(关键词直查)" }, { key: "agentic", label: "agentic 臂(模型自取)" }]
+    : [{ key: "off", label: "基线(push 关)" }, { key: "on", label: "增强(push 开)" }];
+  const winner = r?.judge?.winner_variant;
+  const winLabel = (() => {
+    if (!r.judge || r.judge.error) return null;
+    const m: Record<string, string> = { off: "基线", on: "增强(push)", push: "push 臂", agentic: "agentic 臂", "平/未知": "平/未知" };
+    return m[winner] || winner;
+  })();
+  const col = ({ key, label }: { key: string; label: string }) => {
+    const d = r[key] || {};
+    const isWin = winner === key;
+    const injected = (d.pushed_refs || d.hits || []).length;
     return (
-      <div style={{ flex: 1, minWidth: 320, border: isWin ? "2px solid var(--good, #9ece6a)" : "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
+      <div key={key} style={{ flex: 1, minWidth: 320, border: isWin ? "2px solid var(--good, #9ece6a)" : "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
         <div style={{ fontWeight: 700, marginBottom: 6 }}>
-          {side === "off" ? "基线(push 关)" : "增强(push 开)"} {isWin && <span style={{ color: "var(--good, #9ece6a)" }}>· 盲评胜出</span>}
+          {label} {isWin && <span style={{ color: "var(--good, #9ece6a)" }}>· 盲评胜出</span>}
         </div>
         <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
           参考章:[{(d.ref_chapters || []).join(", ")}]
-          {side === "on" && ` · push 注入 ${(d.pushed_refs || []).length} 条`}
+          {injected > 0 && ` · 检索注入 ${injected} 条`}
           {` · $${(d.cost_usd ?? 0).toFixed?.(4) ?? d.cost_usd}`}
         </div>
         <div style={{ maxHeight: "52vh", overflow: "auto", whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.7, background: "var(--panel-2)", padding: 10, borderRadius: 6 }}>
@@ -541,14 +559,12 @@ function AbTopicPushResult({ r }: { r: any }) {
             <strong>盲评:</strong>
             {r.judge.error
               ? <span style={{ color: "var(--bad,#f7768e)" }}> 裁决失败:{r.judge.error}</span>
-              : <> 胜出 = <strong>{winner === "on" ? "增强(push)" : winner === "off" ? "基线" : "平/未知"}</strong>
-                  {r.judge.reason ? ` · ${r.judge.reason}` : ""}</>}
+              : <> 胜出 = <strong>{winLabel}</strong>{r.judge.reason ? ` · ${r.judge.reason}` : ""}</>}
           </div>
         )}
       </div>
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-        {col("off")}
-        {col("on")}
+        {sides.map(col)}
       </div>
     </div>
   );

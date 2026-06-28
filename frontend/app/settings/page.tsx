@@ -81,6 +81,7 @@ type SettingsBundle = {
     default_model_strong: string;
     extract_max_tokens?: number;
     topic_push_enabled?: boolean;
+    agentic_search_enabled?: boolean;
     vector_recall_enabled?: boolean;
     providers: Record<string, ProviderCred>;   // masked api_key
     agents: Record<string, Override>;
@@ -154,6 +155,19 @@ export default function SettingsPage() {
       const updated = await api.settingsPut({ topic_push_enabled: on });
       setBundle(updated);  // 只更新 bundle,不动 draft(避免丢未保存的 agent 改动)
       message.success(on ? "已启用话题 push 增强" : "已切回基线(无 push)");
+    } catch (e) {
+      message.error("切换失败：" + String(e));
+    } finally {
+      setVecBusy(false);
+    }
+  };
+
+  const toggleAgentic = async (on: boolean) => {
+    setVecBusy(true);
+    try {
+      const updated = await api.settingsPut({ agentic_search_enabled: on });
+      setBundle(updated);
+      message.success(on ? "已启用 agentic 检索(写作时模型自取)" : "已关闭 agentic 检索");
     } catch (e) {
       message.error("切换失败：" + String(e));
     } finally {
@@ -432,6 +446,29 @@ export default function SettingsPage() {
           />
           <span style={{ fontSize: 14, fontWeight: 600 }}>
             {bundle?.settings?.topic_push_enabled !== false ? "已启用(push)" : "已关闭(基线)"}
+          </span>
+        </div>
+      </div>
+
+      {/* ---------- agentic 检索(#79)---------- */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <ExperimentOutlined /> agentic 检索（opt-in）
+          <span className="muted" style={{ fontSize: 12, fontWeight: "normal" }}>默认关闭</span>
+        </h3>
+        <p className="muted" style={{ marginTop: -4, fontSize: 12 }}>
+          与 push 不同:写每章前先用一次便宜调用让<strong>模型自己决定</strong>该检索哪些话题/类目,再据此从原著取材
+          (<strong>取代</strong> push 的关键词直查)。消融显示它与 push 基本打平、但多一次规划调用,故默认关、按需开。
+          可在「写作」页用“🧭 agentic 对比”按钮 A/B（push 臂 vs agentic 臂）。开启时优先于 push。
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+          <Switch
+            checked={!!bundle?.settings?.agentic_search_enabled}
+            loading={vecBusy}
+            onChange={toggleAgentic}
+          />
+          <span style={{ fontSize: 14, fontWeight: 600 }}>
+            {bundle?.settings?.agentic_search_enabled ? "已启用(模型自取)" : "已关闭"}
           </span>
         </div>
       </div>
