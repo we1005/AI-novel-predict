@@ -83,7 +83,8 @@ def arm_agentic(theme):
     plan = chat("你是检索策略助手。只输出 JSON。",
                 f"我要写小说场景:{theme}。素材库按类目存了原著片段,类目有:{', '.join(CATS)}。"
                 f"为最贴切地参考,你会查哪些类目(可多选,2-3个)、再补什么正文关键词(≥6字短语,1-2个)?"
-                f'只输出 JSON:{{"categories":[...],"queries":[...]}}', mt=400, temp=0.4)
+                f'只输出 JSON:{{"categories":[...],"queries":[...]}}', mt=1500, temp=0.4)
+    # 注:mt 从 400→1500——400 会截断 mimo 输出导致 JSON 解析失败、退化成默认值(对 agentic 不公平,已修)
     try:
         from json_repair import repair_json
         d = json.loads(repair_json(re.sub(r"```json|```", "", plan)))
