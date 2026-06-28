@@ -930,7 +930,7 @@ def _ab_judge(chapter_outline: dict, prose_a: str, prose_b: str,
         v = _json.loads(repair_json(_re.sub(r"```json|```", "", raw))) or {}
     except Exception:
         v = {"winner": "?", "reason": raw[:160]}
-    v["winner_variant"] = _map_ab_winner(v.get("winner"), swap)
+    v["winner_variant"] = _map_ab_winner(v.get("winner"), swap, label_a, label_b)
     v["_order_swapped"] = swap
     return v, resp.cost_usd
 

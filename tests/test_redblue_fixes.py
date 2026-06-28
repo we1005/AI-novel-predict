@@ -227,3 +227,20 @@ def test_e79_ab_winner_custom_labels():
     assert _map_ab_winner("乙", False, "push", "agentic") == "agentic"
     assert _map_ab_winner("甲", True, "push", "agentic") == "agentic"   # swap 翻转
     assert _map_ab_winner("乙", True, "push", "agentic") == "push"
+
+
+def test_e79_ab_judge_forwards_labels(monkeypatch):
+    # 集成防回归:_ab_judge 必须把 label_a/label_b **传进** _map_ab_winner
+    # (曾漏传 → agentic A/B 误显示 on/off)。monkeypatch 掉 llm + random 使其确定。
+    import random as _r
+
+    from app.draft import pipeline
+    from app.llm import client as _llm
+
+    monkeypatch.setattr(_r, "random", lambda: 0.9)          # swap=False → 甲=prose_a
+    class _Resp:
+        text = '{"winner":"甲","reason":"x"}'
+        cost_usd = 0.0
+    monkeypatch.setattr(_llm, "call", lambda **k: _Resp())
+    v, _ = pipeline._ab_judge({"intent": "i"}, "A", "B", 1, label_a="push", label_b="agentic")
+    assert v["winner_variant"] == "push"   # 修复前会错成 "off"
