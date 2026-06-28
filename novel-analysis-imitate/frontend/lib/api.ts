@@ -30,4 +30,16 @@ export const api = {
       method: "POST", body: JSON.stringify({ chapter_index, skip_reviews }),
     }),
   exportCompose: (cslug: string) => j(`/compose/${encodeURIComponent(cslug)}/export`),
+
+  // ---- 通用类型模板(genre_template)----
+  genreList: () => j("/genre-templates"),
+  genreGet: (slug: string) => j(`/genre-templates/${encodeURIComponent(slug)}`),
+  genreExtract: (body: { name: string; source_slugs: string[] }) =>
+    j("/genre-templates/extract", { method: "POST", body: JSON.stringify(body) }),
+  genreDelete: (slug: string) =>
+    j(`/genre-templates/${encodeURIComponent(slug)}`, { method: "DELETE" }),
+  genrePreview: (slug: string, topic: string) =>
+    j(`/genre-templates/${encodeURIComponent(slug)}/preview`, {
+      method: "POST", body: JSON.stringify({ topic }),
+    }),
 };
