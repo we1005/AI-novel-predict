@@ -6,7 +6,10 @@ Pipeline (per /predict/simulate request):
   3. For each round, run DecisionAgent in parallel (one LLM call per character)
   4. Append actions to rounds_json; the *next* round's prompt sees them
   5. After N rounds, ReportAgent writes a coherent chapter from the log
-  6. Persist the chapter to ChapterDraft so it can flow into the reviewer chain
+  6. Persist the chapter as a ``status="draft"`` ChapterDraft (NOT approved) and
+     link it on SimulationRun.chapter_draft_id, so the speculative output can
+     flow into the EXISTING gated reviewer/回灌 chain — canonical EntityState is
+     only updated when the user *accepts* the draft (see extract_one_chapter).
 
 Cost budget (with qwen3.5-flash):
   ~5 chars × 3 rounds = 15 decision calls @ ~$0.003 = ~$0.05
@@ -15,6 +18,7 @@ Cost budget (with qwen3.5-flash):
 
 from __future__ import annotations
 
+import copy
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -196,6 +200,46 @@ def _initial_state(after_chapter: int, cast: list[Entity]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# E4:每轮活状态(non-frozen)与产物落库辅助(均为纯函数,可单测)
+# ---------------------------------------------------------------------------
+
+def _fold_round_into_state(char_state: dict, actions: list[dict], round_no: int) -> dict:
+    """把本轮各角色的公开动作累积进其结构化状态(``events_during_sim`` 轨迹)。
+
+    修复 E4:此前 ``initial_state`` 全程冻结(只算一次第 N 章快照),每轮
+    ``my_current_state`` 都是同一份初始值——角色看不到自己上一轮做了什么的
+    *结构化*状态(只能从全局动作日志里自己捞)。折叠后,下一轮各角色的
+    ``my_current_state`` 会带上其本人迄今为止的演进轨迹。
+
+    就地修改并返回 ``char_state``(返回值便于测试)。
+    """
+    for a in actions or []:
+        name = a.get("character")
+        if not name:
+            continue
+        slot = char_state.setdefault(name, {})
+        if not isinstance(slot, dict):
+            slot = {"state": slot}
+            char_state[name] = slot
+        trail = slot.setdefault("events_during_sim", [])
+        trail.append({
+            "round": round_no,
+            "kind": a.get("kind"),
+            "content": (a.get("content") or "")[:120],
+        })
+    return char_state
+
+
+def _chapter_title_from_text(text: str, after_chapter: int) -> str:
+    """从 ReportAgent 正文首行抽章节标题;无则用默认「第 N+1 章」。"""
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if line:
+            return line[:80]
+    return f"第 {after_chapter + 1} 章"
+
+
+# ---------------------------------------------------------------------------
 # Per-character decision call
 # ---------------------------------------------------------------------------
 
@@ -369,6 +413,8 @@ def run_simulation(
 
         initial_state = _initial_state(after_chapter, cast)
         cast_names = [c.name for c in cast]
+        # E4:活状态(每轮折叠动作),不再全程冻结 initial_state。
+        live_state = copy.deepcopy(initial_state)
 
         rounds: list[dict] = []
         for r in range(n_rounds):
@@ -378,7 +424,7 @@ def run_simulation(
                     ex.submit(
                         _decide_one,
                         char, profiles_by_id.get(char.id) or {},
-                        initial_state, rounds, cast_names,
+                        live_state, rounds, cast_names,
                         after_chapter, user_hints, r,
                     ): char
                     for char in cast
@@ -394,7 +440,14 @@ def run_simulation(
 
             # Stable order: by character name to keep round logs deterministic
             actions.sort(key=lambda a: cast_names.index(a["character"]) if a["character"] in cast_names else 99)
-            round_record = {"round": r + 1, "actions": actions}
+            # E4:折叠本轮动作进活状态 → 下一轮各角色 my_current_state 带上自身演进轨迹;
+            # 并把本轮快照存进 round_record(供报告/前端看状态演进,模型注释早已预留该字段)。
+            _fold_round_into_state(live_state["char_state"], actions, r + 1)
+            round_record = {
+                "round": r + 1,
+                "actions": actions,
+                "state_snapshot": copy.deepcopy(live_state["char_state"]),
+            }
             rounds.append(round_record)
 
             # persist incrementally so a polling client can see progress
@@ -430,10 +483,29 @@ def run_simulation(
         text, report_cost = _report(sim_id, sim_run_payload, after_chapter)
         total_cost += report_cost
 
+        # E4(c):把仿真产物落成 status="draft" 的 ChapterDraft 并回填 chapter_draft_id,
+        # 使其能进入 *既有的、有人审 gate 的* 复审/回灌链(草稿被接受后才 extract_one_chapter
+        # 回灌 canonical EntityState)。**刻意不**在此静默回灌——仿真是假设性的,直接写回真值
+        # 会用推测内容污染记忆,比原 bug 更糟;正确做法是经 draft→人审→接受 这条既有通路。
+        draft_id: int | None = None
         with session_scope() as s:
             row = s.get(SimulationRun, sim_id)
+            if text.strip():
+                draft = ChapterDraft(
+                    outline_run_id=None,
+                    chapter_index=after_chapter + 1,
+                    title=_chapter_title_from_text(text, after_chapter),
+                    status="draft",
+                    attempts_json=[{"source": "simulation", "simulation_run_id": sim_id}],
+                    final_text=text,
+                    cost_usd=total_cost,
+                )
+                s.add(draft)
+                s.flush()
+                draft_id = draft.id
             if row:
                 row.final_text = text
+                row.chapter_draft_id = draft_id
                 row.cost_usd = total_cost
                 row.status = "done"
                 row.updated_at = datetime.utcnow()
@@ -445,6 +517,7 @@ def run_simulation(
             "cast": cast_names,
             "rounds": rounds,
             "final_text": text,
+            "chapter_draft_id": draft_id,
             "cost_usd": round(total_cost, 5),
         }
     except Exception as exc:

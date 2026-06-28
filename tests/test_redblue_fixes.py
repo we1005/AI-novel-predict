@@ -121,3 +121,37 @@ def test_e6_failover_to_fallback(monkeypatch):
     monkeypatch.setattr(client, "_call_impl", impl)
     out = client.call(agent="t", model="m1", system="s", messages=[{"role": "user", "content": "x"}])
     assert out == "OK-FROM-FALLBACK" and calls == ["m1", "fallback-m2"]
+
+
+# ---- E4:仿真每轮活状态(非冻结)+ 产物落 draft 的纯函数 ----
+def test_e4_fold_round_accumulates_per_character_trail():
+    from app.sim.simulator import _fold_round_into_state
+    cs = {"张三": {"state": {}}, "李四": {"state": {}}}
+    _fold_round_into_state(cs, [
+        {"character": "张三", "kind": "speak", "content": "我去查档案"},
+        {"character": "李四", "kind": "move", "content": "尾随张三"},
+    ], 1)
+    _fold_round_into_state(cs, [
+        {"character": "张三", "kind": "act", "content": "撬开抽屉"},
+    ], 2)
+    # 张三轨迹累积两轮、李四一轮 → 下一轮各自 my_current_state 带演进(非冻结初始)
+    assert [e["round"] for e in cs["张三"]["events_during_sim"]] == [1, 2]
+    assert cs["张三"]["events_during_sim"][1]["kind"] == "act"
+    assert len(cs["李四"]["events_during_sim"]) == 1
+
+
+def test_e4_fold_round_ignores_anonymous_and_handles_nondict_slot():
+    from app.sim.simulator import _fold_round_into_state
+    cs = {"王五": "原是字符串而非dict"}  # 非 dict slot 也要稳健
+    _fold_round_into_state(cs, [
+        {"kind": "speak", "content": "无名氏"},      # 无 character → 跳过
+        {"character": "王五", "kind": "speak", "content": "嗯"},
+    ], 1)
+    assert isinstance(cs["王五"], dict) and len(cs["王五"]["events_during_sim"]) == 1
+
+
+def test_e4_chapter_title_from_text():
+    from app.sim.simulator import _chapter_title_from_text
+    assert _chapter_title_from_text("第 158 章 归途\n\n正文……", 157) == "第 158 章 归途"
+    # 空正文 → 默认标题(after_chapter+1)
+    assert _chapter_title_from_text("   \n  ", 157) == "第 158 章"

@@ -40,3 +40,7 @@ MiroFish/
 # --- personal notes (contains real API keys) ---
 多个模型.md
 需求.md
+
+# 误生成位置的库文件(应在 data/ 下;含书正文,勿入库)
+backend/app/novel.db
+backend/app/novel.db-*
