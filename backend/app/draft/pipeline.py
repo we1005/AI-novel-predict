@@ -165,6 +165,23 @@ def _gather_style_refs(*, after_chapter: int, must_include: list[str]) -> list[d
         except Exception:
             continue
 
+    # E2(语义补充):开关打开时,用 must_include 主题做向量检索,捞**语义相关但不含
+    # 关键词**的原著片段(FTS 给不了的召回)。默认关闭则完全跳过(不加载模型);
+    # 同样排除已生成章,避免自我同质化。失败静默(降级回纯 FTS/近章)。
+    try:
+        from ..settings.store import get_vector_recall_enabled
+        if get_vector_recall_enabled():
+            from ..memory import vector as _vec
+            topic = " ".join(p for p in (must_include or [])[:3] if p)[:80]
+            if topic:
+                for h in _vec.query(topic, k=2, before_chapter=after_chapter + 1):
+                    if h.get("chapter") in gen_chapters:
+                        continue
+                    refs.append({"chapter": h.get("chapter"), "title": h.get("title"),
+                                 "text": h.get("text"), "source": "vector"})
+    except Exception:
+        pass
+
     # Dedup by chapter.
     seen = set()
     out = []

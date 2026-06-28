@@ -353,6 +353,12 @@ def _load_raw() -> dict[str, Any]:
                 "max_tokens":  saved_agents[aid].get("max_tokens"),
                 "top_p":       saved_agents[aid].get("top_p"),
             }
+
+    # 标量额外项:重载时一并保留(此前 extract_max_tokens / fallback_model 在重建
+    # base 时被丢弃 → 进程重启即失效。vector_recall_enabled 同理,必须跨重启留存)。
+    for k in ("extract_max_tokens", "fallback_model", "vector_recall_enabled"):
+        if k in data:
+            base[k] = data[k]
     return base
 
 
@@ -485,6 +491,7 @@ def get_settings() -> dict[str, Any]:
     safe_settings["base_url"] = def_ov.get("base_url") or ""
     safe_settings["effective_base_url"] = def_url
     safe_settings["extract_max_tokens"] = get_extract_max_tokens()
+    safe_settings["vector_recall_enabled"] = get_vector_recall_enabled()
     # Mask any per-provider keys carried in the raw settings dict.
     safe_settings["providers"] = {
         pid: {"api_key": _mask_key((v or {}).get("api_key") or ""),
@@ -512,6 +519,16 @@ def get_extract_max_tokens(default: int = 8000) -> int:
         v = int(_settings_cached().get("extract_max_tokens") or default)
         return max(2000, min(32000, v))
     except (TypeError, ValueError):
+        return default
+
+
+def get_vector_recall_enabled(default: bool = False) -> bool:
+    """语义检索(向量层)总开关。E2:默认**关闭**——后端启动不加载嵌入模型
+    (模型本就惰性加载,见 memory/vector._embedder),用户在前端打开开关并手动
+    建索引后才会真正载入。关闭时 /recall 与 writer 混合召回都不碰向量层。"""
+    try:
+        return bool(_settings_cached().get("vector_recall_enabled", default))
+    except Exception:
         return default
 
 
@@ -554,6 +571,9 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
                 cur["extract_max_tokens"] = max(2000, min(32000, int(payload["extract_max_tokens"])))
             except (TypeError, ValueError):
                 pass
+
+        if "vector_recall_enabled" in payload:
+            cur["vector_recall_enabled"] = bool(payload["vector_recall_enabled"])
 
         def _is_masked(v: str) -> bool:
             # Treat the masked placeholder ("****...****") as "no change".

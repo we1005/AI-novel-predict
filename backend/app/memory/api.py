@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 
@@ -119,13 +119,76 @@ class RecallRequest(BaseModel):
 
 @router.post("/recall")
 def recall(req: RecallRequest):
+    from ..settings.store import get_vector_recall_enabled
+
     fts_hits = fts_recall.search(req.query, limit=req.k, before_chapter=req.before_chapter)
     vec_err = None
-    try:
-        vec_hits = vec_recall.query(req.query, k=req.k, before_chapter=req.before_chapter)
-    except Exception as exc:  # 修复 E2(红蓝对抗):不再把错误写死 None 掩盖"向量层未启用/异常"
-        vec_hits = []
-        vec_err = str(exc) or exc.__class__.__name__
-    # 注:向量层 index_chapters 当前零调用点(死代码),vector 多为空且 vec_err 暴露真因;
-    #     启用或清理见 docs/架构红蓝对抗-质疑与验证.md(E2)。
-    return {"fts": fts_hits, "vector": vec_hits, "vector_error": vec_err}
+    vec_hits: list[dict] = []
+    enabled = get_vector_recall_enabled()
+    # E2:向量层默认关闭,关闭时**完全不碰**(不加载模型、不建客户端);开关打开后才查询。
+    if enabled:
+        try:
+            vec_hits = vec_recall.query(req.query, k=req.k, before_chapter=req.before_chapter)
+        except Exception as exc:  # 打开但出错(未建索引/依赖缺/模型下载失败)→ 暴露真因,不静默吞。
+            vec_err = str(exc) or exc.__class__.__name__
+    else:
+        vec_err = "disabled"  # 前端据此显示"向量层未启用",而非误以为"没结果"。
+    return {"fts": fts_hits, "vector": vec_hits, "vector_error": vec_err, "vector_enabled": enabled}
+
+
+# ---------------------------------------------------------------------------
+# E2:向量层(语义检索)启用 / 状态 / 手动建索引
+# ---------------------------------------------------------------------------
+
+@router.get("/vector/status")
+def vector_status():
+    """前端「语义检索」卡片用:开关 / 依赖是否装 / 模型是否已加载 / 已索引片段数 /
+    上次建索引进度。状态查询保持廉价(不加载嵌入模型)。"""
+    from ..config import EMBEDDING_MODEL
+    from ..settings.store import get_vector_recall_enabled
+
+    return {
+        "enabled": get_vector_recall_enabled(),
+        "deps_installed": vec_recall.deps_available(),
+        "model_loaded": vec_recall.model_loaded(),
+        "indexed_count": vec_recall.indexed_count(),
+        "reindex": vec_recall.reindex_state(),
+        "embedding_model": EMBEDDING_MODEL,
+    }
+
+
+@router.post("/vector/reindex")
+def vector_reindex(background: BackgroundTasks):
+    """手动「加载模型并建立索引」:对当前活动书全量重嵌入。后台运行(首次会加载/
+    下载嵌入模型,耗时);前端轮询 /vector/status 看 reindex 进度。
+    需先在设置里打开开关,否则拒绝(避免误触发重型加载)。"""
+    from contextlib import nullcontext
+
+    from ..books import library
+    from ..db import book_scope
+    from ..settings.store import get_vector_recall_enabled
+
+    if not get_vector_recall_enabled():
+        raise HTTPException(400, "向量层未启用 —— 请先在设置里打开「语义检索」开关")
+    if not vec_recall.deps_available():
+        raise HTTPException(
+            400,
+            "向量依赖未安装 —— 请在 backend 下运行 "
+            "`.venv/bin/python -m pip install chromadb sentence-transformers`",
+        )
+    st = vec_recall.reindex_state()
+    if st.get("status") == "running":
+        raise HTTPException(409, "索引正在构建中,请稍候")
+
+    slug = library.get_active()
+
+    def _run():
+        # 与抽取一致:进程级绑定 active book,防构建期间用户切书把向量写进别的库。
+        with (book_scope(slug) if slug else nullcontext()):
+            try:
+                vec_recall.reindex_active_book()
+            except Exception:
+                pass  # 进度/错误已写入 reindex_state,前端轮询可见
+
+    background.add_task(_run)
+    return {"queued": True, "book": slug}

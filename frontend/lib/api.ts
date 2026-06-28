@@ -240,6 +240,10 @@ export const api = {
   settingsPut: (payload: any) =>
     j<any>("/settings", { method: "PUT", body: JSON.stringify(payload) }),
   settingsReset: () => j<any>("/settings/reset", { method: "POST" }),
+
+  // ----- 语义检索向量层(E2)-----
+  vectorStatus: () => j<any>("/memory/vector/status"),
+  vectorReindex: () => j<any>("/memory/vector/reindex", { method: "POST" }),
   settingsTestKey: (payload: { api_key?: string; base_url?: string; model?: string; provider?: string } = {}) =>
     j<any>("/settings/test-key", { method: "POST", body: JSON.stringify(payload) }),
 

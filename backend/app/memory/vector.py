@@ -97,13 +97,102 @@ def query(text: str, k: int = 8, before_chapter: int | None = None) -> list[dict
         where=where,
     )
     out: list[dict] = []
-    for i, doc in enumerate(res["documents"][0]):
-        meta = res["metadatas"][0][i]
+    docs = (res.get("documents") or [[]])[0]
+    metas = (res.get("metadatas") or [[]])[0]
+    dists = (res.get("distances") or [[]])[0]
+    for i, doc in enumerate(docs):
+        meta = metas[i] if i < len(metas) else {}
         out.append({
             "chapter": meta.get("chapter"),
             "title": meta.get("title"),
             "chunk": meta.get("chunk"),
             "text": doc,
-            "distance": res["distances"][0][i],
+            "distance": dists[i] if i < len(dists) else None,
         })
     return out
+
+
+# ---------------------------------------------------------------------------
+# E2:启用支撑——依赖探测 / 模型加载状态 / 索引计数 / 重建索引(均带守卫)
+# ---------------------------------------------------------------------------
+
+def deps_available() -> bool:
+    """chromadb + sentence-transformers 是否已安装。用 find_spec **只探测不导入**
+    (导入 sentence_transformers 会拖入 torch,慢;状态查询要廉价)。"""
+    import importlib.util
+    return bool(
+        importlib.util.find_spec("chromadb")
+        and importlib.util.find_spec("sentence_transformers")
+    )
+
+
+def model_loaded() -> bool:
+    """嵌入模型是否已载入内存(_embedder 的 lru_cache 是否已填充)。
+    默认启动时为 False——只有建索引/检索真正用到时才载入。"""
+    try:
+        return _embedder.cache_info().currsize > 0  # type: ignore[attr-defined]
+    except Exception:
+        return False
+
+
+def indexed_count() -> int:
+    """活动书向量库已索引的片段数(0 = 空库/未建)。deps 缺失时返回 0,不抛。"""
+    if not deps_available():
+        return 0
+    try:
+        return _get_or_create().count()
+    except Exception:
+        return 0
+
+
+def _reset_collection() -> None:
+    """删掉旧 collection,避免重切章/重建后残留过期片段。"""
+    try:
+        _client().delete_collection(_COLLECTION)
+    except Exception:
+        pass
+
+
+# 重建索引的进度(供前端轮询)。模块级单例,够用(单机单进程)。
+_REINDEX_STATE: dict = {"status": "idle", "chapters": 0, "chunks": 0, "error": None}
+
+
+def reindex_state() -> dict:
+    return dict(_REINDEX_STATE)
+
+
+def reindex_active_book() -> dict:
+    """把活动书的全部章节(切片自 corpus_txt)重新嵌入入库。**重操作**:
+    首次会触发嵌入模型加载(可能从 HuggingFace 下载 ~1.3GB),应在后台运行。
+    会先清空旧 collection 再重建,保证与当前切章一致。"""
+    from sqlalchemy import asc, select
+
+    from ..books.library import active_paths
+    from ..db import session_scope
+    from .models import Chapter
+
+    _REINDEX_STATE.update(status="running", chapters=0, chunks=0, error=None)
+    try:
+        if not deps_available():
+            raise RuntimeError(
+                "向量依赖未安装:请在 backend 下运行 "
+                "`.venv/bin/python -m pip install chromadb sentence-transformers`"
+            )
+        corpus_path = active_paths()["corpus_txt"]
+        if not corpus_path.exists():
+            raise RuntimeError(f"未找到语料 {corpus_path} —— 请先切分本书")
+        corpus = corpus_path.read_text(encoding="utf-8")
+        with session_scope() as s:
+            rows = s.execute(select(Chapter).order_by(asc(Chapter.number))).scalars().all()
+            chapters = [
+                (r.number, r.title, r.char_offset_start, r.char_offset_end) for r in rows
+            ]
+        if not chapters:
+            raise RuntimeError("本书还没有章节 —— 请先切分")
+        _reset_collection()
+        n = index_chapters(chapters, corpus)  # 触发模型加载 + 全量嵌入
+        _REINDEX_STATE.update(status="done", chapters=len(chapters), chunks=n)
+        return {"chapters": len(chapters), "chunks_indexed": n}
+    except Exception as exc:
+        _REINDEX_STATE.update(status="failed", error=str(exc)[:300])
+        raise

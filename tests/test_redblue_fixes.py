@@ -155,3 +155,26 @@ def test_e4_chapter_title_from_text():
     assert _chapter_title_from_text("第 158 章 归途\n\n正文……", 157) == "第 158 章 归途"
     # 空正文 → 默认标题(after_chapter+1)
     assert _chapter_title_from_text("   \n  ", 157) == "第 158 章"
+
+
+# ---- E2:向量层启用开关(默认关 + 跨重启留存)+ 状态辅助安全降级 ----
+def test_e2_vector_flag_default_off_and_persists(tmp_path, monkeypatch):
+    from app.settings import store
+    monkeypatch.setattr(store, "_SETTINGS_PATH", tmp_path / "settings.json")
+    monkeypatch.setattr(store, "_CACHE", None)
+    try:
+        assert store.get_vector_recall_enabled() is False          # 默认关闭
+        store.update_settings({"vector_recall_enabled": True})
+        store._CACHE = None                                        # 模拟进程重启:从盘重载
+        assert store.get_vector_recall_enabled() is True           # _load_raw 必须保留该标量
+    finally:
+        store._CACHE = None
+
+
+def test_e2_vector_helpers_safe_and_lazy():
+    from app.memory import vector as v
+    assert isinstance(v.deps_available(), bool)
+    assert v.model_loaded() is False                # 启动/未用时模型不加载(惰性)
+    assert isinstance(v.indexed_count(), int)       # 缺依赖/空库也返回 int,不抛
+    st = v.reindex_state()
+    assert st["status"] in ("idle", "running", "done", "failed")

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Slider,
   InputNumber,
+  Switch,
   Tag,
   Tooltip,
   message,
@@ -124,6 +125,40 @@ export default function SettingsPage() {
   const [testing, setTesting] = useState<Record<string, boolean>>({});
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string }>>({});
 
+  // 语义检索向量层(E2)
+  const [vec, setVec] = useState<any>(null);
+  const [vecBusy, setVecBusy] = useState(false);
+
+  const fetchVec = async () => {
+    try { setVec(await api.vectorStatus()); } catch { /* 后端旧版无此端点则忽略 */ }
+  };
+
+  const toggleVec = async (on: boolean) => {
+    setVecBusy(true);
+    try {
+      await api.settingsPut({ vector_recall_enabled: on });
+      message.success(on ? "已启用语义检索(向量层)" : "已关闭语义检索");
+      await fetchVec();
+    } catch (e) {
+      message.error("切换失败：" + String(e));
+    } finally {
+      setVecBusy(false);
+    }
+  };
+
+  const reindexVec = async () => {
+    setVecBusy(true);
+    try {
+      await api.vectorReindex();
+      message.info("已开始加载模型并建立索引,首次会下载嵌入模型,请耐心等待…");
+      await fetchVec();
+    } catch (e) {
+      message.error("启动失败：" + String(e));
+    } finally {
+      setVecBusy(false);
+    }
+  };
+
   const emptyProviderDraft = (providers: ProviderInfo[]): Record<string, ProviderCred> =>
     providers.reduce<Record<string, ProviderCred>>((acc, p) => {
       acc[p.id] = { api_key: "", base_url: p.base_url };
@@ -149,7 +184,14 @@ export default function SettingsPage() {
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchAll(); fetchVec(); }, []);
+
+  // 建索引进行中:每 3s 轮询一次状态,直到结束。
+  useEffect(() => {
+    if (vec?.reindex?.status !== "running") return;
+    const t = setInterval(fetchVec, 3000);
+    return () => clearInterval(t);
+  }, [vec?.reindex?.status]);
 
   const dirty = useMemo(() => {
     if (!bundle || !draft) return false;
@@ -355,6 +397,68 @@ export default function SettingsPage() {
             />
           ))}
         </div>
+      </div>
+
+      {/* ---------- 语义检索向量层(E2)---------- */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <CloudServerOutlined /> 语义检索（向量层）
+          <span className="muted" style={{ fontSize: 12, fontWeight: "normal" }}>
+            可选 · 默认关闭
+          </span>
+        </h3>
+        <p className="muted" style={{ marginTop: -4, fontSize: 12 }}>
+          关键词检索（FTS）只能找“出现了这些字”的章节；向量层用嵌入模型做<strong>语义近邻</strong>，能召回
+          <strong>意思相近但用词不同</strong>的原著片段，写作时作为额外风味锚点。默认关闭——后端启动<strong>不加载</strong>模型；
+          打开开关并“建立索引”后才载入（首次会下载嵌入模型 <code style={{ fontSize: 11 }}>{vec?.embedding_model || "bge-large-zh"}</code>，约 1.3GB）。
+        </p>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 14, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Switch checked={!!vec?.enabled} loading={vecBusy} onChange={toggleVec} />
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{vec?.enabled ? "已启用" : "已关闭"}</span>
+          </div>
+
+          {vec?.enabled && (
+            <button
+              className="ghost"
+              disabled={vecBusy || !vec?.deps_installed || vec?.reindex?.status === "running"}
+              onClick={reindexVec}
+              style={{ padding: "6px 14px" }}
+            >
+              <DatabaseOutlined />{" "}
+              {vec?.reindex?.status === "running" ? "建立索引中…" : "加载模型并建立索引"}
+            </button>
+          )}
+        </div>
+
+        {vec?.enabled && (
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border)", display: "flex", gap: 18, flexWrap: "wrap", fontSize: 13 }}>
+            <span>依赖：{vec?.deps_installed
+              ? <Tag color="green">已安装</Tag>
+              : <Tag color="red">未安装</Tag>}</span>
+            <span>模型：{vec?.model_loaded
+              ? <Tag color="green">已加载</Tag>
+              : <Tag>未加载（惰性）</Tag>}</span>
+            <span>已索引片段：<strong>{vec?.indexed_count ?? 0}</strong></span>
+            {vec?.reindex?.status === "running" && (
+              <span style={{ color: "var(--accent)" }}>构建中…</span>
+            )}
+            {vec?.reindex?.status === "done" && (
+              <span className="muted">上次：{vec.reindex.chapters} 章 / {vec.reindex.chunks} 片段</span>
+            )}
+            {vec?.reindex?.status === "failed" && (
+              <span style={{ color: "#e5484d" }}>失败：{vec.reindex.error}</span>
+            )}
+          </div>
+        )}
+
+        {vec?.enabled && !vec?.deps_installed && (
+          <p className="muted" style={{ marginTop: 10, fontSize: 12 }}>
+            依赖未安装。请在 <code style={{ fontSize: 11 }}>backend</code> 下运行：
+            <code style={{ fontSize: 11 }}>.venv/bin/python -m pip install chromadb sentence-transformers</code>
+          </p>
+        )}
       </div>
 
       {/* ---------- 默认模型 lane ---------- */}
