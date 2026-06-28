@@ -75,3 +75,23 @@ def test_fingerprint_compare_same_beats_cross():
     fid_cross = FP.compare(s, FP.fingerprint_from_text(cross))["fidelity_score"]
     assert fid_same is not None and fid_cross is not None
     assert fid_same > fid_cross  # 同腔保真度应高于跨腔
+
+
+# ---- E8:EntityState items 状态/diff 对账(reconcile_items) ----
+def test_reconcile_items_gain():
+    from app.ingest.extract import reconcile_items
+    items, net = reconcile_items(["剑"], ["盾", "弓"], [])
+    assert items == ["剑", "弓", "盾"] and set(net) == {"盾", "弓"}
+
+
+def test_reconcile_items_gain_and_lose_same_change_cancels():
+    # 同章既得又失 → 净为无,state 不含,net_gained 不计(diff 与 state 一致可逆)
+    from app.ingest.extract import reconcile_items
+    items, net = reconcile_items(["剑"], ["金灵根"], ["金灵根"])
+    assert "金灵根" not in items and net == [] and items == ["剑"]
+
+
+def test_reconcile_items_lose_existing():
+    from app.ingest.extract import reconcile_items
+    items, net = reconcile_items(["剑", "盾"], [], ["盾"])
+    assert items == ["剑"] and net == []

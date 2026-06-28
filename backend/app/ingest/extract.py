@@ -248,6 +248,16 @@ def _persist_foreshadowings(session, planted: list[dict[str, Any]],
         f.resolved_description = r.get("resolved_description", "")
 
 
+def reconcile_items(prev_items, items_gained, items_lost):
+    """E8(红蓝对抗):同章 gained∩lost 抵消。返回 (new_items_sorted, net_gained)。
+    state 与 diff 由此对齐可逆:state = prev + net_gained − items_lost。纯函数,供回归测试。"""
+    il_set = set(items_lost or [])
+    net_gained = [x for x in (items_gained or []) if x not in il_set]
+    items = sorted(set((prev_items or []) + net_gained))
+    items = [x for x in items if x not in il_set]
+    return items, net_gained
+
+
 def _persist_states(session, items: list[dict[str, Any]]) -> None:
     items = [it for it in items if isinstance(it, dict) and it.get("entity_name")]
     items = sorted(items, key=lambda x: x.get("chapter", 0))
@@ -279,21 +289,29 @@ def _persist_states(session, items: list[dict[str, Any]]) -> None:
         def _as_list(v):
             return v if isinstance(v, list) else ([v] if isinstance(v, str) and v else [])
         ig, il, sg = _as_list(change.get("items_gained")), _as_list(change.get("items_lost")), _as_list(change.get("skills_gained"))
-        if ig:
-            new_state.setdefault("items", [])
-            new_state["items"] = sorted(set((new_state["items"] or []) + ig))
-        if il:
-            new_state["items"] = [x for x in new_state.get("items", []) if x not in il]
+        # 修复 E8 余下(红蓝对抗):同物品同章既 gained 又 lost → 应用后净为"无",但旧 diff_json 仍记 gained,
+        # 致 state 与 diff 不一致、无法由 diff 反推 state。改为记录"实际应用"的净增减,使二者对齐可逆。
+        if ig or il:
+            new_items, net_gained = reconcile_items(new_state.get("items"), ig, il)
+            new_state["items"] = new_items
+        else:
+            net_gained = []
         if sg:
             new_state.setdefault("skills", [])
             new_state["skills"] = sorted(set((new_state["skills"] or []) + sg))
         if "alive" in change:
             new_state["alive"] = change["alive"]
+        applied = dict(change)                 # 归一化 diff:与 state 对齐(net_gained / il)
+        applied["items_gained"] = net_gained
+        applied["items_lost"] = il
+        applied["skills_gained"] = sg
+        if net_gained != ig or il:
+            applied["_reconciled"] = True      # 标记发生过抵消,便于审计
         s = EntityState(
             entity_id=e.id,
             chapter=it["chapter"],
             state_json=new_state,
-            diff_json=change,
+            diff_json=applied,
             note=change.get("note"),
         )
         session.add(s)
