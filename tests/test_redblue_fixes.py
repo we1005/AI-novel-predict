@@ -229,6 +229,31 @@ def test_e79_ab_winner_custom_labels():
     assert _map_ab_winner("乙", True, "push", "agentic") == "push"
 
 
+def test_genre_template_render_system_prompt():
+    # genre_template 渲染:纯函数,组装语义部件 + 内建求异/负面清单护栏(V2)
+    from naimitate.generate.genre_template import render_system_prompt
+    sp = render_system_prompt({
+        "imagery": ["雾都", "煤气灯", "蒸汽机械"],
+        "motifs": ["禁忌知识致疯"],
+        "worldview_lexicon": ["非凡者", "值夜者"],
+        "atmosphere": "压抑疏离、知识即诅咒",
+        "flavor_recipe": "在煤气灯下研究深渊的冰冷考究口吻",
+        "anti_patterns": ["嘴角勾起", "空气仿佛凝固"],
+    })
+    assert "雾都" in sp and "煤气灯" in sp                       # 意象进了
+    assert "值夜者" in sp                                         # 世界观语汇进了
+    assert "写作护栏" in sp and "嘴角勾起" in sp                  # V2 求异 + 负面清单进了
+    # 关掉护栏则不含求异段
+    sp2 = render_system_prompt({"imagery": ["雾都"]}, anti_cliche=False)
+    assert "写作护栏" not in sp2
+
+
+def test_genre_template_render_empty_safe():
+    from naimitate.generate.genre_template import render_system_prompt
+    sp = render_system_prompt({})                                # 空模板也不崩,仍给默认护栏
+    assert "类型写作配方" in sp and "写作护栏" in sp
+
+
 def test_e79_ab_judge_forwards_labels(monkeypatch):
     # 集成防回归:_ab_judge 必须把 label_a/label_b **传进** _map_ab_winner
     # (曾漏传 → agentic A/B 误显示 on/off)。monkeypatch 掉 llm + random 使其确定。

@@ -21,6 +21,7 @@ from .analysis import beat, worldview, relationship, golden, pov, style, speedre
 from .analysis import style_genome
 from .generate import usecases, compose, transplant, fusion
 from .generate import technique as tech
+from .generate import genre_template as gt
 
 app = FastAPI(title="novel-analysis-imitate")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -369,3 +370,65 @@ def compose_generate(cslug: str, body: GenReq, background: BackgroundTasks):
 @app.get("/compose/{cslug}/export")
 def compose_export(cslug: str):
     return compose.export_chapters(cslug)
+
+
+# ---------------------------------------------------------------------------
+# 通用类型模板(genre_template):从一组同题材书抽"写作配方",可保存可调用
+# ---------------------------------------------------------------------------
+
+class GenreExtractReq(BaseModel):
+    name: str
+    source_slugs: list[str]
+    slug: str | None = None
+
+
+@app.post("/genre-templates/extract")
+def genre_extract(body: GenreExtractReq, background: BackgroundTasks):
+    """从一组同题材书的语义层抽类型模板并保存(后台;抽取需一次 STRONG 调用)。
+    轮询 GET /genre-templates/{slug} 看是否就绪。"""
+    from app.books import library as _lib
+    slug = body.slug or gt._slugify(body.name)
+    known = {b.get("slug") for b in _lib.list_books()}
+    missing = [s for s in body.source_slugs if s not in known]
+    if missing:
+        return {"error": f"未入库(请先切分): {missing}"}
+
+    def _run():
+        try:
+            gt.extract_genre_template(body.name, body.source_slugs, slug=slug)
+        except Exception:
+            pass  # 失败时 get 返回 None,前端可重试
+
+    background.add_task(_run)
+    return {"status": "started", "slug": slug, "source_slugs": body.source_slugs}
+
+
+@app.get("/genre-templates")
+def genre_list():
+    return project_store.list_genre_templates()
+
+
+@app.get("/genre-templates/{slug}")
+def genre_get(slug: str):
+    rec = project_store.get_genre_template(slug)
+    if not rec:
+        return {"error": "not found or still building", "slug": slug}
+    return rec
+
+
+@app.delete("/genre-templates/{slug}")
+def genre_delete(slug: str):
+    return {"deleted": project_store.delete_genre_template(slug), "slug": slug}
+
+
+class GenrePreviewReq(BaseModel):
+    topic: str
+
+
+@app.post("/genre-templates/{slug}/preview")
+def genre_preview(slug: str, body: GenrePreviewReq):
+    """用该模板的 system_prompt 现写一段样例,证明'可调用'。"""
+    try:
+        return gt.preview(slug, body.topic)
+    except ValueError as e:
+        return {"error": str(e)}

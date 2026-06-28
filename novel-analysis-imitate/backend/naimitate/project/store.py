@@ -46,6 +46,15 @@ def init() -> None:
             project_slug TEXT, kind TEXT,
             card_json TEXT, source_slugs_json TEXT, cost_usd REAL, updated_at TEXT,
             UNIQUE(project_slug, kind))"""))
+        # 通用类型模板(genre_template):从一组**同题材**书的语义层抽出、可保存可调用的"写作配方"。
+        # V_genre 验证:语义模板 > 裸prompt(三轴全胜)、≥ 贴单作者;纯语义(结构指纹归作者层,V1)。
+        # template_json: {imagery, motifs, worldview_lexicon, atmosphere, flavor_recipe, anti_patterns}
+        # system_prompt: 渲染好的、可直接喂 writer 的指令(含 V2 求异/留白护栏)。
+        c.execute(text("""CREATE TABLE IF NOT EXISTS genre_template(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slug TEXT UNIQUE, name TEXT, source_slugs_json TEXT,
+            template_json TEXT, system_prompt TEXT, cost_usd REAL,
+            created_at TEXT, updated_at TEXT)"""))
 
 
 def save_fused(project_slug: str, kind: str, card: dict, *,
@@ -86,6 +95,60 @@ def list_fused(project_slug: str) -> dict:
         out[r["kind"]] = {"source_slugs": json.loads(r["source_slugs_json"] or "[]"),
                           "updated_at": r["updated_at"]}
     return out
+
+
+# ---------------------------------------------------------------------------
+# genre_template:通用类型模板(可保存/可调用)
+# ---------------------------------------------------------------------------
+
+def save_genre_template(slug: str, name: str, *, template: dict, system_prompt: str,
+                        source_slugs: list[str] | None = None, cost_usd: float = 0.0) -> dict:
+    init()
+    now = datetime.now(timezone.utc).isoformat()
+    with _engine.begin() as c:
+        exists = c.execute(text("SELECT created_at FROM genre_template WHERE slug=:s"),
+                           {"s": slug}).scalar()
+        c.execute(text("""INSERT OR REPLACE INTO genre_template
+            (slug,name,source_slugs_json,template_json,system_prompt,cost_usd,created_at,updated_at)
+            VALUES (:s,:n,:src,:t,:sp,:cost,:ca,:ua)"""),
+            {"s": slug, "n": name,
+             "src": json.dumps(source_slugs or [], ensure_ascii=False),
+             "t": json.dumps(template, ensure_ascii=False),
+             "sp": system_prompt, "cost": cost_usd,
+             "ca": exists or now, "ua": now})
+    return get_genre_template(slug)
+
+
+def get_genre_template(slug: str) -> dict | None:
+    init()
+    with _engine.begin() as c:
+        r = c.execute(text("SELECT * FROM genre_template WHERE slug=:s"), {"s": slug}).mappings().first()
+    if not r:
+        return None
+    d = dict(r)
+    d["template"] = json.loads(d.pop("template_json") or "{}")
+    d["source_slugs"] = json.loads(d.pop("source_slugs_json") or "[]")
+    return d
+
+
+def list_genre_templates() -> list[dict]:
+    init()
+    with _engine.begin() as c:
+        rows = c.execute(text("SELECT slug,name,source_slugs_json,updated_at FROM genre_template "
+                              "ORDER BY id DESC")).mappings().all()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["source_slugs"] = json.loads(d.pop("source_slugs_json") or "[]")
+        out.append(d)
+    return out
+
+
+def delete_genre_template(slug: str) -> bool:
+    init()
+    with _engine.begin() as c:
+        r = c.execute(text("DELETE FROM genre_template WHERE slug=:s"), {"s": slug})
+    return bool(r.rowcount)
 
 
 def record_compose(cslug: str, *, project_slug: str = "", use_case: str = "",
