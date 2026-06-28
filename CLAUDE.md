@@ -3,6 +3,11 @@
 ## 交流规则
 - **始终用中文回复用户**（包括状态汇报、进度、结论；代码注释/commit 也以中文为主）。不要夹用整段英文。
 
+## 文档沉淀规则（用户要求·长期生效）
+- **每一步操作 / 实验 / 测试 / 修复都要沉淀进 [`novel-analysis-imitate/docs/实验与操作台账.md`](novel-analysis-imitate/docs/实验与操作台账.md)**：先做、做完即时追加一条（动机 / 命令 / 结果关键数 / 结论含反例 / 改动文件+commit短码 / 遗留）。
+- 台账只做时间线索引 + 关键数 + commit；**详细分析另开专题 md**（如 `agentic-search-消融结论.md`、`评测可信度-实测.md`）。
+- 实验脚本入库 `novel-analysis-imitate/docs/experiments/`(相对路径、不含密钥);结论可回溯到命令与数据,杜绝"凭印象"。
+
 ## 提交规则
 - 用户已授权：**直接提交并推送到 `main` 分支**（不开 feature 分支）。
 - 提交前必查不带入密钥/隐私：`.env`、`backend/data/settings.json`、`backend/data/`(含 novel.db) 均已 gitignore。
