@@ -22,10 +22,10 @@ from app.books import library          # noqa: E402
 from app.db import book_scope          # noqa: E402
 from naimitate.analysis import _fingerprint as FP   # noqa: E402
 
-# 簇定义(可调)
+# 簇定义(可调)。新增:克苏鲁维多利亚 5 本**不同作者同题材**(关键——簇内稳定=类型基因)。
 CLUSTERS = {
+    "克苏鲁维多利亚(5不同作者·同题材)": ["诡秘之主", "余烬之铳", "诡秘地海", "黎明医生", "深海余烬"],
     "江南(同作者·跨子类型)": ["《九州·缥缈录》-江南", "天之炽-江南", "龙族"],
-    "余烬(同题材克苏鲁蒸汽朋克)": ["余烬之铳", "深海余烬"],
     "网文(对照)": ["末法王座"],
 }
 SAMPLE_CHARS = 800_000   # 每本取前 ~80万字算指纹(纯字符串/正则,快)
@@ -102,16 +102,21 @@ def main() -> int:
         tag = "★强判别" if fstats[d] > 5 else ("·中" if fstats[d] > 1.5 else "  弱/噪声")
         print(f"  {d:24s} F={fstats[d]:8.2f}  {tag}")
 
-    # 5) 作者基因候选:江南簇(跨子类型)内仍低 CV 的维
-    jn = "江南(同作者·跨子类型)"
-    if len([s for s in CLUSTERS[jn] if s in fps]) >= 2:
-        slugs = [s for s in CLUSTERS[jn] if s in fps]
-        print(f"\n===== 作者基因候选(江南 {len(slugs)} 部跨子类型内仍稳定,CV<0.15)=====")
+    # 5) 基因候选:克苏鲁簇(不同作者)内仍低 CV = **类型基因**;江南簇(同作者)内仍低 CV = **作者基因**
+    GENE = [
+        ("克苏鲁维多利亚(5不同作者·同题材)", "类型基因候选(不同作者仍稳=题材共性)"),
+        ("江南(同作者·跨子类型)", "作者基因候选(跨子类型仍稳=江南签名)"),
+    ]
+    for cl, desc in GENE:
+        slugs = [s for s in CLUSTERS.get(cl, []) if s in fps]
+        if len(slugs) < 2:
+            continue
+        print(f"\n===== {desc} —— {cl}({len(slugs)} 本,CV<0.15)=====")
         for d in DIMS:
             cv = _cv([fps[s][d] for s in slugs])
             if cv < 0.15:
                 vals = [round(fps[s][d], 2) for s in slugs]
-                print(f"  {d:24s} CV={cv:.3f}  值={vals}  ← 跨子类型仍稳=江南签名候选")
+                print(f"  {d:24s} CV={cv:.3f}  值={vals}")
 
     print("\n[结论留给人读] F 高的维 = 能判别簇的'共性'维;江南跨子类型仍低CV的维 = 作者基因候选。")
     print("注:comma_per_kchar 只数半角逗号+顿号,中文多全角→可能退化(本身是对生产指纹的一处发现)。")
