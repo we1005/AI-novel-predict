@@ -30,6 +30,26 @@ def write(req: WriteRequest):
         raise HTTPException(400, str(e))
 
 
+class AbTopicPushRequest(BaseModel):
+    outline_run_id: int
+    chapter_index: int
+    judge: bool = True
+
+
+@router.post("/ab-topic-push")
+def ab_topic_push(req: AbTopicPushRequest):
+    """#78 一键 A/B:对同一章写两遍(话题 push 关=基线 vs 开=增强)+ 盲评。
+    同步返回(写两遍约 60–120 秒)。"""
+    try:
+        return pipeline.ab_topic_push(
+            outline_run_id=req.outline_run_id,
+            chapter_index=req.chapter_index,
+            judge=req.judge,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @router.get("/drafts")
 def list_drafts(limit: int = 800):
     return pipeline.list_drafts(limit=limit)

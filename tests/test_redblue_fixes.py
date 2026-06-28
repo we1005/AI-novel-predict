@@ -178,3 +178,29 @@ def test_e2_vector_helpers_safe_and_lazy():
     assert isinstance(v.indexed_count(), int)       # 缺依赖/空库也返回 int,不抛
     st = v.reindex_state()
     assert st["status"] in ("idle", "running", "done", "failed")
+
+
+# ---- #78:话题 push 增强 开关(默认开 + 跨重启留存)+ 盲评位置去偏映射 ----
+def test_e78_topic_push_default_on_and_persists(tmp_path, monkeypatch):
+    from app.settings import store
+    monkeypatch.setattr(store, "_SETTINGS_PATH", tmp_path / "settings.json")
+    monkeypatch.setattr(store, "_CACHE", None)
+    try:
+        assert store.get_topic_push_enabled() is True          # 默认开启(PUSH 默认)
+        store.update_settings({"topic_push_enabled": False})
+        store._CACHE = None                                    # 模拟重启:从盘重载
+        assert store.get_topic_push_enabled() is False         # 关闭状态必须留存
+    finally:
+        store._CACHE = None
+
+
+def test_e78_ab_winner_position_debias_mapping():
+    from app.draft.pipeline import _map_ab_winner
+    # swap=False:甲=off, 乙=on
+    assert _map_ab_winner("甲", False) == "off"
+    assert _map_ab_winner("乙", False) == "on"
+    # swap=True:甲=on, 乙=off(位置交换后映射必须翻转)
+    assert _map_ab_winner("甲", True) == "on"
+    assert _map_ab_winner("乙", True) == "off"
+    # 平/未知
+    assert _map_ab_winner("平", False) == "平/未知"

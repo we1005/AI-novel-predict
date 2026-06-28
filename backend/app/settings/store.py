@@ -356,7 +356,8 @@ def _load_raw() -> dict[str, Any]:
 
     # 标量额外项:重载时一并保留(此前 extract_max_tokens / fallback_model 在重建
     # base 时被丢弃 → 进程重启即失效。vector_recall_enabled 同理,必须跨重启留存)。
-    for k in ("extract_max_tokens", "fallback_model", "vector_recall_enabled"):
+    for k in ("extract_max_tokens", "fallback_model", "vector_recall_enabled",
+              "topic_push_enabled"):
         if k in data:
             base[k] = data[k]
     return base
@@ -492,6 +493,7 @@ def get_settings() -> dict[str, Any]:
     safe_settings["effective_base_url"] = def_url
     safe_settings["extract_max_tokens"] = get_extract_max_tokens()
     safe_settings["vector_recall_enabled"] = get_vector_recall_enabled()
+    safe_settings["topic_push_enabled"] = get_topic_push_enabled()
     # Mask any per-provider keys carried in the raw settings dict.
     safe_settings["providers"] = {
         pid: {"api_key": _mask_key((v or {}).get("api_key") or ""),
@@ -519,6 +521,16 @@ def get_extract_max_tokens(default: int = 8000) -> int:
         v = int(_settings_cached().get("extract_max_tokens") or default)
         return max(2000, min(32000, v))
     except (TypeError, ValueError):
+        return default
+
+
+def get_topic_push_enabled(default: bool = True) -> bool:
+    """话题关键词检索 push 增强(#78)总开关。默认**开启**(消融已证 push 默认有用,
+    盲评 +29;且项目定「PUSH 默认」)。开启=写每章前按该章话题关键词去原著检索最贴题的
+    范例片段塞进 writer;关闭=基线(仅近章正文,不做话题 push)。供 A/B 对比。"""
+    try:
+        return bool(_settings_cached().get("topic_push_enabled", default))
+    except Exception:
         return default
 
 
@@ -574,6 +586,9 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
 
         if "vector_recall_enabled" in payload:
             cur["vector_recall_enabled"] = bool(payload["vector_recall_enabled"])
+
+        if "topic_push_enabled" in payload:
+            cur["topic_push_enabled"] = bool(payload["topic_push_enabled"])
 
         def _is_masked(v: str) -> bool:
             # Treat the masked placeholder ("****...****") as "no change".

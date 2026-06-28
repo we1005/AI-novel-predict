@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Drawer, message } from "antd";
+import { Drawer, Modal, message } from "antd";
 import { api } from "@/lib/api";
 import { useTheme } from "@/components/ThemeProvider";
 import PageTitle from "@/components/PageTitle";
@@ -111,6 +111,10 @@ function DraftPageInner() {
   const [skipReviews, setSkipReviews] = useState(false);
   const [maxAttempts, setMaxAttempts] = useState(3);
   const [msg, setMsg] = useState("");
+
+  // #78 一键 A/B(话题 push 关 vs 开)
+  const [abBusy, setAbBusy] = useState(false);
+  const [abResult, setAbResult] = useState<any | null>(null);
 
   // form
   const [outlineRunId, setOutlineRunId] = useState(initOutlineRunId || "");
@@ -265,6 +269,22 @@ function DraftPageInner() {
     }
   };
 
+  const runAbTopicPush = async () => {
+    const orId = Number(outlineRunId);
+    const chIdx = Number(chapterIndex);
+    if (!orId || !chIdx) return;
+    setAbBusy(true);
+    setMsg("");
+    try {
+      const r = await api.draftAbTopicPush(orId, chIdx, true);
+      setAbResult(r);
+    } catch (e: any) {
+      message.error("对比失败：" + String(e));
+    } finally {
+      setAbBusy(false);
+    }
+  };
+
   const elapsed = busy && busySince ? Math.floor((Date.now() - busySince) / 1000) : 0;
 
   // Timeline/history must reflect the SELECTED outline only — otherwise drafts
@@ -356,11 +376,16 @@ function DraftPageInner() {
             })()}
           </>
         )}
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <button onClick={() => triggerWrite()} disabled={busy || !outlineRunId || !chapterIndex}>
             {busy ? `写作中… ${elapsed}s` : skipReviews ? "✍️ 写（跳过审查）" : "✍️ 写（含审查）"}
           </button>
-          <span className="muted" style={{ marginLeft: 12, fontSize: 12 }}>
+          <button className="ghost" onClick={runAbTopicPush}
+            disabled={abBusy || busy || !outlineRunId || !chapterIndex}
+            title="对同一章写两遍:话题 push 关(基线) vs 开(增强),盲评对比">
+            {abBusy ? "对比中…(约 60-120s)" : "🔬 push 对比"}
+          </button>
+          <span className="muted" style={{ fontSize: 12 }}>
             带审查约 60-180 秒；跳过审查约 30-60 秒
           </span>
         </div>
@@ -472,7 +497,60 @@ function DraftPageInner() {
             busy={busy} onRegenerate={() => triggerWrite(selected.outline_run_id, selected.chapter_index)} />
         )}
       </Drawer>
+
+      <Modal
+        title="🔬 话题 push 增强 · A/B 对比"
+        open={!!abResult}
+        onCancel={() => setAbResult(null)}
+        footer={null}
+        width="86%"
+      >
+        {abResult && <AbTopicPushResult r={abResult} />}
+      </Modal>
     </>
+  );
+}
+
+function AbTopicPushResult({ r }: { r: any }) {
+  const winner = r?.judge?.winner_variant;            // "off" | "on" | "平/未知"
+  const col = (side: "off" | "on") => {
+    const d = r[side] || {};
+    const isWin = winner === side;
+    return (
+      <div style={{ flex: 1, minWidth: 320, border: isWin ? "2px solid var(--good, #9ece6a)" : "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>
+          {side === "off" ? "基线(push 关)" : "增强(push 开)"} {isWin && <span style={{ color: "var(--good, #9ece6a)" }}>· 盲评胜出</span>}
+        </div>
+        <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+          参考章:[{(d.ref_chapters || []).join(", ")}]
+          {side === "on" && ` · push 注入 ${(d.pushed_refs || []).length} 条`}
+          {` · $${(d.cost_usd ?? 0).toFixed?.(4) ?? d.cost_usd}`}
+        </div>
+        <div style={{ maxHeight: "52vh", overflow: "auto", whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.7, background: "var(--panel-2)", padding: 10, borderRadius: 6 }}>
+          {d.prose || "(空)"}
+        </div>
+      </div>
+    );
+  };
+  return (
+    <div>
+      <div style={{ marginBottom: 12, fontSize: 13 }}>
+        第 {r.chapter_index} 章 · 话题关键词:{(r.must_include || []).slice(0, 5).join(" / ") || "(大纲无必含项)"}
+        {r.judge && (
+          <div style={{ marginTop: 6, padding: "8px 12px", background: "var(--panel-2)", borderRadius: 6 }}>
+            <strong>盲评:</strong>
+            {r.judge.error
+              ? <span style={{ color: "var(--bad,#f7768e)" }}> 裁决失败:{r.judge.error}</span>
+              : <> 胜出 = <strong>{winner === "on" ? "增强(push)" : winner === "off" ? "基线" : "平/未知"}</strong>
+                  {r.judge.reason ? ` · ${r.judge.reason}` : ""}</>}
+          </div>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        {col("off")}
+        {col("on")}
+      </div>
+    </div>
   );
 }
 

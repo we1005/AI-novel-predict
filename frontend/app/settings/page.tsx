@@ -80,6 +80,8 @@ type SettingsBundle = {
     default_model_fast: string;
     default_model_strong: string;
     extract_max_tokens?: number;
+    topic_push_enabled?: boolean;
+    vector_recall_enabled?: boolean;
     providers: Record<string, ProviderCred>;   // masked api_key
     agents: Record<string, Override>;
   };
@@ -139,6 +141,19 @@ export default function SettingsPage() {
       await api.settingsPut({ vector_recall_enabled: on });
       message.success(on ? "已启用语义检索(向量层)" : "已关闭语义检索");
       await fetchVec();
+    } catch (e) {
+      message.error("切换失败：" + String(e));
+    } finally {
+      setVecBusy(false);
+    }
+  };
+
+  const toggleTopicPush = async (on: boolean) => {
+    setVecBusy(true);
+    try {
+      const updated = await api.settingsPut({ topic_push_enabled: on });
+      setBundle(updated);  // 只更新 bundle,不动 draft(避免丢未保存的 agent 改动)
+      message.success(on ? "已启用话题 push 增强" : "已切回基线(无 push)");
     } catch (e) {
       message.error("切换失败：" + String(e));
     } finally {
@@ -396,6 +411,28 @@ export default function SettingsPage() {
               testResult={testResult[p.id] || null}
             />
           ))}
+        </div>
+      </div>
+
+      {/* ---------- 话题检索 push 增强(#78)---------- */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <ThunderboltOutlined /> 话题检索 push 增强
+          <span className="muted" style={{ fontSize: 12, fontWeight: "normal" }}>默认开启</span>
+        </h3>
+        <p className="muted" style={{ marginTop: -4, fontSize: 12 }}>
+          写每章前,按本章话题关键词(大纲的“必含”项)去<strong>原著</strong>检索最贴题的范例片段,作为文笔/质感锚点喂给 writer。
+          消融已证关键词级检索盲评 +29。关闭=基线(只用最近几章正文)。可在「写作」页用“🔬 push 对比”按钮对同一章 A/B 验证。
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+          <Switch
+            checked={bundle?.settings?.topic_push_enabled !== false}
+            loading={vecBusy}
+            onChange={toggleTopicPush}
+          />
+          <span style={{ fontSize: 14, fontWeight: 600 }}>
+            {bundle?.settings?.topic_push_enabled !== false ? "已启用(push)" : "已关闭(基线)"}
+          </span>
         </div>
       </div>
 

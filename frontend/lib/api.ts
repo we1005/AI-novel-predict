@@ -244,6 +244,13 @@ export const api = {
   // ----- 语义检索向量层(E2)-----
   vectorStatus: () => j<any>("/memory/vector/status"),
   vectorReindex: () => j<any>("/memory/vector/reindex", { method: "POST" }),
+
+  // ----- 话题 push 增强 一键 A/B(#78)-----
+  draftAbTopicPush: (outlineRunId: number, chapterIndex: number, judge = true) =>
+    j<any>("/draft/ab-topic-push", {
+      method: "POST",
+      body: JSON.stringify({ outline_run_id: outlineRunId, chapter_index: chapterIndex, judge }),
+    }),
   settingsTestKey: (payload: { api_key?: string; base_url?: string; model?: string; provider?: string } = {}) =>
     j<any>("/settings/test-key", { method: "POST", body: JSON.stringify(payload) }),
 

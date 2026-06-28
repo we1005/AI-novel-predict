@@ -126,11 +126,20 @@ def _recent_chapter_prose(after_chapter: int, n: int = 4, per_chars: int = 900) 
     return out
 
 
-def _gather_style_refs(*, after_chapter: int, must_include: list[str]) -> list[dict]:
-    """Style anchors: the most-recent chapters' real prose (book-agnostic) plus
-    a couple of topic-relevant historical hits via FTS for flavor."""
+def _gather_style_refs(*, after_chapter: int, must_include: list[str],
+                       topic_push: bool | None = None) -> list[dict]:
+    """Style anchors: the most-recent chapters' real prose (book-agnostic) plus,
+    当 push 增强(#78)开启时,按本章话题关键词从**原著**检索最贴题的范例片段。
+
+    topic_push: None=随全局设置 get_topic_push_enabled();True/False=强制(供 A/B 复现)。
+    每条 ref 带 ``source`` 标记(recent / topic_push / vector),便于观察 push 加了什么。
+    """
+    from ..settings.store import get_topic_push_enabled
+    push_on = topic_push if topic_push is not None else get_topic_push_enabled()
 
     refs: list[dict] = _recent_chapter_prose(after_chapter, n=4)
+    for r in refs:
+        r.setdefault("source", "recent")
 
     # Fallback: if corpus/offsets unavailable, use a generic recent-FTS pull.
     if not refs:
@@ -138,14 +147,12 @@ def _gather_style_refs(*, after_chapter: int, must_include: list[str]) -> list[d
             # Match any chapter before the cut; an empty-ish query isn't allowed,
             # so probe with a few very common CJK function words.
             refs = fts_recall.search(query="的 了 他", limit=4, before_chapter=after_chapter + 1)
+            for r in refs:
+                r["source"] = "recent"
         except Exception:
             refs = []
 
-    # Topic-relevant supplement: use must_include phrases as queries.
-    # 修复(agentic-search 议题·自我污染):风味锚点应来自**原著**,排除续写已生成的章
-    # (否则写到第 N 章会把自己刚生成的 N-1 章当"原著风格"召回 → 自我同质化/塌缩)。
-    # 改用 craft.search.search_corpus(trigram 友好 + exclude_chapters),只在话题补充段生效;
-    # 近章续贯(_recent_chapter_prose)保持不变。
+    # 已生成章号(push 与向量两块都要排除,防自我同质化/塌缩,见 agentic-search 自我污染议题)。
     gen_chapters: set[int] = set()
     try:
         from sqlalchemy import select as _select
@@ -154,16 +161,24 @@ def _gather_style_refs(*, after_chapter: int, must_include: list[str]) -> list[d
             gen_chapters = {c for (c,) in _s.execute(_select(ChapterDraft.chapter_index)).all() if c is not None}
     except Exception:
         gen_chapters = set()
-    for phrase in (must_include or [])[:2]:
-        if not phrase or len(phrase) < 4:
-            continue
-        try:
-            from ..craft import search as _cs
-            hits = _cs.search_corpus(phrase[:40], k=1,
-                                     exclude_chapters=gen_chapters, before_chapter=after_chapter + 1)
-            refs.extend(hits)
-        except Exception:
-            continue
+
+    # #78 话题关键词 push 增强(默认开,关闭=基线只用近章正文)。
+    # 用本章 must_include 作话题关键词,从**原著**检索最贴题范例(消融:关键词级 +29,
+    # 远胜类目级 +4)。较旧"顺带版"加强:取前 3 个词、每词 k=2,且打 source 标记。
+    if push_on:
+        for phrase in (must_include or [])[:3]:
+            if not phrase or len(phrase) < 4:
+                continue
+            try:
+                from ..craft import search as _cs
+                hits = _cs.search_corpus(phrase[:40], k=2,
+                                         exclude_chapters=gen_chapters, before_chapter=after_chapter + 1)
+                for h in hits:
+                    h["source"] = "topic_push"
+                    h["topic"] = phrase[:40]
+                refs.extend(hits)
+            except Exception:
+                continue
 
     # E2(语义补充):开关打开时,用 must_include 主题做向量检索,捞**语义相关但不含
     # 关键词**的原著片段(FTS 给不了的召回)。默认关闭则完全跳过(不加载模型);
@@ -474,6 +489,7 @@ def write_chapter(
     reingest: bool = True,
     bilingual: bool = False,
     repo_commit: bool = False,
+    topic_push: bool | None = None,
 ) -> dict[str, Any]:
     # 1) Load outline + chapter outline
     with session_scope() as s:
@@ -500,11 +516,13 @@ def write_chapter(
     ctx = _gather_context(after_chapter)
     cached_blocks = _ctx_blocks(ctx)
 
-    # 3) Style references via FTS
+    # 3) Style references via FTS(#78:topic_push 控制话题 push 增强,None=随全局设置)
     style_refs = _gather_style_refs(
         after_chapter=after_chapter,
         must_include=chapter_outline.get("must_include") or [],
+        topic_push=topic_push,
     )
+    _push_n = sum(1 for r in style_refs if r.get("source") == "topic_push")
 
     # 3b) Serial continuity: tail of the previous generated chapter, if any.
     prev_tail = _prev_chapter_tail(outline_run_id, chapter_index)
@@ -786,7 +804,116 @@ def write_chapter(
         "cost_usd": round(total_cost, 5),
         "bilingual": bilingual_status,
         "repo": repo_status,
+        "topic_push_refs": _push_n,   # #78:本章注入了几条话题 push 范例(0=未启用/无命中)
     }
+
+
+# ---------------------------------------------------------------------------
+# #78 一键 A/B:话题 push 增强 关 vs 开
+# ---------------------------------------------------------------------------
+
+def _map_ab_winner(winner_zh: str, swap: bool) -> str:
+    """把盲评的甲/乙裁决映射回 off/on(去位置偏差用)。
+    约定:甲==first;swap=True 时 first 是 on(否则 first 是 off)。"""
+    if winner_zh == "甲":
+        return "on" if swap else "off"
+    if winner_zh == "乙":
+        return "off" if swap else "on"
+    return "平/未知"
+
+
+def _ab_judge(chapter_outline: dict, prose_off: str, prose_on: str,
+              after_chapter: int) -> tuple[dict, float]:
+    """盲评两份初稿。随机甲/乙顺序去位置偏差,裁决后映射回 off/on。"""
+    import json as _json
+    import random
+    import re as _re
+
+    from ..config import MODEL_STRONG
+    from ..llm import client as _llm
+
+    swap = random.random() < 0.5          # swap=True → 甲=on, 乙=off
+    first, second = (prose_on, prose_off) if swap else (prose_off, prose_on)
+    sys = (
+        "你是严格的中文小说编辑。下面是同一章的两份初稿(甲/乙),来自同一大纲。"
+        "请盲评哪份更好,重点看:①文笔与原著腔调的贴合;②场景/话题的具体质感"
+        "(细节是否扎实、贴题、不空泛);③可读性与连贯。"
+        '只输出 JSON,不要任何多余文字:'
+        '{"winner":"甲"|"乙"|"平","reason":"一句话理由",'
+        '"topical_concreteness":{"甲":0-100,"乙":0-100}}'
+    )
+    user = (f"【本章大纲意图】{(chapter_outline.get('intent') or '')[:300]}\n\n"
+            f"【甲】\n{(first or '')[:3000]}\n\n【乙】\n{(second or '')[:3000]}")
+    resp = _llm.call(agent="draft.review.style", model=MODEL_STRONG, system=sys,
+                     messages=[{"role": "user", "content": user}],
+                     max_tokens=1200, temperature=0.2)
+    raw = resp.text or ""
+    try:
+        from json_repair import repair_json
+        v = _json.loads(repair_json(_re.sub(r"```json|```", "", raw))) or {}
+    except Exception:
+        v = {"winner": "?", "reason": raw[:160]}
+    v["winner_variant"] = _map_ab_winner(v.get("winner"), swap)
+    v["_order_swapped"] = swap
+    return v, resp.cost_usd
+
+
+def ab_topic_push(*, outline_run_id: int, chapter_index: int,
+                  judge: bool = True) -> dict[str, Any]:
+    """#78 一键 A/B:对同一章写两遍(push 关=基线 vs push 开=增强),隔离话题 push
+    这**一个**变量。直接调 _writer_call(跳过复审/落库),聚焦"参考对写作的影响"、
+    不污染草稿行。返回两份初稿 + 各自注入的参考来源 + (可选)盲评裁决。"""
+    with session_scope() as s:
+        run = s.get(OutlineRun, outline_run_id)
+        if not run:
+            raise ValueError(f"no OutlineRun id={outline_run_id}")
+        chapters = list(run.chapters_json or [])
+        chapter_outline = next(
+            (c for c in chapters
+             if isinstance(c, dict) and c.get("chapter_index") == chapter_index),
+            None,
+        )
+        if not chapter_outline:
+            raise ValueError(f"chapter {chapter_index} not in OutlineRun {outline_run_id}")
+
+    after_chapter = max(0, chapter_index - 1)
+    if not chapter_outline.get("word_target"):
+        chapter_outline = {**chapter_outline, "word_target": corpus_median_chapter_chars()}
+
+    ctx = _gather_context(after_chapter)
+    cached_blocks = _ctx_blocks(ctx)
+    prev_tail = _prev_chapter_tail(outline_run_id, chapter_index)
+    must_include = chapter_outline.get("must_include") or []
+
+    def _one(push: bool) -> dict:
+        refs = _gather_style_refs(after_chapter=after_chapter,
+                                  must_include=must_include, topic_push=push)
+        prose, cost, ms = _writer_call(
+            chapter_outline=chapter_outline, style_refs=refs, is_revision=False,
+            previous_attempt=None, chapter_index=chapter_index,
+            cached_blocks=cached_blocks, prev_chapter_tail=prev_tail,
+        )
+        pushed = [{"chapter": r.get("chapter"), "topic": r.get("topic")}
+                  for r in refs if r.get("source") == "topic_push"]
+        return {"prose": prose, "cost_usd": round(cost, 5), "elapsed_ms": ms,
+                "ref_chapters": [r.get("chapter") for r in refs],
+                "pushed_refs": pushed}
+
+    off = _one(False)
+    on = _one(True)
+    out: dict[str, Any] = {
+        "outline_run_id": outline_run_id, "chapter_index": chapter_index,
+        "must_include": must_include, "off": off, "on": on, "judge": None,
+        "cost_usd": round(off["cost_usd"] + on["cost_usd"], 5),
+    }
+    if judge:
+        try:
+            verdict, jcost = _ab_judge(chapter_outline, off["prose"], on["prose"], after_chapter)
+            out["judge"] = verdict
+            out["cost_usd"] = round(out["cost_usd"] + jcost, 5)
+        except Exception as e:  # noqa: BLE001
+            out["judge"] = {"error": str(e)[:200]}
+    return out
 
 
 # ---------------------------------------------------------------------------
