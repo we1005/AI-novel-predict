@@ -142,11 +142,25 @@ def _gather_style_refs(*, after_chapter: int, must_include: list[str]) -> list[d
             refs = []
 
     # Topic-relevant supplement: use must_include phrases as queries.
+    # 修复(agentic-search 议题·自我污染):风味锚点应来自**原著**,排除续写已生成的章
+    # (否则写到第 N 章会把自己刚生成的 N-1 章当"原著风格"召回 → 自我同质化/塌缩)。
+    # 改用 craft.search.search_corpus(trigram 友好 + exclude_chapters),只在话题补充段生效;
+    # 近章续贯(_recent_chapter_prose)保持不变。
+    gen_chapters: set[int] = set()
+    try:
+        from sqlalchemy import select as _select
+        from ..memory.models import ChapterDraft
+        with session_scope() as _s:
+            gen_chapters = {c for (c,) in _s.execute(_select(ChapterDraft.chapter_index)).all() if c is not None}
+    except Exception:
+        gen_chapters = set()
     for phrase in (must_include or [])[:2]:
         if not phrase or len(phrase) < 4:
             continue
         try:
-            hits = fts_recall.search(query=phrase[:30], limit=1, before_chapter=after_chapter + 1)
+            from ..craft import search as _cs
+            hits = _cs.search_corpus(phrase[:40], k=1,
+                                     exclude_chapters=gen_chapters, before_chapter=after_chapter + 1)
             refs.extend(hits)
         except Exception:
             continue
