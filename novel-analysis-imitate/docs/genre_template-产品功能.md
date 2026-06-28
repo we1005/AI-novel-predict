@@ -32,3 +32,10 @@
 - 已是"可保存 + 可调用"MVP(API + e2e)。**前端页**(列表/抽取/preview/编辑)未做,列为下一步。
 - 未接进 compose 生成内核(写整本时自动注入 system_prompt)——可作为 outline/draft 的可选注入,后续接。
 - 旋钮可控(V6/#7:风格强度/求异度滑杆)未做;模板编辑(人工增删意象/负面项)未做。
+
+## 前端页(已加)
+- 路由 `app/genre/page.tsx`,rail 入口「类型模板」(home/generate/genome/architecture 均加)。
+- 左:多选**同题材**书 + 命名 → 抽取(后台轮询直到就绪);已存模板列表(选/删)。
+- 右:模板详情(意象/母题/世界观语汇/氛围/味道/负面清单 + 可展开 system_prompt)+ 试写(输主题→用模板现写一段)。
+- 前端 tsc 0 错;HTTP 端点实测(GET /genre-templates 返回已存「克苏鲁维多利亚」)。
+- 启动:后端 `backend/.venv/bin/python -m uvicorn naimitate.main:app --port 8100`(在 novel-analysis-imitate/backend 下);前端 `cd novel-analysis-imitate/frontend && npm run dev`(:3200)→ 打开「类型模板」。
