@@ -23,6 +23,51 @@ REDUP = re.compile(r"([一-龥])\1")          # 叠字:呆呆/死死/缓缓
 ELLIPSIS_PARA = re.compile(r"(^|\n)\s*[…\.]{2,}\s*(\n|$)")  # 省略号独段
 
 
+# ---- 句法层确定性维(句法层 MVP;**高特异性、无通配**,避免中文假阳性。先作观测/验证,不默认进 compare)----
+# 套路句式锚词对:**同句共现**即算命中(评审:不用 .*通配 防噪声淹没)。可外部传入扩展。
+DEFAULT_CLICHE_PAIRS = [
+    ("瞳孔", "收缩"), ("嘴角", "勾起"), ("嘴角", "扬起"), ("冷笑", "一声"),
+    ("眼底", "寒芒"), ("眼中", "精光"), ("眸", "厉色"), ("后颈", "发凉"),
+    ("脊背", "发凉"), ("深吸", "一口气"), ("眼神", "一凛"), ("寒芒", "一闪"),
+]
+# 翻译腔/西式句法的高特异性标记(只取信噪比高的;砍掉"句首状语/泛被动"等中文假阳性高的)
+WESTERN_CONNECTORS = re.compile(r"以至于|与其说|不如说|某种(?:意义|程度)上|换言之|不可名状|难以名状")
+ABSTRACT_PASSIVE = re.compile(r"被一种|被某种|所(?:攫住|笼罩|吞没|包裹|淹没|裹挟|支配)")
+
+
+def _sentences(text: str) -> list[str]:
+    return [s for s in re.split(r"[。!?…\n]", text or "") if s.strip()]
+
+
+def cliche_hit_density(text: str, pairs: list[tuple[str, str]] | None = None) -> float:
+    """套路句式命中频次/千字:每个锚词对**同一句内两词共现**计一次。无通配,假阳性低。"""
+    pairs = pairs or DEFAULT_CLICHE_PAIRS
+    if not text:
+        return 0.0
+    hits = sum(1 for s in _sentences(text) for a, b in pairs if a in s and b in s)
+    return round(hits / (len(text) / 1000.0), 3)
+
+
+def long_attributive_density(text: str, min_de: int = 3) -> float:
+    """长定语堆叠(翻译腔标志):小句内"的"≥min_de 的小句数 / 千字。"""
+    if not text:
+        return 0.0
+    clauses = [c for c in re.split(r"[,,。!?;;\n]", text) if c.strip()]
+    n = sum(1 for c in clauses if c.count("的") >= min_de)
+    return round(n / (len(text) / 1000.0), 3)
+
+
+def syntax_metrics(text: str) -> dict:
+    """句法层确定性指纹:套路命中 + 高特异性翻译腔标记。供调试观测 / 评测交叉验证。"""
+    kk = (len(text) / 1000.0) or 1.0
+    return {
+        "cliche_hit_per_kchar": cliche_hit_density(text),
+        "western_connector_per_kchar": round(len(WESTERN_CONNECTORS.findall(text or "")) / kk, 3),
+        "abstract_passive_per_kchar": round(len(ABSTRACT_PASSIVE.findall(text or "")) / kk, 3),
+        "long_attributive_per_kchar": long_attributive_density(text),
+    }
+
+
 # ---- 文本聚合 ----
 
 def scene_bucket_text(beats: list[dict] | None = None) -> dict[str, str]:

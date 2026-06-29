@@ -15,7 +15,9 @@ const FIELDS: { k: string; t: string }[] = [
   { k: "worldview_lexicon", t: "世界观语汇" },
   { k: "atmosphere", t: "氛围基调" },
   { k: "flavor_recipe", t: "味道要诀" },
-  { k: "anti_patterns", t: "负面清单(避免)" },
+  { k: "syntactic_patterns", t: "题材惯用句式 / 翻译腔" },
+  { k: "cliche_sentence_templates", t: "套路句式模板(避免)" },
+  { k: "anti_patterns", t: "负面清单 · 词汇(避免)" },
 ];
 
 export default function GenrePage() {

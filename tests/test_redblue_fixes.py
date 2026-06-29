@@ -268,6 +268,32 @@ def test_genre_template_knobs_graded():
     assert "求异=稳妥" in render_system_prompt(t, genre_strength=70, novelty=10)
 
 
+def test_syntax_cliche_hit_density():
+    # 句法层:套路句式同句共现命中(确定性,无通配)
+    from naimitate.analysis._fingerprint import cliche_hit_density, syntax_metrics
+    cliche = "他的瞳孔骤然收缩。反派冷笑一声。少年眼底寒芒一闪。" * 3   # 多套路
+    clean = "雨落在青石板上,远处传来钟声,他慢慢走过空荡的长街。" * 3   # 无套路
+    assert cliche_hit_density(cliche) > cliche_hit_density(clean)
+    assert cliche_hit_density(clean) == 0.0
+    m = syntax_metrics("他被一种不可名状的恐惧攫住,以至于无法动弹。")
+    assert m["western_connector_per_kchar"] > 0 and m["abstract_passive_per_kchar"] > 0
+
+
+def test_genre_template_syntax_layer_render():
+    # 句法层渲染:题材句式(受类型强度)+ 套路句式负面清单(受求异度,大胆档=硬禁用)
+    from naimitate.generate.genre_template import render_system_prompt
+    t = {"imagery": ["雾都"],
+         "syntactic_patterns": ["状语前置营造译本腔 — 在那扇门后,蛰伏着……"],
+         "cliche_sentence_templates": ["<人物>的<眼>寒芒一闪", "<反派>冷笑一声"]}
+    # 类型强度高 → 题材句式渲入;轻触 → 不渲(保持克制)
+    assert "题材句式" in render_system_prompt(t, genre_strength=90, novelty=60)
+    assert "题材句式" not in render_system_prompt(t, genre_strength=10, novelty=60)
+    # 求异大胆 → 句式硬禁用;求异=0 → 无句式负面清单
+    hi = render_system_prompt(t, genre_strength=70, novelty=90)
+    assert "句式负面清单·硬禁用" in hi and "寒芒一闪" in hi
+    assert "句式负面清单" not in render_system_prompt(t, genre_strength=70, novelty=0)
+
+
 def test_e79_ab_judge_forwards_labels(monkeypatch):
     # 集成防回归:_ab_judge 必须把 label_a/label_b **传进** _map_ab_winner
     # (曾漏传 → agentic A/B 误显示 on/off)。monkeypatch 掉 llm + random 使其确定。

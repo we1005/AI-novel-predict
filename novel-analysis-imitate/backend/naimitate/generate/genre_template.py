@@ -21,8 +21,11 @@ from sqlalchemy import text as _sql
 
 from ..project import store as project_store
 
-# 模板的语义部件(纯语义;无结构指纹——见 V1 定论)
-_FIELDS = ("imagery", "motifs", "worldview_lexicon", "atmosphere", "flavor_recipe", "anti_patterns")
+# 模板部件。语义层(V1:纯语义)+ 句法层(句法层审查):
+# - syntactic_patterns:题材**跨作者共有**的惯用句式/翻译腔(只在多作者同题材蒸馏时产出,见 V1 张力化解)。
+# - cliche_sentence_templates:该题材最该避免的**套路句式 slot 模板**(句式+词序,如「<人物>的<眼>+寒芒一闪」)。
+_FIELDS = ("imagery", "motifs", "worldview_lexicon", "atmosphere", "flavor_recipe",
+           "anti_patterns", "syntactic_patterns", "cliche_sentence_templates")
 
 
 def _slugify(name: str) -> str:
@@ -78,6 +81,15 @@ def render_system_prompt(template: dict, *, genre_strength: int = 70, novelty: i
                  if gb == 0 else "适中】自然融入上述意象与氛围,不喧宾夺主。"
                  if gb == 1 else "浓墨重彩】密集调用上述意象/语汇/氛围,饱和该题材的味道与质感。"))
 
+    # 句法层①:题材惯用句式(正向,受类型强度;轻触档不渲以保持克制)
+    syn = t.get("syntactic_patterns")
+    if syn and gb >= 1:
+        def _syn1(i):
+            return i if isinstance(i, str) else f"{i.get('rule', '')}({i.get('example', '')})"
+        rendered = ";".join(_syn1(i) for i in (syn if isinstance(syn, list) else [syn]) if i)
+        if rendered:
+            parts.append("【题材句式】适度运用该题材惯用句式/语序(题材味的句法层,勿生硬堆砌):" + rendered + "。")
+
     # 旋钮②:求异度(0=不加护栏)
     if novelty > 0:
         nb = _band(novelty)
@@ -89,20 +101,43 @@ def render_system_prompt(template: dict, *, genre_strength: int = 70, novelty: i
             if nb == 1 else
             f"大胆】**主动加入独特、出人意料、不落俗套的意象与转折**,极力避免任何套路与 AI 腔(尤其:{neg});"
             "但务必保持情节推进与节奏,勿因求新而拖慢、堆砌或写怪话。"))
+
+        # 句法层②:套路句式负面清单(受求异度;大胆档=硬禁用+同章不重复)
+        clich = t.get("cliche_sentence_templates")
+        if clich:
+            ct = ";".join(str(c) for c in (clich if isinstance(clich, list) else [clich]) if c)
+            if ct:
+                parts.append(
+                    ("【句式负面清单·硬禁用】严禁下列套路句式模板**及其同构变体**(出稿自查,命中即改写),同章勿重复任一句式:" + ct + "。")
+                    if nb >= 2 else
+                    ("【句式负面清单】尽量避开下列套路句式模板及其同构变体:" + ct + "。"))
     return "\n".join(parts)
 
 
 def _distill(samples: dict[str, str]) -> tuple[dict, float]:
     blob = "\n\n".join(f"【{k}】\n{v}" for k, v in samples.items())
     multi = len(samples) > 1
+    # 句法字段:syntactic_patterns 只在**多作者同题材**(multi)时要,以保证抽的是"跨作者收敛的题材句式"
+    # 而非某作者私货(化解 V1"结构=作者层"张力);单作者样本不抽题材句式。
+    syn_clause = (
+        "、syntactic_patterns(该题材**多家作者共有**的惯用句式/翻译腔规则,数组;"
+        "每条形如「规则 — 例句」,点名句法操作:状语/介词短语前置、长定语堆叠、"
+        "西式连接词(如此…以至于/与其说…不如说)、判断句式等;**只收多家都用的句式,不收某一家的私有节奏**)"
+        if multi else ""
+    )
     sys = (
         f"你是题材分析师。下面是 {len(samples)} 部"
         f"{'**不同作者**的同题材作品' if multi else '作品'}节选。"
-        f"请{'只提炼它们**共同**的' if multi else '提炼其'}**题材语义层**"
-        "(**不要**任何作者的句长/段落/标点等结构习惯——那是作者指纹,不是题材)。"
+        f"请{'只提炼它们**共同**的' if multi else '提炼其'}**题材语义层 + 句法层**"
+        "(语义层不要任何作者私有的句长/段落/标点等**因人而异**的结构习惯;但题材**跨作者共有**的句式/翻译腔属于题材层,要抽)。"
         "只输出 JSON,字段:imagery(核心意象,数组)、motifs(反复母题/套路,数组)、"
         "worldview_lexicon(世界观元件与专有语汇,数组)、atmosphere(氛围情绪基调,一句话)、"
-        "flavor_recipe(该题材的'味道'要诀,1-2 句)、anti_patterns(写这类最该避免的套路/陈词,数组)。"
+        "flavor_recipe(该题材的'味道'要诀,1-2 句)、anti_patterns(最该避免的**词汇级**陈词,数组)"
+        + syn_clause +
+        "、cliche_sentence_templates(该题材最该避免的**套路句式模板**,数组;"
+        "每条是**句式+词序模板**而非单词,用尖括号标可替换处,并给括号变体,"
+        "如「<人物>的<眼睛>+寒芒一闪(变体:眸光一厉/眼底精光一闪)」「<反派>冷笑一声」;"
+        "**尽量取语料里真出现过的高频套路**,孤例不算)。"
     )
     r = llm.call(agent="style.analyze", model=MODEL_STRONG, system=sys,
                  messages=[{"role": "user", "content": blob}],
