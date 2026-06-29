@@ -40,10 +40,22 @@ def _sample(slug: str, chars: int = 2600) -> str:
     return ("\n".join(r[0] for r in rows))[:chars]
 
 
-def render_system_prompt(template: dict, *, anti_cliche: bool = True) -> str:
+def _band(v: int) -> int:
+    """0-100 → 0/1/2 三档(低/中/高)。"""
+    v = max(0, min(100, int(v)))
+    return 0 if v < 34 else (1 if v < 67 else 2)
+
+
+def render_system_prompt(template: dict, *, genre_strength: int = 70, novelty: int = 60,
+                         anti_cliche: bool | None = None) -> str:
     """把结构化模板渲染成可直接喂 writer 的 system_prompt。纯函数(可单测)。
-    内建 V2 求异/留白护栏 + 负面清单 + 保持节奏。"""
+    两个旋钮(V6):
+      - genre_strength 0-100:类型味浓度(轻触 / 正常 / 浓墨重彩)。
+      - novelty 0-100:求异度/去套路强度(稳妥 / 适度求新 / 大胆求异;0=不加护栏)。
+    anti_cliche(向后兼容):None=用 novelty;False→novelty=0;True→保持 novelty。"""
     t = template or {}
+    if anti_cliche is False:
+        novelty = 0
     def _join(x):
         if isinstance(x, list):
             return "、".join(str(i) for i in x if i)
@@ -59,13 +71,24 @@ def render_system_prompt(template: dict, *, anti_cliche: bool = True) -> str:
         parts.append(f"氛围基调:{_join(t['atmosphere'])}。")
     if t.get("flavor_recipe"):
         parts.append(f"味道要诀:{_join(t['flavor_recipe'])}。")
-    if anti_cliche:
+
+    # 旋钮①:类型味浓度
+    gb = _band(genre_strength)
+    parts.append("【类型强度=" + ("轻触】只点到最核心的几个意象,语言克制,不堆砌设定与术语,题材味淡。"
+                 if gb == 0 else "适中】自然融入上述意象与氛围,不喧宾夺主。"
+                 if gb == 1 else "浓墨重彩】密集调用上述意象/语汇/氛围,饱和该题材的味道与质感。"))
+
+    # 旋钮②:求异度(0=不加护栏)
+    if novelty > 0:
+        nb = _band(novelty)
         neg = _join(t.get("anti_patterns")) or "嘴角勾起、空气仿佛凝固、心头一紧 等陈词与 AI 腔"
-        parts.append(
-            "【写作护栏】在以上类型底色上,**主动加入独特、出人意料、不落俗套的意象与转折**,"
-            f"刻意避免陈词滥调与套路化表达(尤其:{neg});"
-            "但保持情节推进与节奏,勿因求新而拖慢、堆砌或写怪话。"
-        )
+        parts.append("【写作护栏·求异=" + (
+            f"稳妥】优先清晰好读、节奏明快,允许常规写法,不刻意求异(仍尽量避开:{neg})。"
+            if nb == 0 else
+            f"适度】在常规上略加新意,避免最陈词的表达(尤其:{neg})。"
+            if nb == 1 else
+            f"大胆】**主动加入独特、出人意料、不落俗套的意象与转折**,极力避免任何套路与 AI 腔(尤其:{neg});"
+            "但务必保持情节推进与节奏,勿因求新而拖慢、堆砌或写怪话。"))
     return "\n".join(parts)
 
 
@@ -116,13 +139,17 @@ def extract_genre_template(name: str, source_slugs: list[str], *,
     )
 
 
-def preview(slug: str, topic: str, *, max_tokens: int = 1400) -> dict:
-    """用已保存模板的 system_prompt 写一段样例(证明'可调用')。"""
+def preview(slug: str, topic: str, *, genre_strength: int = 70, novelty: int = 60,
+            max_tokens: int = 1400) -> dict:
+    """用模板写一段样例(证明'可调用')。按旋钮(V6)**实时重渲** system_prompt,而非用存好的默认。"""
     rec = project_store.get_genre_template(slug)
     if not rec:
         raise ValueError(f"genre_template {slug!r} 不存在")
+    sp = render_system_prompt(rec.get("template") or {},
+                              genre_strength=genre_strength, novelty=novelty)
     r = llm.call(agent="draft.writer", model=MODEL_STRONG,
-                 system=f"你是小说家。严格按以下配方写约 450 字中文场景,不写标题、直接正文。\n{rec['system_prompt']}",
+                 system=f"你是小说家。严格按以下配方写约 450 字中文场景,不写标题、直接正文。\n{sp}",
                  messages=[{"role": "user", "content": f"场景:{topic}"}],
                  max_tokens=max_tokens, temperature=0.85)
-    return {"slug": slug, "topic": topic, "text": (r.text or "").strip(), "cost_usd": r.cost_usd}
+    return {"slug": slug, "topic": topic, "genre_strength": genre_strength, "novelty": novelty,
+            "system_prompt": sp, "text": (r.text or "").strip(), "cost_usd": r.cost_usd}

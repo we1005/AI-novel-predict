@@ -38,8 +38,8 @@ export const api = {
     j("/genre-templates/extract", { method: "POST", body: JSON.stringify(body) }),
   genreDelete: (slug: string) =>
     j(`/genre-templates/${encodeURIComponent(slug)}`, { method: "DELETE" }),
-  genrePreview: (slug: string, topic: string) =>
+  genrePreview: (slug: string, topic: string, genre_strength = 70, novelty = 60) =>
     j(`/genre-templates/${encodeURIComponent(slug)}/preview`, {
-      method: "POST", body: JSON.stringify({ topic }),
+      method: "POST", body: JSON.stringify({ topic, genre_strength, novelty }),
     }),
 };

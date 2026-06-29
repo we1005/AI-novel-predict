@@ -254,6 +254,20 @@ def test_genre_template_render_empty_safe():
     assert "类型写作配方" in sp and "写作护栏" in sp
 
 
+def test_genre_template_knobs_graded():
+    # V6 旋钮分档:类型强度/求异度 0-100 → 渲染出可区分的低/中/高档措辞(纯函数)
+    from naimitate.generate.genre_template import render_system_prompt, _band
+    assert (_band(10), _band(50), _band(90)) == (0, 1, 2)
+    t = {"imagery": ["雾都"], "anti_patterns": ["嘴角勾起"]}
+    low_g = render_system_prompt(t, genre_strength=10, novelty=60)
+    hi_g = render_system_prompt(t, genre_strength=90, novelty=60)
+    assert "轻触" in low_g and "浓墨重彩" in hi_g                  # 强度档位可区分
+    # 求异=0 → 无护栏;求异高 → 大胆求异
+    assert "写作护栏" not in render_system_prompt(t, genre_strength=70, novelty=0)
+    assert "求异=大胆" in render_system_prompt(t, genre_strength=70, novelty=90)
+    assert "求异=稳妥" in render_system_prompt(t, genre_strength=70, novelty=10)
+
+
 def test_e79_ab_judge_forwards_labels(monkeypatch):
     # 集成防回归:_ab_judge 必须把 label_a/label_b **传进** _map_ab_winner
     # (曾漏传 → agentic A/B 误显示 on/off)。monkeypatch 掉 llm + random 使其确定。

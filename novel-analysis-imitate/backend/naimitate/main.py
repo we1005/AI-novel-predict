@@ -423,12 +423,15 @@ def genre_delete(slug: str):
 
 class GenrePreviewReq(BaseModel):
     topic: str
+    genre_strength: int = 70   # 旋钮①:类型味浓度 0-100
+    novelty: int = 60          # 旋钮②:求异度/去套路 0-100
 
 
 @app.post("/genre-templates/{slug}/preview")
 def genre_preview(slug: str, body: GenrePreviewReq):
-    """用该模板的 system_prompt 现写一段样例,证明'可调用'。"""
+    """按旋钮(类型强度/求异度)实时重渲 system_prompt 并现写一段样例,证明'可调用且可调'。"""
     try:
-        return gt.preview(slug, body.topic)
+        return gt.preview(slug, body.topic,
+                          genre_strength=body.genre_strength, novelty=body.novelty)
     except ValueError as e:
         return {"error": str(e)}

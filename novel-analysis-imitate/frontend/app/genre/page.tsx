@@ -25,6 +25,8 @@ export default function GenrePage() {
   const [picked, setPicked] = useState<string[]>([]);
   const [sel, setSel] = useState<Tpl | null>(null);
   const [topic, setTopic] = useState("");
+  const [genreStrength, setGenreStrength] = useState(70);   // 旋钮①:类型味浓度
+  const [novelty, setNovelty] = useState(60);               // 旋钮②:求异度
   const [previewText, setPreviewText] = useState("");
   const [busy, setBusy] = useState(false);
   const [previewing, setPreviewing] = useState(false);
@@ -67,7 +69,7 @@ export default function GenrePage() {
     if (!sel || !topic.trim()) { setMsg("请填一个场景主题"); return; }
     setPreviewing(true); setPreviewText(""); setMsg("");
     try {
-      const r = await api.genrePreview(sel.slug, topic.trim());
+      const r = await api.genrePreview(sel.slug, topic.trim(), genreStrength, novelty);
       setPreviewText(r.error ? "错误:" + r.error : r.text);
     } catch (e: any) { setMsg("preview 失败: " + e.message); }
     finally { setPreviewing(false); }
@@ -173,6 +175,22 @@ export default function GenrePage() {
 
               <div className="card">
                 <h3 style={{ marginTop: 0 }}>试写(用该模板现写一段)</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 12 }}>
+                  <label style={{ fontSize: 13 }}>
+                    类型味浓度 <strong>{genreStrength}</strong>
+                    <span className="muted" style={{ fontSize: 11 }}>（轻触 → 浓墨重彩）</span>
+                    <input type="range" min={0} max={100} step={5} value={genreStrength}
+                      onChange={(e) => setGenreStrength(Number(e.target.value))}
+                      style={{ width: "100%" }} />
+                  </label>
+                  <label style={{ fontSize: 13 }}>
+                    求异度 <strong>{novelty}</strong>
+                    <span className="muted" style={{ fontSize: 11 }}>（稳妥 → 大胆求异）</span>
+                    <input type="range" min={0} max={100} step={5} value={novelty}
+                      onChange={(e) => setNovelty(Number(e.target.value))}
+                      style={{ width: "100%" }} />
+                  </label>
+                </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input placeholder="场景主题,如:雾夜停尸间,尸体胸腔仍在起伏"
                     value={topic} onChange={(e) => setTopic(e.target.value)}
