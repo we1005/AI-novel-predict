@@ -1,6 +1,56 @@
 "use client";
 import Icon from "@/components/Icon";
 import Link from "next/link";
+import Mermaid from "@/components/Mermaid";
+
+// —— mermaid 流程图(与 docs/分析和设计.md 0.x 同源)——
+const DIA_OVERVIEW = `flowchart LR
+  subgraph MB["墨笔 · 单书续写 (:8000/:3100)"]
+    MBmem["记忆/抽取<br/>实体·伏笔·关系·状态"]
+    MBwrite["写作链路<br/>writer→3审1编→人审gate→回灌"]
+  end
+  subgraph NA["墨析 · 跨书分析+仿写 (:8100/:3200)"]
+    NAan["深度分析层<br/>节拍/POV/关系/金手指/世界观"]
+    NAgenre["genre_template<br/>类型模板(语义+句法抽取)"]
+    NAgen["compose 虚拟书 → 复用生成内核"]
+  end
+  SB["共享 backend 包<br/>llm.client·切分+FTS·6抽取·风格·craft·db"]
+  MBwrite --> SB
+  NAan -->|"set_active / book_scope"| SB
+  NAgenre -->|"import 复用"| SB
+  NAgen -->|"set_active 虚拟书"| SB`;
+
+const DIA_GENRE = `flowchart TD
+  books["N 本同题材不同作者书"] --> split["切分: chapters + FTS + 语料"]
+  split --> distill["_distill 蒸馏 (multi 多作者)"]
+  distill --> tpl["genre_template 存 project.db"]
+  tpl --> sem["语义层: 意象/母题/世界观语汇/氛围/味道"]
+  tpl --> syn["句法层: 题材惯用句式 / 套路句式模板"]
+  sem --> render["render_system_prompt<br/>+旋钮: 类型强度 / 求异度"]
+  syn -. "默认不进生成(分析参考)" .-> render
+  render --> gen["试写 / 生成 (writer)"]
+  syn --> ui["前端展示:抽离题材句法"]`;
+
+const DIA_RETRIEVAL = `flowchart LR
+  ch["要写的章<br/>intent / must_include"] --> route{"检索策略"}
+  route -->|"push 默认 (#78)"| push["话题关键词 → 原著 FTS"]
+  route -->|"agentic opt-in (#79)"| ag["规划器自选查询 → 检索"]
+  route -->|"vector opt-in (E2)"| vec["语义召回 bge/chroma<br/>默认关·手动建索引"]
+  recent["近章正文(续贯)"] --> refs["style_refs<br/>(排除已生成章)"]
+  push --> refs
+  ag --> refs
+  vec --> refs
+  refs --> writer["writer 生成"]`;
+
+const DIA_VERIFY = `flowchart TD
+  reframe["reframe:逼近某作者 → 提取类型通用模板"] --> V1["V1 结构指纹=作者层<br/>题材纯在语义层"]
+  V1 --> V2["V2 共性更套路 → 需强制求异"]
+  V2 --> V3["V3 融合不变粥(2源)·真风险=缝感"]
+  V3 --> Vg["V_genre 通用模板:胜过裸prompt · 不输贴单作者"]
+  Vg --> V5["V5 跨书raw检索注入反更差 → 预蒸连贯模板"]
+  V5 --> V6["V6 旋钮单调可控 ✓"]
+  V6 --> Vs["V_syntax 句法层:抽取✅ / 生成注入未验出增量→默认关"]
+  Vs --> dec["定稿:语义模板+求异护栏+旋钮;句法抽取-only;评估转'适配度'"]`;
 
 function Rail() {
   return (
@@ -105,6 +155,16 @@ export default function Architecture() {
         <span className="eyebrow">SYSTEM · ARCHITECTURE</span>
         <div className="h1">墨析 · 系统架构</div>
         <div className="sub">从原著到「可复现文风」:拆解 → 基因组 → 生成 → 评测闭环。一图看懂整条管线。</div>
+
+        {/* 0 · mermaid 流程图 */}
+        <div className="card">
+          <span className="eyebrow">FLOWCHARTS</span>
+          <h2>⓪ 架构流程图(带箭头)</h2>
+          <Mermaid title="0.1 双服务总览(墨笔 / 墨析 / 共享 backend)" chart={DIA_OVERVIEW} />
+          <Mermaid title="0.2 类型模板线(genre_template:语义层 + 句法层)" chart={DIA_GENRE} />
+          <Mermaid title="0.3 写作时的检索三路(push 默认 / agentic / 向量 opt-in)" chart={DIA_RETRIEVAL} />
+          <Mermaid title="0.4 验证地图(reframe → V1–V6/V_genre/V_syntax → 定稿)" chart={DIA_VERIFY} />
+        </div>
 
         {/* 1 · 总览管线 */}
         <div className="card">
