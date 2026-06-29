@@ -158,9 +158,13 @@ export default function GenrePage() {
                 {FIELDS.map((f) => {
                   const v = sel.template?.[f.k];
                   if (!v || (Array.isArray(v) && !v.length)) return null;
+                  const isSyntax = f.k === "syntactic_patterns" || f.k === "cliche_sentence_templates";
                   return (
                     <div key={f.k} style={{ marginBottom: 8 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{f.t}</div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>
+                        {f.t}
+                        {isSyntax && <span className="muted" style={{ fontSize: 11, fontWeight: "normal" }}> · 分析参考(当前不进试写)</span>}
+                      </div>
                       <div style={{ fontSize: 13, color: "var(--bone,#574f40)" }}>
                         {Array.isArray(v) ? arr(v).join(" · ") : String(v)}
                       </div>
