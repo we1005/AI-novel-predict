@@ -87,7 +87,7 @@ export default function GenrePage() {
   const arr = (v: any) => Array.isArray(v) ? v : (v ? [String(v)] : []);
 
   return (
-    <div className="layout">
+    <div className="applayout">
       <aside className="rail">
         <Link href="/" className="railbrand"><span className="railseal">墨</span><span>墨析</span></Link>
         <nav className="railnav">
@@ -99,7 +99,8 @@ export default function GenrePage() {
         </nav>
       </aside>
 
-      <main className="main" style={{ padding: 24, display: "grid", gridTemplateColumns: "320px 1fr", gap: 20 }}>
+      <main className="appmain">
+        <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 20, alignItems: "start" }}>
         {/* 左:抽取 + 列表 */}
         <div>
           <div className="card" style={{ marginBottom: 16 }}>
@@ -214,6 +215,7 @@ export default function GenrePage() {
               </div>
             </>
           )}
+        </div>
         </div>
       </main>
     </div>
