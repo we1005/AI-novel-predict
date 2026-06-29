@@ -50,7 +50,7 @@ def _band(v: int) -> int:
 
 
 def render_system_prompt(template: dict, *, genre_strength: int = 70, novelty: int = 60,
-                         anti_cliche: bool | None = None) -> str:
+                         anti_cliche: bool | None = None, inject_syntax: bool = False) -> str:
     """把结构化模板渲染成可直接喂 writer 的 system_prompt。纯函数(可单测)。
     两个旋钮(V6):
       - genre_strength 0-100:类型味浓度(轻触 / 正常 / 浓墨重彩)。
@@ -82,8 +82,11 @@ def render_system_prompt(template: dict, *, genre_strength: int = 70, novelty: i
                  if gb == 1 else "浓墨重彩】密集调用上述意象/语汇/氛围,饱和该题材的味道与质感。"))
 
     # 句法层①:题材惯用句式(正向,受类型强度;轻触档不渲以保持克制)
+    # ⚠ inject_syntax 默认 False:V_syntax 实测**把句法层注入提示词反而更套路、更不新鲜**
+    #   (套路句式逐条列入=反向 priming;题材句式正向推=prose 变重)。故默认不注入,恢复 V_genre 验证的好行为;
+    #   抽取/展示/确定性 detector 仍保留。正确用法应是"生成后 linter"而非 in-prompt,见 docs/V_syntax 结论。
     syn = t.get("syntactic_patterns")
-    if syn and gb >= 1:
+    if inject_syntax and syn and gb >= 1:
         def _syn1(i):
             return i if isinstance(i, str) else f"{i.get('rule', '')}({i.get('example', '')})"
         rendered = ";".join(_syn1(i) for i in (syn if isinstance(syn, list) else [syn]) if i)
@@ -103,7 +106,8 @@ def render_system_prompt(template: dict, *, genre_strength: int = 70, novelty: i
             "但务必保持情节推进与节奏,勿因求新而拖慢、堆砌或写怪话。"))
 
         # 句法层②:套路句式负面清单(受求异度;大胆档=硬禁用+同章不重复)
-        clich = t.get("cliche_sentence_templates")
+        # 同上:inject_syntax 默认 False(实测列举套路句式 → 反向 priming,套路反升)。
+        clich = t.get("cliche_sentence_templates") if inject_syntax else None
         if clich:
             ct = ";".join(str(c) for c in (clich if isinstance(clich, list) else [clich]) if c)
             if ct:
@@ -150,6 +154,26 @@ def _distill(samples: dict[str, str]) -> tuple[dict, float]:
         data = {}
     template = {k: data.get(k) for k in _FIELDS if data.get(k) is not None}
     return template, r.cost_usd
+
+
+def cliche_lint(text: str, cliche_templates: list[str], *, max_tokens: int = 1600) -> tuple[str, float]:
+    """生成**后** linter:只改写命中套路句式模板的句子,其余原样。
+    这是句法层的**正确接法**(V_syntax 实测:把套路清单塞进生成提示=反向 priming,套路反升;
+    放到生成后做定向去套路则不污染创作)。无命中模板则原样返回(零成本)。"""
+    if not text or not cliche_templates:
+        return text, 0.0
+    tpl = "；".join(str(c) for c in cliche_templates if c)
+    sys = (
+        "你是中文文字编辑。下面给你一段小说正文和一份'套路句式模板'清单。"
+        "任务:**只把正文里命中这些套路句式(或其同构变体)的句子,改写成不落俗套、贴合上下文的表达**;"
+        "其余句子**一字不改**。保持情节、人物、信息量、长度大致不变,不要新增情节。直接输出改写后的完整正文,不要解释。\n"
+        f"【套路句式模板清单】{tpl}"
+    )
+    r = llm.call(agent="draft.review.style", model=MODEL_STRONG, system=sys,
+                 messages=[{"role": "user", "content": text}],
+                 max_tokens=max_tokens, temperature=0.6)
+    out = (r.text or "").strip()
+    return (out or text), r.cost_usd
 
 
 def extract_genre_template(name: str, source_slugs: list[str], *,

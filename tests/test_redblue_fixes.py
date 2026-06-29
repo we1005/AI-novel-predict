@@ -285,13 +285,15 @@ def test_genre_template_syntax_layer_render():
     t = {"imagery": ["雾都"],
          "syntactic_patterns": ["状语前置营造译本腔 — 在那扇门后,蛰伏着……"],
          "cliche_sentence_templates": ["<人物>的<眼>寒芒一闪", "<反派>冷笑一声"]}
-    # 类型强度高 → 题材句式渲入;轻触 → 不渲(保持克制)
-    assert "题材句式" in render_system_prompt(t, genre_strength=90, novelty=60)
-    assert "题材句式" not in render_system_prompt(t, genre_strength=10, novelty=60)
-    # 求异大胆 → 句式硬禁用;求异=0 → 无句式负面清单
-    hi = render_system_prompt(t, genre_strength=70, novelty=90)
+    # inject_syntax 默认 False(V_syntax 实测注入反更套路)→ 默认不渲句法层
+    assert "题材句式" not in render_system_prompt(t, genre_strength=90, novelty=60)
+    assert "句式负面清单" not in render_system_prompt(t, genre_strength=70, novelty=90)
+    # 显式 inject_syntax=True(实验用)才渲:类型强度高→题材句式,轻触→不渲
+    assert "题材句式" in render_system_prompt(t, genre_strength=90, novelty=60, inject_syntax=True)
+    assert "题材句式" not in render_system_prompt(t, genre_strength=10, novelty=60, inject_syntax=True)
+    hi = render_system_prompt(t, genre_strength=70, novelty=90, inject_syntax=True)
     assert "句式负面清单·硬禁用" in hi and "寒芒一闪" in hi
-    assert "句式负面清单" not in render_system_prompt(t, genre_strength=70, novelty=0)
+    assert "句式负面清单" not in render_system_prompt(t, genre_strength=70, novelty=0, inject_syntax=True)
 
 
 def test_e79_ab_judge_forwards_labels(monkeypatch):
