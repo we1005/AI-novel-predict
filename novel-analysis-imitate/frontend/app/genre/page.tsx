@@ -34,7 +34,7 @@ export default function GenrePage() {
   const [previewing, setPreviewing] = useState(false);
   const [msg, setMsg] = useState("");
   // 抽样策略(按字数比例 + 全书均匀铺开)
-  const [sample, setSample] = useState<any>({ ratio: 0.005, min_chars: 2500, max_chars: 8000, spread: 6 });
+  const [sample, setSample] = useState<any>({ ratio: 0.005, min_chars: 3000, max_chars: 20000, spread: 16 });
   const [showSample, setShowSample] = useState(false);
 
   const refresh = () => api.genreList().then(setList).catch(() => {});

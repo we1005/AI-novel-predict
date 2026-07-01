@@ -36,7 +36,7 @@ def _slugify(name: str) -> str:
 
 # 抽样默认策略:**按字数比例 + 全书均匀铺开**(非按章节;修"长章少/短章多"偏差 + 只取开头段的偏差)。
 # 每本预算 = clamp(ratio×该书字数, min_chars, max_chars);全书均匀取 spread 段。min==max 即"等量模式"。
-SAMPLE_DEFAULTS = {"ratio": 0.005, "min_chars": 2500, "max_chars": 8000, "spread": 6}
+SAMPLE_DEFAULTS = {"ratio": 0.005, "min_chars": 3000, "max_chars": 20000, "spread": 16}
 
 
 def _sample(slug: str, cfg: dict | None = None) -> str:
@@ -162,7 +162,10 @@ def _distill(samples: dict[str, str]) -> tuple[dict, float]:
         "、cliche_sentence_templates(该题材最该避免的**套路句式模板**,数组;"
         "每条是**句式+词序模板**而非单词,用尖括号标可替换处,并给括号变体,"
         "如「<人物>的<眼睛>+寒芒一闪(变体:眸光一厉/眼底精光一闪)」「<反派>冷笑一声」;"
-        "**尽量取语料里真出现过的高频套路**,孤例不算)。"
+        "**尽量取语料里真出现过的高频套路**,孤例不算)。\n"
+        # S0(抽样代表性 brainstorm):样本可能偏重某类场景 → 显式要求跨模式提炼,补齐采样未覆盖到的模式。
+        "注意:上述节选可能偏重某类场景(对白/动作/景物/心理),请**跨这些写作模式**分别提炼该题材的写法,"
+        "不要只覆盖样本里最多的那一类。"
     )
     r = llm.call(agent="style.analyze", model=MODEL_STRONG, system=sys,
                  messages=[{"role": "user", "content": blob}],
