@@ -376,31 +376,53 @@ def compose_export(cslug: str):
 # 通用类型模板(genre_template):从一组同题材书抽"写作配方",可保存可调用
 # ---------------------------------------------------------------------------
 
+class SampleCfg(BaseModel):
+    ratio: float | None = None       # 每本取 ratio×字数(0.0001–0.2)
+    min_chars: int | None = None     # 下限(min==max 即等量模式)
+    max_chars: int | None = None     # 上限(防长书淹没短书)
+    spread: int | None = None        # 全书均匀取几段
+
+
 class GenreExtractReq(BaseModel):
     name: str
     source_slugs: list[str]
     slug: str | None = None
+    sample: SampleCfg | None = None   # 抽样策略覆盖(不给则用已存默认)
+
+
+@app.get("/genre-templates/sample-config")
+def genre_sample_config_get():
+    """抽样策略默认值(内置默认 + 已存覆盖)。"""
+    return {**gt.SAMPLE_DEFAULTS, **project_store.get_genre_sample_config()}
+
+
+@app.put("/genre-templates/sample-config")
+def genre_sample_config_put(body: SampleCfg):
+    cfg = {k: v for k, v in body.model_dump().items() if v is not None}
+    project_store.save_genre_sample_config(cfg)
+    return {**gt.SAMPLE_DEFAULTS, **cfg}
 
 
 @app.post("/genre-templates/extract")
 def genre_extract(body: GenreExtractReq, background: BackgroundTasks):
     """从一组同题材书的语义层抽类型模板并保存(后台;抽取需一次 STRONG 调用)。
-    轮询 GET /genre-templates/{slug} 看是否就绪。"""
+    轮询 GET /genre-templates/{slug} 看是否就绪。sample 不给则用已存默认策略。"""
     from app.books import library as _lib
     slug = body.slug or gt._slugify(body.name)
     known = {b.get("slug") for b in _lib.list_books()}
     missing = [s for s in body.source_slugs if s not in known]
     if missing:
         return {"error": f"未入库(请先切分): {missing}"}
+    sample = {k: v for k, v in (body.sample.model_dump() if body.sample else {}).items() if v is not None}
 
     def _run():
         try:
-            gt.extract_genre_template(body.name, body.source_slugs, slug=slug)
+            gt.extract_genre_template(body.name, body.source_slugs, slug=slug, sample=sample or None)
         except Exception:
             pass  # 失败时 get 返回 None,前端可重试
 
     background.add_task(_run)
-    return {"status": "started", "slug": slug, "source_slugs": body.source_slugs}
+    return {"status": "started", "slug": slug, "source_slugs": body.source_slugs, "sample": sample}
 
 
 @app.get("/genre-templates")

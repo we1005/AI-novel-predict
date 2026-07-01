@@ -33,12 +33,18 @@ export default function GenrePage() {
   const [busy, setBusy] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [msg, setMsg] = useState("");
+  // 抽样策略(按字数比例 + 全书均匀铺开)
+  const [sample, setSample] = useState<any>({ ratio: 0.005, min_chars: 2500, max_chars: 8000, spread: 6 });
+  const [showSample, setShowSample] = useState(false);
 
   const refresh = () => api.genreList().then(setList).catch(() => {});
   useEffect(() => {
     api.books().then(setBooks).catch((e) => setMsg("无法连接后端 :8100 — " + e.message));
+    api.genreSampleConfigGet().then((c) => c && setSample((s: any) => ({ ...s, ...c }))).catch(() => {});
     refresh();
   }, []);
+
+  const setS = (k: string, v: number) => setSample((s: any) => ({ ...s, [k]: v }));
 
   const toggle = (slug: string) =>
     setPicked((p) => (p.includes(slug) ? p.filter((x) => x !== slug) : [...p, slug]));
@@ -53,7 +59,7 @@ export default function GenrePage() {
     if (!name.trim() || picked.length < 2) { setMsg("请填模板名,且至少选 2 本同题材的书"); return; }
     setBusy(true); setMsg("正在抽取(蒸馏多书语义层,约 15–40 秒)…"); setSel(null);
     try {
-      const r = await api.genreExtract({ name: name.trim(), source_slugs: picked });
+      const r = await api.genreExtract({ name: name.trim(), source_slugs: picked, sample });
       if (r.error) { setMsg("失败:" + r.error); setBusy(false); return; }
       const slug = r.slug;
       // 后台抽取,轮询直到就绪
@@ -119,6 +125,42 @@ export default function GenrePage() {
                 </label>
               ))}
             </div>
+
+            {/* 抽样策略:按字数比例 + 全书均匀铺开(可调 + 存为默认)*/}
+            <div style={{ marginTop: 10, fontSize: 12 }}>
+              <div onClick={() => setShowSample((v) => !v)}
+                style={{ cursor: "pointer", color: "var(--zhe,#9a6b2f)", fontWeight: 600 }}>
+                {showSample ? "▾" : "▸"} 抽样策略(按字数比例)
+                <span className="muted" style={{ fontWeight: "normal" }}> · 每本 ≈{(sample.ratio * 100).toFixed(2)}%字数,夹在 {sample.min_chars}–{sample.max_chars} 字</span>
+              </div>
+              {showSample && (
+                <div style={{ marginTop: 8, padding: 10, background: "var(--paper,#f1efe5)", borderRadius: 6, display: "grid", gap: 8 }}>
+                  <label>比例(每本取全书的 %) <strong>{(sample.ratio * 100).toFixed(2)}%</strong>
+                    <input type="range" min={0.1} max={3} step={0.1} value={sample.ratio * 100}
+                      onChange={(e) => setS("ratio", Number(e.target.value) / 100)} style={{ width: "100%" }} />
+                  </label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <label style={{ flex: 1 }}>下限字数
+                      <input type="number" value={sample.min_chars} min={500} step={500}
+                        onChange={(e) => setS("min_chars", Number(e.target.value))} style={{ width: "100%" }} /></label>
+                    <label style={{ flex: 1 }}>上限字数
+                      <input type="number" value={sample.max_chars} min={sample.min_chars} step={500}
+                        onChange={(e) => setS("max_chars", Number(e.target.value))} style={{ width: "100%" }} /></label>
+                    <label style={{ width: 70 }}>取样段数
+                      <input type="number" value={sample.spread} min={1} max={20}
+                        onChange={(e) => setS("spread", Number(e.target.value))} style={{ width: "100%" }} /></label>
+                  </div>
+                  <div className="muted" style={{ fontSize: 11 }}>
+                    按字符位置在全书均匀取样(非按章节,修长短章偏差);上限防长书淹没短书;下限=上限即“等量模式”。
+                  </div>
+                  <button className="ghost" style={{ fontSize: 12, padding: "4px 10px", justifySelf: "start" }}
+                    onClick={() => api.genreSampleConfigPut(sample).then(() => setMsg("✅ 已存为默认抽样策略")).catch(() => setMsg("保存失败"))}>
+                    保存为默认
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button onClick={extract} disabled={busy}
               style={{ marginTop: 10, width: "100%", padding: "8px 0" }}>
               {busy ? "抽取中…" : `抽取(已选 ${picked.length} 本)`}

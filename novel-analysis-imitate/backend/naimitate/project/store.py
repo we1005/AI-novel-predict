@@ -55,6 +55,9 @@ def init() -> None:
             slug TEXT UNIQUE, name TEXT, source_slugs_json TEXT,
             template_json TEXT, system_prompt TEXT, cost_usd REAL,
             created_at TEXT, updated_at TEXT)"""))
+        # 通用 kv 配置(如 genre 抽样策略默认值)。
+        c.execute(text("""CREATE TABLE IF NOT EXISTS app_config(
+            key TEXT PRIMARY KEY, value_json TEXT, updated_at TEXT)"""))
 
 
 def save_fused(project_slug: str, kind: str, card: dict, *,
@@ -142,6 +145,30 @@ def list_genre_templates() -> list[dict]:
         d["source_slugs"] = json.loads(d.pop("source_slugs_json") or "[]")
         out.append(d)
     return out
+
+
+def get_config(key: str, default=None):
+    init()
+    with _engine.begin() as c:
+        r = c.execute(text("SELECT value_json FROM app_config WHERE key=:k"), {"k": key}).scalar()
+    return json.loads(r) if r else default
+
+
+def save_config(key: str, value) -> None:
+    init()
+    with _engine.begin() as c:
+        c.execute(text("INSERT OR REPLACE INTO app_config(key,value_json,updated_at) VALUES (:k,:v,:t)"),
+                  {"k": key, "v": json.dumps(value, ensure_ascii=False),
+                   "t": datetime.now(timezone.utc).isoformat()})
+
+
+def get_genre_sample_config() -> dict:
+    return get_config("genre_sample", {}) or {}
+
+
+def save_genre_sample_config(cfg: dict) -> dict:
+    save_config("genre_sample", cfg)
+    return cfg
 
 
 def delete_genre_template(slug: str) -> bool:

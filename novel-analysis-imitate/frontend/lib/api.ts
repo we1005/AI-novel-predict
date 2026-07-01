@@ -34,8 +34,11 @@ export const api = {
   // ---- 通用类型模板(genre_template)----
   genreList: () => j("/genre-templates"),
   genreGet: (slug: string) => j(`/genre-templates/${encodeURIComponent(slug)}`),
-  genreExtract: (body: { name: string; source_slugs: string[] }) =>
+  genreExtract: (body: { name: string; source_slugs: string[]; sample?: any }) =>
     j("/genre-templates/extract", { method: "POST", body: JSON.stringify(body) }),
+  genreSampleConfigGet: () => j("/genre-templates/sample-config"),
+  genreSampleConfigPut: (cfg: any) =>
+    j("/genre-templates/sample-config", { method: "PUT", body: JSON.stringify(cfg) }),
   genreDelete: (slug: string) =>
     j(`/genre-templates/${encodeURIComponent(slug)}`, { method: "DELETE" }),
   genrePreview: (slug: string, topic: string, genre_strength = 70, novelty = 60) =>

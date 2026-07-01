@@ -34,13 +34,34 @@ def _slugify(name: str) -> str:
     return s or "genre"
 
 
-def _sample(slug: str, chars: int = 2600) -> str:
+# 抽样默认策略:**按字数比例 + 全书均匀铺开**(非按章节;修"长章少/短章多"偏差 + 只取开头段的偏差)。
+# 每本预算 = clamp(ratio×该书字数, min_chars, max_chars);全书均匀取 spread 段。min==max 即"等量模式"。
+SAMPLE_DEFAULTS = {"ratio": 0.005, "min_chars": 2500, "max_chars": 8000, "spread": 6}
+
+
+def _sample(slug: str, cfg: dict | None = None) -> str:
+    c = {**SAMPLE_DEFAULTS, **(cfg or {})}
+    ratio = max(0.0001, min(0.2, float(c["ratio"])))
+    lo = max(500, int(c["min_chars"]))
+    hi = max(lo, int(c["max_chars"]))
+    spread = max(1, min(20, int(c["spread"])))
     with book_scope(slug):
-        with get_engine().begin() as c:
-            rows = c.execute(_sql(
-                "SELECT body FROM chapter_fts WHERE chapter BETWEEN 15 AND 35 LIMIT 4"
-            )).all()
-    return ("\n".join(r[0] for r in rows))[:chars]
+        with get_engine().begin() as conn:
+            rows = conn.execute(_sql("SELECT body FROM chapter_fts ORDER BY chapter")).all()
+    full = "\n".join((r[0] or "") for r in rows)
+    n = len(full)
+    if n == 0:
+        return ""
+    target = max(lo, min(hi, int(n * ratio)))
+    if target >= n:
+        return full[:hi]
+    seg = max(200, target // spread)
+    out = []
+    for i in range(spread):                       # 全书按字符位置均匀取 spread 段
+        center = int(n * (i + 0.5) / spread)
+        start = max(0, min(n - seg, center - seg // 2))
+        out.append(full[start:start + seg])
+    return "\n…\n".join(out)
 
 
 def _band(v: int) -> int:
@@ -177,13 +198,15 @@ def cliche_lint(text: str, cliche_templates: list[str], *, max_tokens: int = 160
 
 
 def extract_genre_template(name: str, source_slugs: list[str], *,
-                           slug: str | None = None, sample_chars: int = 2600) -> dict:
-    """从一组同题材书抽 genre_template 并保存。返回保存后的记录(含 system_prompt)。"""
+                           slug: str | None = None, sample: dict | None = None) -> dict:
+    """从一组同题材书抽 genre_template 并保存。返回保存后的记录(含 system_prompt)。
+    sample:抽样策略(按字数比例+全书均匀铺开),None 则用已存默认/内置默认。"""
     if not source_slugs:
         raise ValueError("source_slugs 不能为空")
+    cfg = {**SAMPLE_DEFAULTS, **(project_store.get_genre_sample_config() or {}), **(sample or {})}
     samples = {}
     for s in source_slugs:
-        txt = _sample(s, sample_chars)
+        txt = _sample(s, cfg)
         if txt and len(txt) > 500:
             samples[s] = txt
     if not samples:
