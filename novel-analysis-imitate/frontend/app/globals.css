@@ -130,6 +130,9 @@ tbody tr:hover { background: var(--paper); }
   display: flex; flex-direction: column; gap: 6px; padding: 18px 14px;
   overflow-y: auto;
 }
+/* rail 是 flex column + overflow-y:auto;子项默认 flex-shrink:1,内容超高会被压扁(视图切换被挤成一条)。
+   固定子项尺寸 → 内容超高时**滚动**而非压扁(根治新增 rail 项再挤;见 fix e62f78f 同类) */
+.rail > * { flex-shrink: 0; }
 .railbrand { display: flex; align-items: center; gap: 10px; font-family: var(--serif); font-size: 20px; font-weight: 700; color: var(--ink); padding: 2px 6px 14px; letter-spacing: 3px; }
 .railseal { display: inline-grid; place-items: center; width: 30px; height: 30px; background: var(--zhu); color: #fdf6f2; font-size: 17px; border-radius: 4px; box-shadow: 2px 2px 0 rgba(156,44,31,.25); }
 .railnav { display: flex; flex-direction: column; gap: 2px; }
