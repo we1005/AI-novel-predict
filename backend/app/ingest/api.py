@@ -50,7 +50,21 @@ def split_endpoint(req: IngestRequest | None = None):
         p = active_paths()["corpus_txt"]
     if not p.exists():
         raise HTTPException(404, f"file not found: {p}")
-    return ingest_corpus(p)
+    try:
+        return ingest_corpus(p)
+    except RuntimeError as e:
+        # 切分失败(未检测到章节 / 无法解码)属于"这本书的数据不合规",不是服务器故障。
+        # 必须转成带 CORS 头的 4xx —— 未捕获异常会走 FastAPI 的 500,而 500 由最外层的
+        # ServerErrorMiddleware 生成、绕过 CORSMiddleware,响应没有 Access-Control-Allow-Origin,
+        # 浏览器只会报成"CORS 被拦"(掩盖真实原因)。见 docs/实验与操作台账.md。
+        msg = str(e)
+        if "no chapters detected" in msg:
+            msg = (
+                "未检测到章节:该书正文没有「第N章」式标题(切分器锚定『第<数字>章』,"
+                "允许前导空格/全角空格)。请确认导入的是章回体小说,或到「书库」换一本;"
+                f"若确为其它标记(第N回/节/幕等)请提需求扩充切分规则。(原始:{msg})"
+            )
+        raise HTTPException(422, msg)
 
 
 @router.get("/chapters/count")

@@ -311,3 +311,23 @@ def test_e79_ab_judge_forwards_labels(monkeypatch):
     monkeypatch.setattr(_llm, "call", lambda **k: _Resp())
     v, _ = pipeline._ab_judge({"intent": "i"}, "A", "B", 1, label_a="push", label_b="agentic")
     assert v["winner_variant"] == "push"   # 修复前会错成 "off"
+
+
+# ---- 切分失败必须转成带 CORS 头的 4xx(未捕获 RuntimeError→500 绕过 CORS 中间件→前端伪"CORS 被拦") ----
+def test_split_no_chapters_raises_422_not_500(tmp_path, monkeypatch):
+    from fastapi import HTTPException
+    from app.ingest import api as ingest_api
+    from app.books import library
+
+    corpus = tmp_path / "corpus.txt"
+    corpus.write_text("《某书》\n序章 背叛\n没有第N章标题的纯散文……", encoding="utf-8")
+    monkeypatch.setattr(library, "active_paths", lambda: {"corpus_txt": corpus})
+
+    def _boom(_p):
+        raise RuntimeError("no chapters detected — pattern may need tuning")
+    monkeypatch.setattr(ingest_api, "ingest_corpus", _boom)
+
+    with pytest.raises(HTTPException) as ei:
+        ingest_api.split_endpoint(None)
+    assert ei.value.status_code == 422          # 不是 500(500 会绕过 CORS)
+    assert "未检测到章节" in ei.value.detail      # 面向用户的可读原因,而非裸 traceback
