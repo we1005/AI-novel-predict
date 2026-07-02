@@ -75,7 +75,7 @@ OUTLINE_REFINE_TOOL = {
                         },
                         "word_target": {
                             "type": "integer",
-                            "description": "目标字数。一般 2500-3500。",
+                            "description": "目标字数。填个大致值即可——系统会统一按本书原著单章中位字数归一,不以此处为准。",
                         },
                         "ending_hook": {
                             "type": "string",

@@ -123,9 +123,22 @@ function DraftPageInner() {
   const [outlineRuns, setOutlineRuns] = useState<any[]>([]);
   const [outlineChapters, setOutlineChapters] = useState<any[]>([]);
 
+  // 本书原著单章中位字数——word_target 的“为准”基线,用于展示与一键回填。
+  const [bookMedian, setBookMedian] = useState<number>(0);
+
   const reload = () => api.draftList().then(setDrafts).catch(() => {});
 
   useEffect(() => { reload(); }, []);
+  useEffect(() => {
+    api.recommendBatch().then((r) => setBookMedian(r?.median_chars || 0)).catch(() => {});
+  }, []);
+
+  // 逐章改目标字数:存回大纲(部分 patch,不动其它字段)并本地即时刷新。
+  const patchWordTarget = async (ci: number, val: number) => {
+    if (!outlineRunId || !Number.isFinite(val) || val < 1) return;
+    setOutlineChapters((prev) => prev.map((c) => c.chapter_index === ci ? { ...c, word_target: val } : c));
+    try { await api.outlinePatchChapter(Number(outlineRunId), ci, { word_target: val }); } catch { /* 忽略,下次加载会纠正 */ }
+  };
 
   // Load outline runs for the picker.
   useEffect(() => {
@@ -371,7 +384,30 @@ function DraftPageInner() {
                     {co.must_include?.length ? <span>必含 {co.must_include.length} 条</span> : null}
                     {co.must_avoid?.length ? <span>必避 {co.must_avoid.length} 条</span> : null}
                     {co.pacing ? <span>节奏：{String(co.pacing).slice(0, 24)}</span> : null}
-                    {co.word_target ? <span>目标 {co.word_target} 字</span> : null}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      目标
+                      <input
+                        type="number" min={500} max={20000} step={100}
+                        value={co.word_target ?? ""}
+                        placeholder={bookMedian ? String(bookMedian) : ""}
+                        onChange={(e) => setOutlineChapters((prev) => prev.map((c) =>
+                          c.chapter_index === co.chapter_index
+                            ? { ...c, word_target: e.target.value === "" ? undefined : Number(e.target.value) }
+                            : c))}
+                        onBlur={(e) => patchWordTarget(co.chapter_index, Number(e.target.value))}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        style={{ width: 62, fontSize: 11, padding: "1px 4px" }}
+                      />
+                      字
+                      {bookMedian ? (
+                        <button
+                          type="button"
+                          title={`本书原著单章中位约 ${bookMedian} 字——点此按中位设为目标`}
+                          onClick={() => patchWordTarget(co.chapter_index, bookMedian)}
+                          style={{ fontSize: 10, padding: "1px 6px", lineHeight: 1.4 }}
+                        >按中位 {bookMedian}</button>
+                      ) : null}
+                    </span>
                   </div>
                 </div>
               );

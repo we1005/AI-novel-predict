@@ -366,6 +366,18 @@ def refine(*, source_kind: str, source_run_id: int, chosen_index: int,
             c["must_avoid"] = _str_items(c.get("must_avoid"))
     chapters.sort(key=lambda c: c["chapter_index"])
 
+    # word_target 归一到「本书原著单章中位字数」。此前 flesh/oneshot 只被 schema 告知
+    # "一般 2500-3500",不知道本书真实体量 → 对长章书(如中位 ~4800)系统性偏低,还把随手值
+    # 烙进大纲。改为生成阶段一律以中位为准(软目标;需个别加长/缩短的章可在前端逐章微调)。
+    try:
+        from ..draft.pipeline import corpus_median_chapter_chars
+        _median_wt = corpus_median_chapter_chars()
+    except Exception:  # noqa: BLE001 — 拿不到中位就保留模型值,不阻断出稿
+        _median_wt = None
+    if _median_wt:
+        for c in chapters:
+            c["word_target"] = _median_wt
+
     if not persist:
         # Whole-book projection aggregates phases itself; don't spam OutlineRun list.
         return {
