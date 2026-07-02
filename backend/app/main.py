@@ -24,7 +24,9 @@ app = FastAPI(title="Novel Writer API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3100"],
+    # 本地开发:放行 localhost 与 127.0.0.1 的任意端口(此前只放 localhost:3100,
+    # 从 127.0.0.1:3100 打开前端会被 CORS 拦)。
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_methods=["*"],
     allow_headers=["*"],
 )
