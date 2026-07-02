@@ -17,6 +17,18 @@ class WriteRequest(BaseModel):
     max_attempts: int = Field(3, ge=1, le=10)
 
 
+class ResetContinuationRequest(BaseModel):
+    from_chapter: int = Field(..., ge=1)   # 通常=原著章数+1;清 chapter>=此值 的续写产物
+    dry_run: bool = False
+
+
+@router.post("/reset-continuation")
+def reset_continuation_endpoint(req: ResetContinuationRequest):
+    """一致性维护:清除 chapter>=from_chapter 的续写草稿 + 回灌实体(原著不动)。
+    重生成大纲后调用,避免旧续写产物污染新一轮上下文。dry_run 只统计不删。"""
+    return pipeline.reset_continuation(req.from_chapter, dry_run=req.dry_run)
+
+
 @router.post("/write")
 def write(req: WriteRequest):
     try:

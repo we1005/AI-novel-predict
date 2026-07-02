@@ -123,15 +123,40 @@ function DraftPageInner() {
   const [outlineRuns, setOutlineRuns] = useState<any[]>([]);
   const [outlineChapters, setOutlineChapters] = useState<any[]>([]);
 
-  // 本书原著单章中位字数——word_target 的“为准”基线,用于展示与一键回填。
+  // 本书原著单章中位字数 + 原著章数——前者供 word_target 展示/回填,后者定“续写起点”(原著章数+1)。
   const [bookMedian, setBookMedian] = useState<number>(0);
+  const [bookTotalChapters, setBookTotalChapters] = useState<number>(0);
 
   const reload = () => api.draftList().then(setDrafts).catch(() => {});
 
   useEffect(() => { reload(); }, []);
   useEffect(() => {
-    api.recommendBatch().then((r) => setBookMedian(r?.median_chars || 0)).catch(() => {});
+    api.recommendBatch().then((r) => {
+      setBookMedian(r?.median_chars || 0);
+      setBookTotalChapters(r?.total_chapters || 0);
+    }).catch(() => {});
   }, []);
+
+  // 一致性维护:重生成大纲后,清掉按旧大纲写出的续写章节 + 其回灌实体(chapter≥原著章数+1),
+  // 让新大纲从原著末章这个干净基线重写。原著本身不动。先 dry-run 报清单再确认删。
+  const resetContinuation = async () => {
+    const from = (bookTotalChapters || 0) + 1;
+    try {
+      const dry = await api.draftResetContinuation(from, true);
+      const aff = dry.affected || {};
+      const keys = Object.keys(aff);
+      if (!keys.length) { alert(`第 ${from} 章及以后没有已写正文/回灌实体,无需清理。`); return; }
+      const summary = keys.map((k) => `  · ${k}: ${aff[k]}`).join("\n");
+      if (!window.confirm(
+        `将永久删除「第 ${from} 章及以后」的续写产物(原著第 1-${from - 1} 章不受影响):\n\n${summary}\n\n用于与重生成的大纲保持一致。确定删除?`
+      )) return;
+      const res = await api.draftResetContinuation(from, false);
+      alert(`已清理续写产物:\n${Object.entries(res.affected || {}).map(([k, v]) => `  · ${k}: ${v}`).join("\n") || "(无)"}`);
+      reload();
+    } catch (e: any) {
+      alert(`重置失败:${e?.message || e}`);
+    }
+  };
 
   // 逐章改目标字数:存回大纲(部分 patch,不动其它字段)并本地即时刷新。
   const patchWordTarget = async (ci: number, val: number) => {
@@ -427,6 +452,11 @@ function DraftPageInner() {
             disabled={abBusy || busy || !outlineRunId || !chapterIndex}
             title="对同一章写两遍:push 臂 vs agentic 臂(模型自选检索),盲评对比">
             {abBusy ? "对比中…" : "🧭 agentic 对比"}
+          </button>
+          <button className="ghost" onClick={resetContinuation} disabled={busy || abBusy}
+            title={`重生成大纲后,清掉按旧大纲写出的续写章节 + 其回灌实体(第${(bookTotalChapters || 0) + 1}章及以后),原著不动`}
+            style={{ color: "var(--c-danger, #c0392b)", marginLeft: "auto" }}>
+            🧹 重置续写（保一致）
           </button>
           <span className="muted" style={{ fontSize: 12 }}>
             带审查约 60-180 秒；跳过审查约 30-60 秒

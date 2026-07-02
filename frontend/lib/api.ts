@@ -188,6 +188,10 @@ export const api = {
       body: JSON.stringify(patch),
     }),
 
+  draftResetContinuation: (fromChapter: number, dryRun = false) =>
+    j<{ from_chapter: number; dry_run: boolean; affected: Record<string, number> }>(
+      "/draft/reset-continuation",
+      { method: "POST", body: JSON.stringify({ from_chapter: fromChapter, dry_run: dryRun }) }),
   draftWrite: (outlineRunId: number, chapterIndex: number, opts: { skip_reviews?: boolean; max_attempts?: number } = {}) =>
     j<any>("/draft/write", {
       method: "POST",

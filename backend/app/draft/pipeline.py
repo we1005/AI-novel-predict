@@ -552,6 +552,62 @@ def corpus_median_chapter_chars(default: int = 4000) -> int:
     return med
 
 
+# 续写产物涉及的派生表(与 ingest/split.py 重切孤儿清理保持一致)。
+_CONTINUATION_DERIVED = [
+    ("entity_states", "chapter"), ("plot_points", "chapter"),
+    ("foreshadowings", "planted_chapter"), ("relationships", "first_chapter"),
+    ("craft_snippet", "chapter_number"),
+    ("chapter_beat", "chapter"), ("worldview_reveal", "chapter"), ("pov_event", "chapter"),
+    ("golden_finger_step", "chapter"), ("relationship_event", "chapter"), ("speed_read_stage", "chapter_start"),
+]
+
+
+def reset_continuation(from_chapter: int, *, dry_run: bool = False) -> dict:
+    """一致性维护:清除 chapter >= from_chapter 的**全部续写产物**。
+
+    重生成大纲后,按旧大纲写出的续写章节(ChapterDraft)+ 其「写→回灌」抽取出的实体/剧情点/
+    伏笔都成了脏数据(会污染新一轮 _gather_context)。本函数把它们整体清掉,让新大纲从
+    「原著最后一章」这个干净基线重写;**原著本身(chapter < from_chapter)一律不动**。
+    dry_run=True 只统计不删。返回各表命中/删除行数。
+    """
+    from sqlalchemy import text as _sql
+    from ..db import get_engine
+
+    counts: dict[str, int] = {}
+    # 1) 已写续写章节草稿(chapter_index 为绝对章号)
+    with session_scope() as s:
+        drafts = s.execute(
+            select(ChapterDraft).where(ChapterDraft.chapter_index >= from_chapter)
+        ).scalars().all()
+        if drafts:
+            counts["chapter_drafts"] = len(drafts)
+        if not dry_run:
+            for d in drafts:
+                s.delete(d)
+    # 2) 回灌产生的派生行 + 落在被删章的伏笔回收点置空
+    with get_engine().begin() as conn:
+        for tbl, col in _CONTINUATION_DERIVED:
+            try:
+                if dry_run:
+                    n = conn.execute(_sql(f"SELECT count(*) FROM {tbl} WHERE {col} >= :x"), {"x": from_chapter}).scalar()
+                else:
+                    n = conn.execute(_sql(f"DELETE FROM {tbl} WHERE {col} >= :x"), {"x": from_chapter}).rowcount
+                if n:
+                    counts[tbl] = n
+            except Exception:
+                continue  # 该表在本书 schema 不存在 → 跳过
+        try:
+            if dry_run:
+                n = conn.execute(_sql("SELECT count(*) FROM foreshadowings WHERE resolved_chapter >= :x"), {"x": from_chapter}).scalar()
+            else:
+                n = conn.execute(_sql("UPDATE foreshadowings SET resolved_chapter=NULL WHERE resolved_chapter >= :x"), {"x": from_chapter}).rowcount
+            if n:
+                counts["foreshadowings.resolved→NULL"] = n
+        except Exception:
+            pass
+    return {"from_chapter": from_chapter, "dry_run": dry_run, "affected": counts}
+
+
 def write_chapter(
     *,
     outline_run_id: int,
