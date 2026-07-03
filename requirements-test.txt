@@ -8,3 +8,4 @@ fastapi==0.136.1
 tenacity==9.1.4
 httpx==0.28.1
 python-dotenv==1.2.2
+chardet==7.4.3   # ingest/split.py 顶层 import(test_split_no_chapters 经 ingest.api 引入)
