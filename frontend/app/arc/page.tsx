@@ -750,6 +750,16 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
   };
 
   const [forking, setForking] = useState(false);
+  // 当前书已有的分支(用于判断某候选弧是否已建过分支 → 按钮显示"已建"而非重复报错)。
+  const [branchesOfBook, setBranchesOfBook] = useState<any[]>([]);
+  const refreshBranches = () => api.booksList().then((d: any) => {
+    const act = d?.active;
+    setBranchesOfBook((d?.books || []).filter((b: any) => b.is_branch && b.parent_slug === act));
+  }).catch(() => {});
+  useEffect(() => { refreshBranches(); }, []);
+  // 当前选中候选弧是否已建分支:按 (arc_run_id, chosen_index) 精确匹配。
+  const existingBranch = branchesOfBook.find((b) => b.arc_run_id === runId && b.chosen_index === idx);
+
   // 一个候选弧 = 一个分支:把当前书 fork 成一本派生"分支书",分支元数据记 arc_run_id+chosen_index。
   const forkAsBranch = async () => {
     const arc = candidates[idx] || {};
@@ -762,6 +772,7 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
       if (!window.confirm(`把《${parent}》按候选弧「${name}」建成一个独立分支?\n(克隆原著记忆作基线;之后在分支里推演/续写,与原著及其它分支互不污染)`)) return;
       const r = await api.booksFork(parent, name, { arcRunId: runId, chosenIndex: idx, setActive: false });
       alert(`已建分支「${r.branch_name}」(基线 ${r.base_chapter} 章)。到书架切换到它即可在分支里推演/续写。`);
+      await refreshBranches();
     } catch (e: any) {
       alert("建分支失败:" + (e?.message || e));
     } finally {
@@ -814,10 +825,17 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
         <button onClick={project} disabled={running} style={{ padding: "6px 16px" }}>
           {running ? `推演中…${job?.stage ? `（${job.stage}）` : ""}` : "🌌 推演整本书"}
         </button>
-        <button className="ghost" onClick={forkAsBranch} disabled={forking} style={{ padding: "6px 14px" }}
-          title="把这个候选弧建成一本独立的分支书(克隆原著基线;分支内推演/续写与原著及其它分支隔离、可单独回滚)">
-          {forking ? "建分支中…" : "🌿 把此候选弧建为分支"}
-        </button>
+        {existingBranch ? (
+          <button className="ghost" disabled style={{ padding: "6px 14px", opacity: 0.7, cursor: "default" }}
+            title={`此候选弧已建分支「${existingBranch.branch_name || existingBranch.slug}」——到「书架」切换到它即可推演/续写。要重建请先在书架删掉旧分支。`}>
+            ✓ 已建分支「{existingBranch.branch_name || existingBranch.slug}」
+          </button>
+        ) : (
+          <button className="ghost" onClick={forkAsBranch} disabled={forking} style={{ padding: "6px 14px" }}
+            title="把这个候选弧建成一本独立的分支书(克隆原著基线;分支内推演/续写与原著及其它分支隔离、可单独回滚)">
+            {forking ? "建分支中…" : "🌿 把此候选弧建为分支"}
+          </button>
+        )}
         {job?.status === "failed" && <span style={{ color: "var(--bad)" }}>失败：{job.error}</span>}
       </div>
 
