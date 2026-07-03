@@ -89,7 +89,8 @@ def branch_meta(slug: str) -> dict[str, Any] | None:
 
 
 def fork_book(parent_slug: str, branch_slug: str, *, branch_name: str,
-              outline_run_id: int | None, base_chapter: int) -> dict[str, Any]:
+              outline_run_id: int | None, base_chapter: int,
+              arc_run_id: int | None = None, chosen_index: int | None = None) -> dict[str, Any]:
     """把 parent 克隆成一本派生「分支书」:文件级拷贝 novel.db(用 sqlite backup,保证 WAL 一致)
     + corpus.txt,写 branch.json。不拷 chroma(向量库可选,分支需要时重建)。基线清理(删续写产物
     回到 base_chapter)由调用方在 book_scope(branch) 内做,避免本文件依赖 ORM。"""
@@ -125,6 +126,8 @@ def fork_book(parent_slug: str, branch_slug: str, *, branch_name: str,
             "parent_slug": parent_slug,
             "branch_name": branch_name,
             "outline_run_id": outline_run_id,
+            "arc_run_id": arc_run_id,        # 分支所依据的"整本故事弧"预测
+            "chosen_index": chosen_index,    # 该预测里的第几个候选弧
             "base_chapter": base_chapter,
         }
         (dest / BRANCH_META_FILE).write_text(
@@ -179,6 +182,8 @@ def list_books() -> list[dict[str, Any]]:
             "parent_slug": bm.get("parent_slug"),
             "branch_name": bm.get("branch_name"),
             "outline_run_id": bm.get("outline_run_id"),
+            "arc_run_id": bm.get("arc_run_id"),
+            "chosen_index": bm.get("chosen_index"),
             "base_chapter": bm.get("base_chapter"),
         })
     return out

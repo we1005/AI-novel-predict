@@ -66,7 +66,7 @@ export default function LibraryPage() {
     setForkParent(null);
     setWorking(parent);
     try {
-      const r = await api.booksFork(parent, forkName.trim(), undefined, true);
+      const r = await api.booksFork(parent, forkName.trim(), { setActive: true });
       message.success(`已建分支「${r.branch_name}」并切换过去(克隆 ${r.base_chapter} 章基线)`);
       setForkName("");
       await refresh();

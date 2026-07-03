@@ -52,7 +52,9 @@ def books_import(body: ImportPayload) -> dict[str, Any]:
 class ForkPayload(BaseModel):
     parent_slug: str          # 从哪本书分叉(通常是原著)
     outline_run_id: int | None = None  # 该分支基于哪条大纲(记进元数据,便于前端/续写选用)
-    branch_name: str          # 分支名(如"大纲A""稳健向""爽文向")
+    arc_run_id: int | None = None      # 该分支基于哪次"整本故事弧"预测
+    chosen_index: int | None = None    # 该预测里的第几个候选弧(一个候选弧=一个分支)
+    branch_name: str          # 分支名(如"大纲A""稳健向";通常=候选弧名)
     set_active: bool = True
 
 
@@ -84,6 +86,8 @@ def books_fork(body: ForkPayload) -> dict[str, Any]:
             body.parent_slug, branch_slug,
             branch_name=body.branch_name,
             outline_run_id=body.outline_run_id,
+            arc_run_id=body.arc_run_id,
+            chosen_index=body.chosen_index,
             base_chapter=base,
         )
     except ValueError as e:

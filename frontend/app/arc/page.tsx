@@ -749,6 +749,26 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
     } catch { setBookRunning(false); }
   };
 
+  const [forking, setForking] = useState(false);
+  // 一个候选弧 = 一个分支:把当前书 fork 成一本派生"分支书",分支元数据记 arc_run_id+chosen_index。
+  const forkAsBranch = async () => {
+    const arc = candidates[idx] || {};
+    const name = arc.title || `候选${idx}`;
+    setForking(true);
+    try {
+      const bl = await api.booksList();
+      const parent = bl?.active;
+      if (!parent) { alert("没有当前书"); return; }
+      if (!window.confirm(`把《${parent}》按候选弧「${name}」建成一个独立分支?\n(克隆原著记忆作基线;之后在分支里推演/续写,与原著及其它分支互不污染)`)) return;
+      const r = await api.booksFork(parent, name, { arcRunId: runId, chosenIndex: idx, setActive: false });
+      alert(`已建分支「${r.branch_name}」(基线 ${r.base_chapter} 章)。到书架切换到它即可在分支里推演/续写。`);
+    } catch (e: any) {
+      alert("建分支失败:" + (e?.message || e));
+    } finally {
+      setForking(false);
+    }
+  };
+
   const project = async () => {
     setRunning(true); setJob(null);
     try {
@@ -793,6 +813,10 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
         </select>
         <button onClick={project} disabled={running} style={{ padding: "6px 16px" }}>
           {running ? `推演中…${job?.stage ? `（${job.stage}）` : ""}` : "🌌 推演整本书"}
+        </button>
+        <button className="ghost" onClick={forkAsBranch} disabled={forking} style={{ padding: "6px 14px" }}
+          title="把这个候选弧建成一本独立的分支书(克隆原著基线;分支内推演/续写与原著及其它分支隔离、可单独回滚)">
+          {forking ? "建分支中…" : "🌿 把此候选弧建为分支"}
         </button>
         {job?.status === "failed" && <span style={{ color: "var(--bad)" }}>失败：{job.error}</span>}
       </div>

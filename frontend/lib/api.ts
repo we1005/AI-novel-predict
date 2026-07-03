@@ -228,10 +228,17 @@ export const api = {
     j<any>("/books/active", { method: "PUT", body: JSON.stringify({ slug }) }),
   booksDelete: (slug: string) =>
     j<any>(`/books/${encodeURIComponent(slug)}`, { method: "DELETE" }),
-  booksFork: (parentSlug: string, branchName: string, outlineRunId?: number, setActive = true) =>
+  booksFork: (parentSlug: string, branchName: string,
+    opts: { outlineRunId?: number; arcRunId?: number; chosenIndex?: number; setActive?: boolean } = {}) =>
     j<any>("/books/fork", {
       method: "POST",
-      body: JSON.stringify({ parent_slug: parentSlug, branch_name: branchName, outline_run_id: outlineRunId ?? null, set_active: setActive }),
+      body: JSON.stringify({
+        parent_slug: parentSlug, branch_name: branchName,
+        outline_run_id: opts.outlineRunId ?? null,
+        arc_run_id: opts.arcRunId ?? null,
+        chosen_index: opts.chosenIndex ?? null,
+        set_active: opts.setActive ?? true,
+      }),
     }),
 
   // ----- Style (author voice analysis) -----
