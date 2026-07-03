@@ -88,6 +88,21 @@ def branch_meta(slug: str) -> dict[str, Any] | None:
         return None
 
 
+def root_slug(slug: str) -> str:
+    """沿 branch.json 的 parent_slug 上溯到**根原著**(非分支的那本)。
+    这样"从任一分支再建分支"都归到根、成为原著的平级子分支,永不嵌套。防环:最多 20 跳。"""
+    cur = slug
+    seen: set[str] = set()
+    for _ in range(20):
+        bm = branch_meta(cur)
+        parent = bm.get("parent_slug") if bm else None
+        if not parent or parent == cur or cur in seen:
+            return cur
+        seen.add(cur)
+        cur = parent
+    return cur
+
+
 def fork_book(parent_slug: str, branch_slug: str, *, branch_name: str,
               outline_run_id: int | None, base_chapter: int,
               arc_run_id: int | None = None, chosen_index: int | None = None) -> dict[str, Any]:

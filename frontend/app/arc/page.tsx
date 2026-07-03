@@ -758,13 +758,23 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
     setAllBooks(d?.books || []);
   }).catch(() => {});
   useEffect(() => { refreshBranches(); }, []);
-  // 两种"已建"情形(按 arc_run_id+chosen_index 精确匹配):
-  //  ① 当前 active 书本身就是这个候选弧的分支(你正站在该分支上看它自己的候选);
-  //  ② 存在一本"以当前书为 parent"的子分支匹配该候选。
-  const activeBook = allBooks.find((b) => b.slug === activeSlug);
-  const selfIsThisBranch = !!(activeBook?.is_branch && activeBook.arc_run_id === runId && activeBook.chosen_index === idx);
-  const childBranch = allBooks.find((b) => b.is_branch && b.parent_slug === activeSlug && b.arc_run_id === runId && b.chosen_index === idx);
-  const existingBranch = selfIsThisBranch ? activeBook : childBranch;
+  // 分支恒挂在"根原著"下(平级、不嵌套)。故"已建"判定以根原著为锚:
+  // 找 parent===根原著 且 (arc_run_id, chosen_index) 匹配该候选的分支。
+  // 这同时覆盖:站在原著上(找到子分支)、站在某分支上(找到自己或兄弟分支)。
+  const rootSlug = (() => {
+    let cur = activeSlug; const seen = new Set<string>();
+    for (let i = 0; i < 20; i++) {
+      const bk = allBooks.find((b) => b.slug === cur);
+      const p = bk?.parent_slug;
+      if (!p || p === cur || seen.has(cur)) break;
+      seen.add(cur); cur = p;
+    }
+    return cur;
+  })();
+  const existingBranch = allBooks.find(
+    (b) => b.is_branch && b.parent_slug === rootSlug && b.arc_run_id === runId && b.chosen_index === idx
+  );
+  const selfIsThisBranch = !!(existingBranch && existingBranch.slug === activeSlug);
 
   // 一个候选弧 = 一个分支:把当前书 fork 成一本派生"分支书",分支元数据记 arc_run_id+chosen_index。
   const forkAsBranch = async () => {
@@ -773,10 +783,18 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
     setForking(true);
     try {
       const bl = await api.booksList();
-      const parent = bl?.active;
-      if (!parent) { alert("没有当前书"); return; }
-      if (!window.confirm(`把《${parent}》按候选弧「${name}」建成一个独立分支?\n(克隆原著记忆作基线;之后在分支里推演/续写,与原著及其它分支互不污染)`)) return;
-      const r = await api.booksFork(parent, name, { arcRunId: runId, chosenIndex: idx, setActive: false });
+      const books = bl?.books || [];
+      if (!bl?.active) { alert("没有当前书"); return; }
+      // 上溯到根原著:所有分支都挂在原著下、平级、不嵌套(与后端一致)。
+      let root = bl.active; const seen = new Set<string>();
+      for (let i = 0; i < 20; i++) {
+        const bk = books.find((b: any) => b.slug === root);
+        const p = bk?.parent_slug;
+        if (!p || p === root || seen.has(root)) break;
+        seen.add(root); root = p;
+      }
+      if (!window.confirm(`把原著《${root}》按候选弧「${name}」建成一个独立分支?\n(克隆原著记忆作基线;之后在分支里推演/续写,与原著及其它分支互不污染)`)) return;
+      const r = await api.booksFork(root, name, { arcRunId: runId, chosenIndex: idx, setActive: false });
       alert(`已建分支「${r.branch_name}」(基线 ${r.base_chapter} 章)。到书架切换到它即可在分支里推演/续写。`);
       await refreshBranches();
     } catch (e: any) {

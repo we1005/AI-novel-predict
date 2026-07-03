@@ -68,10 +68,14 @@ def books_fork(body: ForkPayload) -> dict[str, Any]:
     from ..draft.pipeline import reset_continuation
     from ..memory.models import Chapter
 
-    # 基线章数 = 原著**真实**正文章数(续写从 base+1 起)。必须排除"续写登记的 0-offset 章"
+    # 永远从**根原著**克隆:若传进来的 parent 本身是分支,上溯到它的根原著,
+    # 使所有分支都是原著的平级子分支、永不嵌套(base 也用根原著的干净基线)。
+    root = library.root_slug(body.parent_slug)
+
+    # 基线章数 = 根原著**真实**正文章数(续写从 base+1 起)。必须排除"续写登记的 0-offset 章"
     # (写作回灌给续写章登记的 FK 锚点行),否则会把 base 算大、续写起点后移。
     try:
-        with book_scope(body.parent_slug):
+        with book_scope(root):
             with session_scope() as s:
                 base = int(s.scalar(
                     select(func.count()).select_from(Chapter)
@@ -80,10 +84,10 @@ def books_fork(body: ForkPayload) -> dict[str, Any]:
     except Exception as e:
         raise HTTPException(400, f"读取原著章数失败:{e}")
 
-    branch_slug = library._slug(f"{body.parent_slug}__{body.branch_name}")
+    branch_slug = library._slug(f"{root}__{body.branch_name}")
     try:
         info = library.fork_book(
-            body.parent_slug, branch_slug,
+            root, branch_slug,
             branch_name=body.branch_name,
             outline_run_id=body.outline_run_id,
             arc_run_id=body.arc_run_id,
