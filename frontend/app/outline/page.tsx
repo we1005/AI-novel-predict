@@ -11,6 +11,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import PageTitle from "@/components/PageTitle";
 
 const SIDEBAR_KEY = "outline-sidebar-collapsed";
+const FORM_KEY = "outline-form-collapsed";
 
 export default function OutlinePage() {
   return (
@@ -38,14 +39,28 @@ function OutlinePageInner() {
   const [arcId, setArcId] = useState<number | "">("");
   const [chosenIdx, setChosenIdx] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [formCollapsed, setFormCollapsed] = useState(false);
 
-  // Restore sidebar collapsed state from localStorage on mount.
+  // 历史大纲跟随所选 ArcRun:只显示该 arc(source_kind=arc 且 source_run_id 匹配)下的大纲。
+  const filteredRuns = useMemo(
+    () => (arcId === "" ? [] : runs.filter((r) => r.source_kind === "arc" && r.source_run_id === Number(arcId))),
+    [runs, arcId],
+  );
+
+  // Restore collapsed states from localStorage on mount.
   useEffect(() => {
     try {
-      const v = localStorage.getItem(SIDEBAR_KEY);
-      if (v === "1") setSidebarCollapsed(true);
+      if (localStorage.getItem(SIDEBAR_KEY) === "1") setSidebarCollapsed(true);
+      if (localStorage.getItem(FORM_KEY) === "1") setFormCollapsed(true);
     } catch {}
   }, []);
+  const toggleForm = () => {
+    setFormCollapsed((c) => {
+      const next = !c;
+      try { localStorage.setItem(FORM_KEY, next ? "1" : "0"); } catch {}
+      return next;
+    });
+  };
   const toggleSidebar = () => {
     setSidebarCollapsed((c) => {
       const next = !c;
@@ -80,7 +95,11 @@ function OutlinePageInner() {
     if (initId) {
       const id = Number(initId);
       if (Number.isFinite(id)) {
-        api.outlineGet(id).then(setSelected).catch(() => {});
+        api.outlineGet(id).then((d) => {
+          setSelected(d);
+          // 让左侧历史大纲列表跟随:深链进来的大纲若来自某 arc,自动选中该 arc。
+          if (d?.source_kind === "arc" && d?.source_run_id != null) setArcId(Number(d.source_run_id));
+        }).catch(() => {});
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,20 +151,31 @@ function OutlinePageInner() {
       <PageTitle title="剧情大纲可视化" subtitle="从 arc winner 的某 phase 生成 5-15 章可执行大纲：意图 · 必含 · 必避 · 节奏 · 钩子" />
 
       <div className="card">
-        <h2>触发：从 arc phase 生成大纲</h2>
-        <div className="row" style={{ alignItems: "center", flexWrap: "wrap" }}>
-          <label>
-            ArcRun id
-            <select value={arcId} onChange={(e) => setArcId(e.target.value === "" ? "" : Number(e.target.value))}
-              style={{ marginLeft: 6 }}>
-              <option value="">选一个</option>
-              {arcRuns.map((r) => (
-                <option key={r.id} value={r.id}>
-                  #{r.id} · ch{r.after_chapter} · winner #{r.chosen_index}
-                </option>
-              ))}
-            </select>
-          </label>
+        {/* 表头始终可见:标题 + ArcRun 选择器(既是生成源,也是下方历史大纲的过滤器)+ 折叠开关 */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <h2 style={{ margin: 0, fontSize: 16 }}>触发：从 arc phase 生成大纲</h2>
+            <label style={{ fontSize: 13 }}>
+              ArcRun id
+              <select value={arcId} onChange={(e) => setArcId(e.target.value === "" ? "" : Number(e.target.value))}
+                style={{ marginLeft: 6 }}>
+                <option value="">选一个</option>
+                {arcRuns.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    #{r.id} · ch{r.after_chapter} · winner #{r.chosen_index}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <button onClick={toggleForm} className="ghost" style={{ padding: "4px 12px", fontSize: 12 }}>
+            {formCollapsed ? "展开生成表单 ▼" : "折叠 ▲"}
+          </button>
+        </div>
+
+        {!formCollapsed && (
+        <>
+        <div className="row" style={{ alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
           <label>
             候选 idx
             <input type="number" value={chosenIdx} onChange={(e) => setChosenIdx(+e.target.value)}
@@ -186,6 +216,8 @@ function OutlinePageInner() {
           </button>
         </div>
         {msg && <p style={{ marginTop: 8, fontSize: 12, color: msg.startsWith("✅") ? "var(--good)" : "var(--bad)" }}>{msg}</p>}
+        </>
+        )}
       </div>
 
       <div style={{ display: "flex", alignItems: "stretch", gap: 14, transition: "all 200ms" }}>
@@ -199,7 +231,7 @@ function OutlinePageInner() {
           transition: "flex-basis 200ms, padding 200ms",
         }}>
           {sidebarCollapsed ? (
-            <Tooltip title={`展开历史大纲（${runs.length}）`} placement="right">
+            <Tooltip title={`展开历史大纲（${filteredRuns.length}）`} placement="right">
               <button onClick={toggleSidebar} className="ghost"
                 style={{
                   width: "100%", padding: "8px 4px", fontSize: 12,
@@ -208,13 +240,13 @@ function OutlinePageInner() {
                 }}>
                 <RightOutlined />
                 <HistoryOutlined style={{ fontSize: 16, color: "var(--accent-2)" }} />
-                <span style={{ fontSize: 11, fontWeight: 600 }}>{runs.length}</span>
+                <span style={{ fontSize: 11, fontWeight: 600 }}>{filteredRuns.length}</span>
               </button>
             </Tooltip>
           ) : (
             <>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <h2 style={{ margin: 0, fontSize: 14 }}>历史大纲 · {runs.length}</h2>
+                <h2 style={{ margin: 0, fontSize: 14 }}>历史大纲 · {filteredRuns.length}</h2>
                 <Tooltip title="折叠侧栏，让图谱占满" placement="left">
                   <button onClick={toggleSidebar} className="ghost"
                     style={{ padding: "2px 8px", fontSize: 11 }}>
@@ -222,9 +254,14 @@ function OutlinePageInner() {
                   </button>
                 </Tooltip>
               </div>
-              {runs.length === 0 && <p className="muted">还没生成</p>}
+              {arcId === "" && (
+                <p className="muted" style={{ fontSize: 13 }}>请选择 arc 以查看对应历史大纲</p>
+              )}
+              {arcId !== "" && filteredRuns.length === 0 && (
+                <p className="muted">该 arc 还没有历史大纲</p>
+              )}
               <div style={{ display: "grid", gap: 6 }}>
-                {runs.map((r) => (
+                {filteredRuns.map((r) => (
                   <button key={r.id} onClick={async () => {
                       const d = await api.outlineGet(r.id);
                       setSelected(d);
