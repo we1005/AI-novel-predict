@@ -353,6 +353,10 @@ def test_replay_mystery_from_log_full_and_trimmed():
     assert r["confidence"] == 50
     assert r["clues"] == ["A"]
     assert r["last_updated_chapter"] == 44
+    # first_seen 无 new_clue 但有 summary → 用 summary 兜底(复现前向 create 的 initial_clue)
+    r2 = _replay_mystery_from_log([{"change": "first_seen", "chapter_range": [10, 10],
+                                    "summary": "S", "new_clue": None}])
+    assert r2["clues"] == ["S"]
 
 
 # ---- 回灌竞态守卫:chapter_no<=0 直接放行(不误等原著/首章) ----

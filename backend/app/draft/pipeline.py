@@ -643,8 +643,10 @@ def reset_continuation(from_chapter: int, *, dry_run: bool = False) -> dict:
 
 def _replay_mystery_from_log(kept: list[dict]) -> dict:
     """由保留下来的 updates_log 条目重放出谜团的 status/confidence/clues/last_updated_chapter。
-    与 ingest/extract._persist_mystery_actions 的前向逻辑对齐(change→状态迁移、默认信心增减)。
-    信心 delta 未存进日志,用默认值近似;初始线索若来自 summary 亦无法精确复原 → 尽力而为。"""
+    与 ingest/extract._persist_mystery_actions 的前向逻辑对齐:
+    - 线索:first_seen 用 `new_clue or summary`(复现前向 create 的 initial_clue),其余事件仅取 new_clue;
+    - 状态迁移 first_seen→open / update→sharpened(仅当 open)/ resolve→resolved / contradict→contradicted;
+    - 信心:默认 +10/+30/-20(前向若用过自定义 confidence_delta,日志未存 → 此处为近似)。"""
     status = "open"
     conf = 50
     clues: list[str] = []
@@ -654,7 +656,11 @@ def _replay_mystery_from_log(kept: list[dict]) -> dict:
             continue
         change = e.get("change")
         nc = e.get("new_clue")
-        if nc:
+        if change == "first_seen":
+            c = nc or e.get("summary")   # 忠实复现前向:initial_clue = new_clue or summary
+            if c:
+                clues.append(str(c)[:240])
+        elif nc:
             clues.append(str(nc)[:240])
         if change == "first_seen":
             status = "open"
@@ -711,8 +717,8 @@ def _rollback_mysteries(from_chapter: int, *, dry_run: bool = False) -> dict:
                 m.updates_log_json = kept
                 m.status = rep["status"]
                 m.confidence = rep["confidence"]
-                if rep["clues"]:
-                    m.clues_json = rep["clues"]
+                # 无条件覆盖:重放是权威重建;若不覆盖,保留段无 new_clue 时会残留续写期脏线索。
+                m.clues_json = rep["clues"]
                 m.last_updated_chapter = rep["last_updated_chapter"]
     out = {}
     if deleted:
@@ -720,6 +726,35 @@ def _rollback_mysteries(from_chapter: int, *, dry_run: bool = False) -> dict:
     if reverted:
         out["mysteries.reverted"] = reverted
     return out
+
+
+def _mark_reingest_pending(chapter_no: int, slug: str | None) -> None:
+    """主线程里先占位建 ExtractionBatch(N, N+1)=running,**在启动后台回灌线程之前**。
+
+    否则从 `Thread.start()` 到线程体真正建 batch(要先 init_schema + 登记 Chapter)之间有个窗口,
+    这期间用户极快连点写下一章,`_await_pending_reingest` 查不到 running batch → 误判"已就绪"放行 →
+    仍读到过期记忆。先占位即消除该窗口;extract_one_chapter 幂等复用同一 batch。占位失败不影响主流程。"""
+    if not chapter_no or chapter_no <= 0:
+        return
+    from contextlib import nullcontext
+
+    from ..db import book_scope
+    from ..memory.models import ExtractionBatch
+    try:
+        with (book_scope(slug) if slug else nullcontext()):
+            with session_scope() as s:
+                b = s.execute(
+                    select(ExtractionBatch).where(
+                        ExtractionBatch.chapter_start == chapter_no,
+                        ExtractionBatch.chapter_end == chapter_no + 1,
+                    ).limit(1)
+                ).scalar_one_or_none()
+                if b is None:
+                    s.add(ExtractionBatch(chapter_start=chapter_no, chapter_end=chapter_no + 1, status="running"))
+                else:
+                    b.status = "running"; b.error = None; b.finished_at = None
+    except Exception:  # noqa: BLE001 — 占位失败只是守卫退化为原行为,不拖垮成稿
+        pass
 
 
 def _await_pending_reingest(chapter_no: int, *, timeout_s: float = 150.0, poll_s: float = 2.0) -> bool:
@@ -1048,6 +1083,9 @@ def write_chapter(
             except Exception as exc:  # noqa: BLE001
                 logging.getLogger(__name__).error("reingest(sync) ch%s 失败: %s", chapter_index, exc)
         else:
+            # 先在主线程占位 batch=running,消除"线程建 batch 前"的竞态窗口(见 _mark_reingest_pending)。
+            _mark_reingest_pending(chapter_index, _slug)
+
             def _reingest():
                 try:
                     _do_reingest()
