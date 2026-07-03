@@ -23,6 +23,11 @@ type Book = {
   has_db: boolean;
   corpus_bytes: number;
   db_bytes: number;
+  is_branch?: boolean;
+  parent_slug?: string | null;
+  branch_name?: string | null;
+  outline_run_id?: number | null;
+  base_chapter?: number | null;
 };
 
 type LibraryFile = {
@@ -52,6 +57,26 @@ export default function LibraryPage() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
   const [importTitle, setImportTitle] = useState<Record<string, string>>({});
+  const [forkParent, setForkParent] = useState<string | null>(null);
+  const [forkName, setForkName] = useState("");
+
+  const doFork = async () => {
+    if (!forkParent || !forkName.trim()) return;
+    const parent = forkParent;
+    setForkParent(null);
+    setWorking(parent);
+    try {
+      const r = await api.booksFork(parent, forkName.trim(), undefined, true);
+      message.success(`已建分支「${r.branch_name}」并切换过去(克隆 ${r.base_chapter} 章基线)`);
+      setForkName("");
+      await refresh();
+      setTimeout(() => window.location.reload(), 700);
+    } catch (e) {
+      message.error("建分支失败：" + String(e));
+    } finally {
+      setWorking(null);
+    }
+  };
 
   const refresh = async () => {
     setLoading(true);
@@ -153,22 +178,60 @@ export default function LibraryPage() {
           <Empty description="还没有导入任何书。先到下方「文件夹扫描」导入一本。" />
         )}
 
-        <div style={{
-          display: "grid",
-          gap: 12,
-          gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-        }}>
-          {bundle.books.map((b) => (
-            <BookCard
-              key={b.slug}
-              book={b}
-              busy={working === b.slug}
-              onSwitch={() => switchTo(b.slug)}
-              onDelete={() => remove(b.slug)}
-            />
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {bundle.books.filter((b) => !b.is_branch).map((p) => {
+            const branches = bundle.books.filter((b) => b.is_branch && b.parent_slug === p.slug);
+            return (
+              <div key={p.slug}>
+                <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+                  <BookCard
+                    book={p}
+                    busy={working === p.slug}
+                    onSwitch={() => switchTo(p.slug)}
+                    onDelete={() => remove(p.slug)}
+                    onFork={() => { setForkParent(p.slug); setForkName(""); }}
+                  />
+                </div>
+                {branches.length > 0 && (
+                  <div style={{ marginLeft: 20, marginTop: 10, paddingLeft: 14, borderLeft: "2px solid var(--border)",
+                    display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+                    {branches.map((br) => (
+                      <BookCard
+                        key={br.slug}
+                        book={br}
+                        busy={working === br.slug}
+                        onSwitch={() => switchTo(br.slug)}
+                        onDelete={() => remove(br.slug)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      <Modal
+        title={`从《${forkParent || ""}》建大纲分支`}
+        open={!!forkParent}
+        onOk={doFork}
+        onCancel={() => setForkParent(null)}
+        okText="建分支"
+        okButtonProps={{ disabled: !forkName.trim() }}
+      >
+        <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+          分支会克隆本书的原著记忆(实体/伏笔/关系)作基线,得到一本独立的派生书;
+          之后在这条分支里的续写与回灌只写进它自己的库,与原著/其它分支<b>互不污染</b>,可单独回滚。
+        </p>
+        <Input
+          autoFocus
+          placeholder="分支名,如「稳健向」「爽文向」「大纲A」"
+          value={forkName}
+          onChange={(e) => setForkName(e.target.value)}
+          onPressEnter={doFork}
+        />
+      </Modal>
 
       {/* 文件夹扫描 */}
       <div className="card">
@@ -210,12 +273,13 @@ export default function LibraryPage() {
 // ---------------------------------------------------------------------------
 
 function BookCard({
-  book, busy, onSwitch, onDelete,
+  book, busy, onSwitch, onDelete, onFork,
 }: {
   book: Book;
   busy: boolean;
   onSwitch: () => void;
   onDelete: () => void;
+  onFork?: () => void;
 }) {
   return (
     <div style={{
@@ -259,6 +323,11 @@ function BookCard({
           <Tag color="warning" style={{ fontSize: 11, margin: 0 }}>无语料</Tag>
         )}
         {book.active && <Tag color="purple" style={{ fontSize: 11, margin: 0 }}>当前</Tag>}
+        {book.is_branch && (
+          <Tag color="geekblue" style={{ fontSize: 11, margin: 0 }}>
+            🌿 分支 · 基线{book.base_chapter ?? "?"}章
+          </Tag>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
@@ -275,6 +344,18 @@ function BookCard({
         >
           {book.active ? "已激活" : busy ? "切换中…" : "切换到本书"}
         </button>
+        {onFork && (
+          <Tooltip title="建一条大纲分支(克隆本书作独立派生书,续写互不污染、可单独回滚)">
+            <button
+              className="ghost"
+              onClick={onFork}
+              disabled={busy}
+              style={{ padding: "6px 12px", fontSize: 12 }}
+            >
+              🌿 建分支
+            </button>
+          </Tooltip>
+        )}
         <Tooltip title={book.active ? "先切到别的书才能删" : "永久删除"}>
           <button
             className="ghost"

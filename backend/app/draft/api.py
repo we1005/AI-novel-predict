@@ -20,13 +20,18 @@ class WriteRequest(BaseModel):
 class ResetContinuationRequest(BaseModel):
     from_chapter: int = Field(..., ge=1)   # 通常=原著章数+1;清 chapter>=此值 的续写产物
     dry_run: bool = False
+    book: str | None = None    # 指定分支书 slug(不传=当前 active);用于逐章回滚某分支
 
 
 @router.post("/reset-continuation")
 def reset_continuation_endpoint(req: ResetContinuationRequest):
-    """一致性维护:清除 chapter>=from_chapter 的续写草稿 + 回灌实体(原著不动)。
-    重生成大纲后调用,避免旧续写产物污染新一轮上下文。dry_run 只统计不删。"""
-    return pipeline.reset_continuation(req.from_chapter, dry_run=req.dry_run)
+    """一致性维护 / 逐章回滚:清除 chapter>=from_chapter 的续写草稿 + 回灌实体(原著不动)。
+    传 book 则作用于该分支库(不改全局 active)。dry_run 只统计不删。"""
+    from contextlib import nullcontext
+
+    from ..db import book_scope
+    with (book_scope(req.book) if req.book else nullcontext()):
+        return pipeline.reset_continuation(req.from_chapter, dry_run=req.dry_run)
 
 
 @router.post("/write")

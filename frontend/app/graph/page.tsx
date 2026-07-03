@@ -24,12 +24,25 @@ const TYPE_COLORS: Record<string, string> = {
 export default function GraphPage() {
   const [tab, setTab] = useState<Tab>("foreshadow");
   const [upTo, setUpTo] = useState<number | "">("");
+  // 视角:"" = 原文(当前 active 书);否则=某分支 slug,图谱按该分支库渲染(不改全局 active)。
+  const [book, setBook] = useState<string>("");
+  const [activeSlug, setActiveSlug] = useState<string>("");
+  const [branches, setBranches] = useState<any[]>([]);
+
+  useEffect(() => {
+    api.booksList().then((d: any) => {
+      setActiveSlug(d?.active || "");
+      setBranches((d?.books || []).filter((b: any) => b.is_branch && b.parent_slug === d?.active));
+    }).catch(() => {});
+  }, []);
+
+  const bookParam = book || undefined;
 
   return (
     <>
       <PageTitle title="结构图谱" subtitle="伏笔甘特 · 人物关系 · 主角演变 · 剧情时间线" />
       <div className="card">
-        <div className="row" style={{ alignItems: "center" }}>
+        <div className="row" style={{ alignItems: "center", flexWrap: "wrap" }}>
           <button className={tab === "foreshadow" ? "" : "ghost"} onClick={() => setTab("foreshadow")}>
             伏笔甘特图
           </button>
@@ -42,6 +55,18 @@ export default function GraphPage() {
           <button className={tab === "timeline" ? "" : "ghost"} onClick={() => setTab("timeline")}>
             剧情时间线
           </button>
+          {branches.length > 0 && (
+            <>
+              <span className="muted" style={{ marginLeft: 16 }}>视角</span>
+              <select value={book} onChange={(e) => setBook(e.target.value)} style={{ maxWidth: 220 }}
+                title="切换到某条大纲分支的图谱(各分支记忆隔离,互不影响)">
+                <option value="">原文（{activeSlug}）</option>
+                {branches.map((b) => (
+                  <option key={b.slug} value={b.slug}>分支 · {b.branch_name || b.slug}</option>
+                ))}
+              </select>
+            </>
+          )}
           <span className="muted" style={{ marginLeft: 16 }}>截至章节</span>
           <input
             type="number"
@@ -53,10 +78,10 @@ export default function GraphPage() {
         </div>
       </div>
 
-      {tab === "foreshadow" && <ForeshadowGantt upTo={upTo === "" ? undefined : upTo} />}
-      {tab === "characters" && <CharacterGraph upTo={upTo === "" ? undefined : upTo} />}
-      {tab === "hero" && <HeroEvolution />}
-      {tab === "timeline" && <Timeline />}
+      {tab === "foreshadow" && <ForeshadowGantt upTo={upTo === "" ? undefined : upTo} book={bookParam} />}
+      {tab === "characters" && <CharacterGraph upTo={upTo === "" ? undefined : upTo} book={bookParam} />}
+      {tab === "hero" && <HeroEvolution book={bookParam} />}
+      {tab === "timeline" && <Timeline book={bookParam} />}
     </>
   );
 }
@@ -65,7 +90,7 @@ export default function GraphPage() {
 // 伏笔甘特图: X = 章节, 每条伏笔一行带颜色，open 延伸到末尾。
 // ---------------------------------------------------------------------------
 
-function ForeshadowGantt({ upTo }: { upTo?: number }) {
+function ForeshadowGantt({ upTo, book }: { upTo?: number; book?: string }) {
   const { colorScheme } = useTheme();
   const ref = useRef<HTMLDivElement | null>(null);
   const [data, setData] = useState<{ items: any[]; max_chapter: number } | null>(null);
@@ -75,8 +100,8 @@ function ForeshadowGantt({ upTo }: { upTo?: number }) {
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    api.graphForeshadowings(upTo).then((r: any) => setData(r));
-  }, [upTo]);
+    api.graphForeshadowings(upTo, book).then((r: any) => setData(r));
+  }, [upTo, book]);
 
   const filtered = useMemo(() => {
     if (!data) return [];
@@ -291,7 +316,7 @@ function ForeshadowGantt({ upTo }: { upTo?: number }) {
 // 人物关系: cytoscape, importance 决定大小，多源边权重决定线粗细。
 // ---------------------------------------------------------------------------
 
-function CharacterGraph({ upTo }: { upTo?: number }) {
+function CharacterGraph({ upTo, book }: { upTo?: number; book?: string }) {
   const { theme, colorScheme } = useTheme();
   const ref = useRef<HTMLDivElement | null>(null);
   const [data, setData] = useState<{ nodes: any[]; edges: any[] }>({ nodes: [], edges: [] });
@@ -315,10 +340,10 @@ function CharacterGraph({ upTo }: { upTo?: number }) {
   }, []);
 
   const reload = () => {
-    api.graphCharacters(upTo || undefined, topN).then(setData).catch(() => {});
+    api.graphCharacters(upTo || undefined, topN, book).then(setData).catch(() => {});
   };
 
-  useEffect(() => { reload(); }, [upTo, topN]);
+  useEffect(() => { reload(); }, [upTo, topN, book]);
 
   const labeledEdges = data.edges.filter((e: any) => e.data.kind === "labeled").length;
 
@@ -469,12 +494,12 @@ function CharacterGraph({ upTo }: { upTo?: number }) {
 // 主角演变 — 境界折线 + 物品/技能数 + hover 标注
 // ---------------------------------------------------------------------------
 
-function HeroEvolution() {
+function HeroEvolution({ book }: { book?: string }) {
   const { colorScheme } = useTheme();
   const ref = useRef<HTMLDivElement | null>(null);
   const [data, setData] = useState<any>(null);
 
-  useEffect(() => { api.hero().then(setData); }, []);
+  useEffect(() => { api.hero(book).then(setData); }, [book]);
 
   // 归一化 realm 名：模型偶尔输出"一级封号魔导士（XX说明）"，提取主名。
   const cleanedSeries = useMemo(() => {
@@ -602,12 +627,12 @@ function HeroEvolution() {
 // 剧情时间线
 // ---------------------------------------------------------------------------
 
-function Timeline() {
+function Timeline({ book }: { book?: string }) {
   const [rows, setRows] = useState<any[]>([]);
   const [minImp, setMinImp] = useState(60);
   useEffect(() => {
-    api.timeline(minImp).then(setRows).catch(() => {});
-  }, [minImp]);
+    api.timeline(minImp, book).then(setRows).catch(() => {});
+  }, [minImp, book]);
 
   return (
     <div className="card">

@@ -74,19 +74,23 @@ export const api = {
   plot: (minImportance: number = 50) =>
     j<any[]>(`/memory/plot?min_importance=${minImportance}`),
 
-  graphCharacters: (upTo?: number, topN?: number) => {
+  graphCharacters: (upTo?: number, topN?: number, book?: string) => {
     const qs = new URLSearchParams();
     if (topN != null) qs.set("top_n", String(topN));
     if (upTo != null) qs.set("up_to_chapter", String(upTo));
+    if (book) qs.set("book", book);
     const q = qs.toString();
     return j<{ nodes: any[]; edges: any[] }>(`/graph/characters${q ? `?${q}` : ""}`);
   },
-  graphForeshadowings: (upTo?: number) =>
-    j<{ items: any[] }>(
-      `/graph/foreshadowings${upTo != null ? `?up_to_chapter=${upTo}` : ""}`
-    ),
-  hero: () => j<any>("/graph/hero"),
-  heroItems: () => j<any>("/graph/hero-items"),
+  graphForeshadowings: (upTo?: number, book?: string) => {
+    const qs = new URLSearchParams();
+    if (upTo != null) qs.set("up_to_chapter", String(upTo));
+    if (book) qs.set("book", book);
+    const q = qs.toString();
+    return j<{ items: any[] }>(`/graph/foreshadowings${q ? `?${q}` : ""}`);
+  },
+  hero: (book?: string) => j<any>(`/graph/hero${book ? `?book=${encodeURIComponent(book)}` : ""}`),
+  heroItems: (book?: string) => j<any>(`/graph/hero-items${book ? `?book=${encodeURIComponent(book)}` : ""}`),
   // ----- Sim / Profile / Interview / Multi-agent simulation -----
   profilesList: () => j<any[]>("/sim/profiles"),
   profileGet: (entityId: number) => j<any>(`/sim/profiles/${entityId}`),
@@ -131,8 +135,13 @@ export const api = {
       "/graph/dedup", { method: "POST" }),
   graphRecomputeImportance: () =>
     j<{ updated: number }>("/graph/recompute-importance", { method: "POST" }),
-  timeline: (minImportance?: number) =>
-    j<any[]>(`/graph/timeline${minImportance != null ? `?min_importance=${minImportance}` : ""}`),
+  timeline: (minImportance?: number, book?: string) => {
+    const qs = new URLSearchParams();
+    if (minImportance != null) qs.set("min_importance", String(minImportance));
+    if (book) qs.set("book", book);
+    const q = qs.toString();
+    return j<any[]>(`/graph/timeline${q ? `?${q}` : ""}`);
+  },
 
   predictRun: (afterChapter: number, candidates: number = 5) =>
     j<any>("/predict/run", {
@@ -219,6 +228,11 @@ export const api = {
     j<any>("/books/active", { method: "PUT", body: JSON.stringify({ slug }) }),
   booksDelete: (slug: string) =>
     j<any>(`/books/${encodeURIComponent(slug)}`, { method: "DELETE" }),
+  booksFork: (parentSlug: string, branchName: string, outlineRunId?: number, setActive = true) =>
+    j<any>("/books/fork", {
+      method: "POST",
+      body: JSON.stringify({ parent_slug: parentSlug, branch_name: branchName, outline_run_id: outlineRunId ?? null, set_active: setActive }),
+    }),
 
   // ----- Style (author voice analysis) -----
   styleGet: () => j<any>("/style"),

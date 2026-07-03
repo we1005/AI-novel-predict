@@ -553,12 +553,16 @@ def corpus_median_chapter_chars(default: int = 4000) -> int:
 
 
 # 续写产物涉及的派生表(与 ingest/split.py 重切孤儿清理保持一致)。
+# 顺序有讲究:先删引用别人的子行(entity_states 引用 entities.id),再删被引用的父行(entities);
+# entities/world_rules 的 chapter 列是指向 chapters.number 的 FK,必须在删 chapters 之前清掉。
 _CONTINUATION_DERIVED = [
     ("entity_states", "chapter"), ("plot_points", "chapter"),
     ("foreshadowings", "planted_chapter"), ("relationships", "first_chapter"),
     ("craft_snippet", "chapter_number"),
     ("chapter_beat", "chapter"), ("worldview_reveal", "chapter"), ("pov_event", "chapter"),
     ("golden_finger_step", "chapter"), ("relationship_event", "chapter"), ("speed_read_stage", "chapter_start"),
+    ("world_rules", "first_chapter"),        # 续写新立的世界设定
+    ("entities", "first_appear_chapter"),    # 续写首次登场的实体(放最后:其 entity_states 已在上面删净)
 ]
 
 
@@ -603,6 +607,31 @@ def reset_continuation(from_chapter: int, *, dry_run: bool = False) -> dict:
                 n = conn.execute(_sql("UPDATE foreshadowings SET resolved_chapter=NULL WHERE resolved_chapter >= :x"), {"x": from_chapter}).rowcount
             if n:
                 counts["foreshadowings.resolved→NULL"] = n
+        except Exception:
+            pass
+        # mysteries/character_profiles 是"整本就地 mutate、无按章增量语义"的表(见架构方案 P5):
+        # 不删整条,只把落在被删续写章的 chapter 指针置空,既解 FK 又保留原著期建立的条目。
+        for tbl, col in [("mysteries", "last_updated_chapter"), ("character_profiles", "last_built_chapter")]:
+            try:
+                if dry_run:
+                    n = conn.execute(_sql(f"SELECT count(*) FROM {tbl} WHERE {col} >= :x"), {"x": from_chapter}).scalar()
+                else:
+                    n = conn.execute(_sql(f"UPDATE {tbl} SET {col}=NULL WHERE {col} >= :x"), {"x": from_chapter}).rowcount
+                if n:
+                    counts[f"{tbl}.{col}→NULL"] = n
+            except Exception:
+                continue
+        # 写作回灌会给续写章登记一个 0-offset 的 chapters 行(FK 锚点)。它也属续写产物,要清;
+        # 放最后:上面已把引用 chapters.number 的 FK 行(entities/world_rules/foreshadow/entity_states…)清净。
+        # 但**绝不动原著章**(有真实 char_offset,offset_end>offset_start)。
+        try:
+            cond = "number >= :x AND (char_offset_end IS NULL OR char_offset_end <= char_offset_start)"
+            if dry_run:
+                n = conn.execute(_sql(f"SELECT count(*) FROM chapters WHERE {cond}"), {"x": from_chapter}).scalar()
+            else:
+                n = conn.execute(_sql(f"DELETE FROM chapters WHERE {cond}"), {"x": from_chapter}).rowcount
+            if n:
+                counts["chapters(registered)"] = n
         except Exception:
             pass
     return {"from_chapter": from_chapter, "dry_run": dry_run, "affected": counts}

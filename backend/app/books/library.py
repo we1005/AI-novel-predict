@@ -69,6 +69,71 @@ def book_paths(slug: str) -> dict[str, Path]:
 
 
 # ---------------------------------------------------------------------------
+# 大纲分支(派生书):每条续写大纲物化成一本独立 db 的"分支书"。
+# 见 docs/多大纲分支-记忆隔离与回滚-架构方案.md。元数据存分支目录下的 branch.json。
+# ---------------------------------------------------------------------------
+
+BRANCH_META_FILE = "branch.json"
+
+
+def branch_meta(slug: str) -> dict[str, Any] | None:
+    """读分支元数据(parent_slug/base_chapter/outline_run_id/branch_name);非分支返回 None。"""
+    import json
+    f = book_dir(slug) / BRANCH_META_FILE
+    if not f.exists():
+        return None
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def fork_book(parent_slug: str, branch_slug: str, *, branch_name: str,
+              outline_run_id: int | None, base_chapter: int) -> dict[str, Any]:
+    """把 parent 克隆成一本派生「分支书」:文件级拷贝 novel.db(用 sqlite backup,保证 WAL 一致)
+    + corpus.txt,写 branch.json。不拷 chroma(向量库可选,分支需要时重建)。基线清理(删续写产物
+    回到 base_chapter)由调用方在 book_scope(branch) 内做,避免本文件依赖 ORM。"""
+    import json
+    import sqlite3
+
+    if not book_dir(parent_slug).is_dir():
+        raise ValueError(f"parent book {parent_slug!r} not found")
+    dest = book_dir(branch_slug)
+    if dest.exists():
+        raise ValueError(f"branch {branch_slug!r} already exists")
+
+    with _LOCK:
+        dest.mkdir(parents=True, exist_ok=True)
+        # 1) 语料原文(分支上下文/FTS 要用)
+        pc = book_paths(parent_slug)["corpus_txt"]
+        if pc.exists():
+            shutil.copyfile(pc, book_paths(branch_slug)["corpus_txt"])
+        # 2) novel.db —— 用 sqlite backup API(读一致快照,含已提交 WAL,比裸 copy 安全)
+        src_db = book_paths(parent_slug)["db_path"]
+        dst_db = book_paths(branch_slug)["db_path"]
+        if src_db.exists():
+            s = sqlite3.connect(str(src_db))
+            d = sqlite3.connect(str(dst_db))
+            try:
+                s.backup(d)
+            finally:
+                d.close()
+                s.close()
+        # 3) 元数据
+        meta = {
+            "is_branch": True,
+            "parent_slug": parent_slug,
+            "branch_name": branch_name,
+            "outline_run_id": outline_run_id,
+            "base_chapter": base_chapter,
+        }
+        (dest / BRANCH_META_FILE).write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    return {"slug": branch_slug, **meta}
+
+
+# ---------------------------------------------------------------------------
 # Discovery
 # ---------------------------------------------------------------------------
 
@@ -100,14 +165,21 @@ def list_books() -> list[dict[str, Any]]:
         if not d.is_dir():
             continue
         p = book_paths(d.name)
+        bm = branch_meta(d.name) or {}
         out.append({
             "slug": d.name,
-            "title": d.name,
+            "title": bm.get("branch_name") or d.name,
             "active": d.name == active,
             "has_corpus": p["corpus_txt"].exists(),
             "has_db": p["db_path"].exists(),
             "corpus_bytes": p["corpus_txt"].stat().st_size if p["corpus_txt"].exists() else 0,
             "db_bytes": p["db_path"].stat().st_size if p["db_path"].exists() else 0,
+            # 分支字段:前端据此把分支折叠到 parent 之下
+            "is_branch": bool(bm.get("is_branch")),
+            "parent_slug": bm.get("parent_slug"),
+            "branch_name": bm.get("branch_name"),
+            "outline_run_id": bm.get("outline_run_id"),
+            "base_chapter": bm.get("base_chapter"),
         })
     return out
 

@@ -137,17 +137,26 @@ function DraftPageInner() {
     }).catch(() => {});
   }, []);
 
-  // 一致性维护:重生成大纲后,清掉按旧大纲写出的续写章节 + 其回灌实体(chapter≥原著章数+1),
-  // 让新大纲从原著末章这个干净基线重写。原著本身不动。先 dry-run 报清单再确认删。
-  const resetContinuation = async () => {
-    const from = (bookTotalChapters || 0) + 1;
+  // 回滚"最新续写章":删掉已写的最后一章续写→该书记忆退回上一章末(from=最新续写章号)。
+  const rollbackLatest = async () => {
+    const conti = drafts.map((d: any) => d.chapter_index).filter((n: number) => n > (bookTotalChapters || 0));
+    if (!conti.length) { alert("当前还没有续写章可回滚。"); return; }
+    const latest = Math.max(...conti);
+    if (!window.confirm(`删掉最新续写「第${latest}章」并把记忆退回到第${latest - 1}章末?\n(仅删这一章的正文+回灌实体;更早的续写保留)`)) return;
+    await resetContinuation(latest, true);
+  };
+
+  // 一致性维护:清掉 chapter≥from(默认=原著章数+1,即全部续写)的续写章节 + 其回灌实体,
+  // 让新大纲从干净基线重写。原著本身不动。先 dry-run 报清单再确认删。quiet=已在外层确认则跳过二次确认。
+  const resetContinuation = async (fromArg?: number, quiet = false) => {
+    const from = fromArg ?? ((bookTotalChapters || 0) + 1);
     try {
       const dry = await api.draftResetContinuation(from, true);
       const aff = dry.affected || {};
       const keys = Object.keys(aff);
-      if (!keys.length) { alert(`第 ${from} 章及以后没有已写正文/回灌实体,无需清理。`); return; }
+      if (!keys.length) { if (!quiet) alert(`第 ${from} 章及以后没有已写正文/回灌实体,无需清理。`); return; }
       const summary = keys.map((k) => `  · ${k}: ${aff[k]}`).join("\n");
-      if (!window.confirm(
+      if (!quiet && !window.confirm(
         `将永久删除「第 ${from} 章及以后」的续写产物(原著第 1-${from - 1} 章不受影响):\n\n${summary}\n\n用于与重生成的大纲保持一致。确定删除?`
       )) return;
       const res = await api.draftResetContinuation(from, false);
@@ -453,9 +462,14 @@ function DraftPageInner() {
             title="对同一章写两遍:push 臂 vs agentic 臂(模型自选检索),盲评对比">
             {abBusy ? "对比中…" : "🧭 agentic 对比"}
           </button>
-          <button className="ghost" onClick={resetContinuation} disabled={busy || abBusy}
-            title={`重生成大纲后,清掉按旧大纲写出的续写章节 + 其回灌实体(第${(bookTotalChapters || 0) + 1}章及以后),原著不动`}
-            style={{ color: "var(--c-danger, #c0392b)", marginLeft: "auto" }}>
+          <button className="ghost" onClick={rollbackLatest} disabled={busy || abBusy}
+            title="删掉最新写好的一章续写→该书记忆退回上一章末(只删这一章,更早续写保留)"
+            style={{ marginLeft: "auto" }}>
+            ↩ 回滚最新续写章
+          </button>
+          <button className="ghost" onClick={() => resetContinuation()} disabled={busy || abBusy}
+            title={`清掉全部续写(第${(bookTotalChapters || 0) + 1}章及以后)的正文+回灌实体,回到原著基线,原著不动`}
+            style={{ color: "var(--c-danger, #c0392b)" }}>
             🧹 重置续写（保一致）
           </button>
           <span className="muted" style={{ fontSize: 12 }}>

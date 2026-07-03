@@ -19,8 +19,13 @@ def rebuild_mysteries(body: RebuildRequest | None = None):
 
 
 @router.get("")
-def list_mysteries():
-    return pipeline.list_all()
+def list_mysteries(book: str | None = None):
+    # book=分支slug → 看该分支的疑点(图谱"视角"切换用);不传=当前 active
+    from contextlib import nullcontext
+
+    from ..db import book_scope
+    with (book_scope(book) if book else nullcontext()):
+        return pipeline.list_all()
 
 
 @router.delete("/{mystery_id}")
