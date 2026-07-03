@@ -165,6 +165,13 @@ export default function LibraryPage() {
         </button>
       </div>
 
+      <p className="muted" style={{ fontSize: 12, marginTop: 6, marginBottom: 16, lineHeight: 1.7,
+        background: "var(--panel-2)", padding: "8px 12px", borderRadius: 8, borderLeft: "3px solid var(--accent)" }}>
+        🌿 <b>分支</b> = 某条「整本故事弧候选」的独立续写线,记忆与原著/其它分支<b>隔离</b>。
+        想<b>在分支里续写 / 推演 / 回滚</b> → 点该分支的 <b style={{ color: "var(--accent-2)" }}>「切换到本书」</b>(把它设为当前工作书);
+        图谱 / 宝物 / 疑点页顶部的「视角」下拉<b>只是只读预览、不能在上面写</b>。
+      </p>
+
       {/* 已导入书 */}
       <div className="card" style={{ marginBottom: 20 }}>
         <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
@@ -173,13 +180,6 @@ export default function LibraryPage() {
             {bundle.books.length} 本
           </span>
         </h3>
-
-        <p className="muted" style={{ fontSize: 12, marginTop: -4, marginBottom: 14, lineHeight: 1.7,
-          background: "var(--panel-2)", padding: "8px 12px", borderRadius: 8, borderLeft: "3px solid var(--accent)" }}>
-          🌿 <b>分支</b> = 某条「整本故事弧候选」的独立续写线,记忆与原著/其它分支<b>隔离</b>。
-          想<b>在分支里续写 / 推演 / 回滚</b> → 点该分支的 <b style={{ color: "var(--accent-2)" }}>「切换到本书」</b>(把它设为当前工作书);
-          图谱 / 宝物 / 疑点页顶部的「视角」下拉<b>只是只读预览、不能在上面写</b>。
-        </p>
 
         {bundle.books.length === 0 && (
           <Empty description="还没有导入任何书。先到下方「文件夹扫描」导入一本。" />
