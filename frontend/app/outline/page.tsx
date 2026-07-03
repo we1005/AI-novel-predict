@@ -12,6 +12,7 @@ import PageTitle from "@/components/PageTitle";
 
 const SIDEBAR_KEY = "outline-sidebar-collapsed";
 const FORM_KEY = "outline-form-collapsed";
+const VIEW_KEY = "outline-view-mode";   // "graph"(图谱) | "classic"(经典列表·可编辑)
 
 export default function OutlinePage() {
   return (
@@ -25,6 +26,15 @@ function OutlinePageInner() {
   const router = useRouter();
   const search = useSearchParams();
   const initId = search?.get("id");
+  const { theme } = useTheme();
+
+  // 页面级视图切换(独立于全局主题):null=跟随主题(modern→图谱, classic→列表),否则用户显式选择。
+  const [viewMode, setViewMode] = useState<"graph" | "classic" | null>(null);
+  const effectiveView: "graph" | "classic" = viewMode ?? (theme === "modern" ? "graph" : "classic");
+  const setView = (v: "graph" | "classic") => {
+    setViewMode(v);
+    try { localStorage.setItem(VIEW_KEY, v); } catch {}
+  };
 
   const [runs, setRuns] = useState<any[]>([]);
   const [arcRuns, setArcRuns] = useState<any[]>([]);
@@ -52,6 +62,8 @@ function OutlinePageInner() {
     try {
       if (localStorage.getItem(SIDEBAR_KEY) === "1") setSidebarCollapsed(true);
       if (localStorage.getItem(FORM_KEY) === "1") setFormCollapsed(true);
+      const vm = localStorage.getItem(VIEW_KEY);
+      if (vm === "graph" || vm === "classic") setViewMode(vm);
     } catch {}
   }, []);
   const toggleForm = () => {
@@ -305,7 +317,7 @@ function OutlinePageInner() {
 
         {/* 右：详情 */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {selected ? <OutlineDetail run={selected} draftMap={draftMap} onChange={async () => {
+          {selected ? <OutlineDetail run={selected} draftMap={draftMap} view={effectiveView} setView={setView} onChange={async () => {
               const d = await api.outlineGet(selected.id);
               setSelected(d);
               reloadDrafts();
@@ -320,10 +332,10 @@ function OutlinePageInner() {
   );
 }
 
-function OutlineDetail({ run, draftMap, onChange }: {
+function OutlineDetail({ run, draftMap, onChange, view, setView }: {
   run: any; draftMap: Map<string, any>; onChange: () => void;
+  view: "graph" | "classic"; setView: (v: "graph" | "classic") => void;
 }) {
-  const { theme } = useTheme();
   const sourceHref =
     run.source_kind === "arc"
       ? `/arc?id=${run.source_run_id}&candidate=${run.source_chosen_index ?? 0}`
@@ -353,18 +365,33 @@ function OutlineDetail({ run, draftMap, onChange }: {
             ch {run.chapter_start}-{run.chapter_end} · {run.chapters?.length || 0} 章
           </span>
         </h2>
-        <span className="muted" style={{ fontSize: 12 }}>${run.cost_usd?.toFixed(4)}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* 页面级视图切换:图谱(只读概览)⇄ 经典列表(可逐章编辑/续写)*/}
+          <div style={{ display: "inline-flex", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden" }}>
+            <button onClick={() => setView("graph")}
+              className={view === "graph" ? "" : "ghost"}
+              style={{ padding: "3px 10px", fontSize: 12, borderRadius: 0, border: "none" }}>
+              🕸 图谱
+            </button>
+            <button onClick={() => setView("classic")}
+              className={view === "classic" ? "" : "ghost"}
+              style={{ padding: "3px 10px", fontSize: 12, borderRadius: 0, border: "none" }}>
+              📝 经典
+            </button>
+          </div>
+          <span className="muted" style={{ fontSize: 12 }}>${run.cost_usd?.toFixed(4)}</span>
+        </div>
       </div>
       {run.user_hints && (
         <p className="muted" style={{ fontSize: 12, padding: "6px 10px", background: "var(--panel-2)", borderRadius: 4, borderLeft: "3px solid var(--accent-2)" }}>
           偏好：{run.user_hints}
         </p>
       )}
-      {theme === "modern" ? (
+      {view === "graph" ? (
         <div style={{ marginTop: 12 }}>
           <ChapterFlowGraph runId={run.id} chapters={run.chapters || []} height="calc(100vh - 280px)" />
           <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>
-            点击节点查看完整大纲。需要编辑章节字段，请切换到 classic 风格。
+            点击节点查看完整大纲。需要逐章编辑/续写,请切到「📝 经典」视图。
           </p>
         </div>
       ) : (
