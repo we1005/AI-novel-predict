@@ -331,3 +331,32 @@ def test_split_no_chapters_raises_422_not_500(tmp_path, monkeypatch):
         ingest_api.split_endpoint(None)
     assert ei.value.status_code == 422          # 不是 500(500 会绕过 CORS)
     assert "未检测到章节" in ei.value.detail      # 面向用户的可读原因,而非裸 traceback
+
+
+# ---- 谜团精细回滚:按 updates_log 重放,去掉被删章的"痕迹"(而非只清指针) ----
+def test_replay_mystery_from_log_full_and_trimmed():
+    from app.draft.pipeline import _replay_mystery_from_log
+    log = [
+        {"change": "first_seen", "chapter_range": [40, 44], "new_clue": "A"},
+        {"change": "update",     "chapter_range": [58, 58], "new_clue": "B"},
+        {"change": "resolve",    "chapter_range": [200, 200], "new_clue": "C"},
+    ]
+    full = _replay_mystery_from_log(log)
+    assert full["status"] == "resolved"           # first_seen→open, update→sharpened, resolve→resolved
+    assert full["confidence"] == 90               # 50 +10(update) +30(resolve)
+    assert full["clues"] == ["A", "B", "C"]
+    assert full["last_updated_chapter"] == 200
+    # 回滚到 <57:仅保留 first_seen → 状态退回 open、信心回 50、只剩线索 A、指针回第44章
+    kept = [e for e in log if e["chapter_range"][-1] < 57]
+    r = _replay_mystery_from_log(kept)
+    assert r["status"] == "open"
+    assert r["confidence"] == 50
+    assert r["clues"] == ["A"]
+    assert r["last_updated_chapter"] == 44
+
+
+# ---- 回灌竞态守卫:chapter_no<=0 直接放行(不误等原著/首章) ----
+def test_await_pending_reingest_noop_for_nonpositive():
+    from app.draft.pipeline import _await_pending_reingest
+    assert _await_pending_reingest(0) is True
+    assert _await_pending_reingest(-1) is True

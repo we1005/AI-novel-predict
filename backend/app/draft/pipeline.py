@@ -609,9 +609,8 @@ def reset_continuation(from_chapter: int, *, dry_run: bool = False) -> dict:
                 counts["foreshadowings.resolved→NULL"] = n
         except Exception:
             pass
-        # mysteries/character_profiles 是"整本就地 mutate、无按章增量语义"的表(见架构方案 P5):
-        # 不删整条,只把落在被删续写章的 chapter 指针置空,既解 FK 又保留原著期建立的条目。
-        for tbl, col in [("mysteries", "last_updated_chapter"), ("character_profiles", "last_built_chapter")]:
+        # character_profiles 无按章增量语义(整本就地重建)→ 只把落在被删章的 last_built_chapter 置空。
+        for tbl, col in [("character_profiles", "last_built_chapter")]:
             try:
                 if dry_run:
                     n = conn.execute(_sql(f"SELECT count(*) FROM {tbl} WHERE {col} >= :x"), {"x": from_chapter}).scalar()
@@ -634,7 +633,128 @@ def reset_continuation(from_chapter: int, *, dry_run: bool = False) -> dict:
                 counts["chapters(registered)"] = n
         except Exception:
             pass
+    # mysteries:按 updates_log 逐章重放,做**精细回滚**(而非只清指针)——见下 _rollback_mysteries。
+    myc = _rollback_mysteries(from_chapter, dry_run=dry_run)
+    for k, v in myc.items():
+        if v:
+            counts[k] = v
     return {"from_chapter": from_chapter, "dry_run": dry_run, "affected": counts}
+
+
+def _replay_mystery_from_log(kept: list[dict]) -> dict:
+    """由保留下来的 updates_log 条目重放出谜团的 status/confidence/clues/last_updated_chapter。
+    与 ingest/extract._persist_mystery_actions 的前向逻辑对齐(change→状态迁移、默认信心增减)。
+    信心 delta 未存进日志,用默认值近似;初始线索若来自 summary 亦无法精确复原 → 尽力而为。"""
+    status = "open"
+    conf = 50
+    clues: list[str] = []
+    last_ch = 0
+    for e in kept:
+        if not isinstance(e, dict):
+            continue
+        change = e.get("change")
+        nc = e.get("new_clue")
+        if nc:
+            clues.append(str(nc)[:240])
+        if change == "first_seen":
+            status = "open"
+        elif change in ("update", "sharpened"):
+            status = "sharpened" if status == "open" else status
+            conf += 10
+        elif change == "resolve":
+            status = "resolved"
+            conf += 30
+        elif change == "contradict":
+            status = "contradicted"
+            conf -= 20
+        cr = e.get("chapter_range") or [0, 0]
+        try:
+            last_ch = max(last_ch, int(cr[-1]))
+        except Exception:
+            pass
+    return {"status": status, "confidence": max(0, min(100, conf)),
+            "clues": clues, "last_updated_chapter": last_ch or None}
+
+
+def _rollback_mysteries(from_chapter: int, *, dry_run: bool = False) -> dict:
+    """谜团精细回滚:按 updates_log_json 里每条事件的 chapter_range 判断。
+    - 某谜团**全部事件都 ≥ from_chapter**(纯续写期产物)→ 删除。
+    - 部分事件 ≥ from_chapter(跨期)→ 裁掉这些事件,由剩余日志**重放** status/confidence/clues/
+      last_updated_chapter(去掉被删章的"痕迹")。
+    - 全部事件 < from_chapter → 不动。
+    返回计数 {mysteries.deleted, mysteries.reverted}。"""
+    from ..memory.models import Mystery
+
+    deleted = reverted = 0
+    with session_scope() as s:
+        rows = s.execute(select(Mystery)).scalars().all()
+        for m in rows:
+            log = list(m.updates_log_json or [])
+            def _ge(e):
+                cr = (e.get("chapter_range") if isinstance(e, dict) else None) or [0, 0]
+                try:
+                    return int(cr[-1]) >= from_chapter
+                except Exception:
+                    return False
+            future = [e for e in log if _ge(e)]
+            if not future:
+                continue  # 该谜团没有落在被删章的事件 → 不动
+            kept = [e for e in log if not _ge(e)]
+            if not kept:
+                deleted += 1
+                if not dry_run:
+                    s.delete(m)
+                continue
+            reverted += 1
+            if not dry_run:
+                rep = _replay_mystery_from_log(kept)
+                m.updates_log_json = kept
+                m.status = rep["status"]
+                m.confidence = rep["confidence"]
+                if rep["clues"]:
+                    m.clues_json = rep["clues"]
+                m.last_updated_chapter = rep["last_updated_chapter"]
+    out = {}
+    if deleted:
+        out["mysteries.deleted"] = deleted
+    if reverted:
+        out["mysteries.reverted"] = reverted
+    return out
+
+
+def _await_pending_reingest(chapter_no: int, *, timeout_s: float = 150.0, poll_s: float = 2.0) -> bool:
+    """等某续写章的后台回灌(extract_one_chapter)落库完成再继续。
+
+    extract_one_chapter 为该章建 ExtractionBatch(chapter_start=ch, chapter_end=ch+1),
+    status running→done/failed。手动单章写作的回灌是后台线程,连续快写下一章会有竞态:
+    下一章 _gather_context 读不到上一章刚抽的记忆。这里轮询该章的 batch,直到非 running 或超时。
+    返回 True=已就绪/无在跑;False=超时仍在跑(仍继续,只记日志,不硬卡死)。整本书流程回灌同步,
+    batch 早已 done,首次查询即返回。"""
+    if not chapter_no or chapter_no <= 0:
+        return True
+    import time
+
+    from ..memory.models import ExtractionBatch
+    waited = 0.0
+    while True:
+        with session_scope() as s:
+            running = s.execute(
+                select(ExtractionBatch).where(
+                    ExtractionBatch.chapter_start == chapter_no,
+                    ExtractionBatch.chapter_end == chapter_no + 1,
+                    ExtractionBatch.status == "running",
+                ).limit(1)
+            ).scalar_one_or_none()
+        if running is None:
+            return True
+        if waited >= timeout_s:
+            import logging
+            logging.getLogger(__name__).warning(
+                "reingest of ch%s still running after %ss — proceeding anyway (context may lag)",
+                chapter_no, int(timeout_s))
+            return False
+        time.sleep(poll_s)
+        waited += poll_s
 
 
 def write_chapter(
@@ -669,6 +789,11 @@ def write_chapter(
     # word_target 兜底：大纲未给则用**本书原著中位字数**（按书统计、非写死）。
     if not chapter_outline.get("word_target"):
         chapter_outline = {**chapter_outline, "word_target": corpus_median_chapter_chars()}
+
+    # 竞态守卫:手动单章写作的回灌走后台线程;若上一章(after_chapter)的回灌还在跑,先等它落库,
+    # 否则本章 _gather_context 会读到过期记忆(漏掉上一章刚抽的实体/伏笔/谜团)。整本书流程回灌本就同步,
+    # 该章的 batch 已 done → 立即返回、不阻塞。
+    _await_pending_reingest(after_chapter)
 
     # 2) Build cached context (entities/foreshadowings/mysteries/world rules etc.)
     ctx = _gather_context(after_chapter)
