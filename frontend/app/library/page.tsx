@@ -178,25 +178,28 @@ export default function LibraryPage() {
           <Empty description="还没有导入任何书。先到下方「文件夹扫描」导入一本。" />
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{
+          display: "grid",
+          gap: 14,
+          gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+          alignItems: "start",   // 不拉伸,带分支的书更高时其它书不跟着变高
+        }}>
           {bundle.books.filter((b) => !b.is_branch).map((p) => {
             const branches = bundle.books.filter((b) => b.is_branch && b.parent_slug === p.slug);
             return (
-              <div key={p.slug}>
-                <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
-                  <BookCard
-                    book={p}
-                    busy={working === p.slug}
-                    onSwitch={() => switchTo(p.slug)}
-                    onDelete={() => remove(p.slug)}
-                    onFork={() => { setForkParent(p.slug); setForkName(""); }}
-                  />
-                </div>
+              <div key={p.slug} style={{ display: "flex", flexDirection: "column" }}>
+                <BookCard
+                  book={p}
+                  busy={working === p.slug}
+                  onSwitch={() => switchTo(p.slug)}
+                  onDelete={() => remove(p.slug)}
+                  onFork={() => { setForkParent(p.slug); setForkName(""); }}
+                />
                 {branches.length > 0 && (
-                  <div style={{ marginLeft: 20, marginTop: 10, paddingLeft: 14, borderLeft: "2px solid var(--border)",
-                    display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+                  <div style={{ marginTop: 8, marginLeft: 12, paddingLeft: 12,
+                    borderLeft: "2px solid var(--border)", display: "flex", flexDirection: "column", gap: 6 }}>
                     {branches.map((br) => (
-                      <BookCard
+                      <BranchRow
                         key={br.slug}
                         book={br}
                         busy={working === br.slug}
@@ -367,6 +370,51 @@ function BookCard({
           </button>
         </Tooltip>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 分支折叠成紧凑单行(挂在原著卡片下),避免每个分支占一整张大卡。
+
+function BranchRow({
+  book, busy, onSwitch, onDelete,
+}: {
+  book: Book;
+  busy: boolean;
+  onSwitch: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8,
+      padding: "6px 10px", borderRadius: 8, fontSize: 12,
+      border: book.active ? "1px solid var(--accent)" : "1px solid var(--border)",
+      background: book.active ? "rgba(122,162,247,0.08)" : "var(--bg)",
+    }}>
+      <span>🌿</span>
+      <span
+        title={book.slug}
+        style={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+      >
+        {book.branch_name || book.title}
+      </span>
+      {book.base_chapter != null && (
+        <span className="muted" style={{ fontSize: 10, whiteSpace: "nowrap" }}>基线{book.base_chapter}章</span>
+      )}
+      {book.active ? (
+        <span style={{ fontSize: 11, color: "var(--accent)", whiteSpace: "nowrap" }}>当前</span>
+      ) : (
+        <button onClick={onSwitch} disabled={busy} style={{ fontSize: 11, padding: "3px 12px" }}>
+          {busy ? "…" : "切换"}
+        </button>
+      )}
+      <Tooltip title={book.active ? "先切到别的书才能删" : "删除此分支"}>
+        <button className="ghost" onClick={onDelete} disabled={book.active || busy}
+          style={{ fontSize: 11, padding: "3px 7px" }}>
+          <DeleteOutlined />
+        </button>
+      </Tooltip>
     </div>
   );
 }
