@@ -171,7 +171,7 @@ export const api = {
   monitorRecent: (limit: number = 50) =>
     j<any[]>(`/monitor/recent?limit=${limit}`),
 
-  mysteries: () => j<any[]>("/mysteries"),
+  mysteries: (book?: string) => j<any[]>(`/mysteries${book ? `?book=${encodeURIComponent(book)}` : ""}`),
   mysteriesRebuild: (skipExisting: boolean = false) =>
     j<{ batches_processed: number; batches_failed: number; mysteries_total: number; cost_usd: number; elapsed_s: number; per_batch: any[] }>(
       "/mysteries/rebuild",

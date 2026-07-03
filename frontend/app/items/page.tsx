@@ -9,6 +9,7 @@ import {
 } from "@ant-design/icons";
 import { api } from "@/lib/api";
 import PageTitle from "@/components/PageTitle";
+import BranchViewPicker from "@/components/BranchViewPicker";
 
 type Event = { chapter: number; chapter_title?: string; kind: "gained" | "lost" | "used"; note?: string };
 type RelatedFs = {
@@ -63,10 +64,11 @@ export default function ItemsPage() {
   const [filterFs, setFilterFs] = useState<"all" | "with_fs">("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Item | null>(null);
+  const [book, setBook] = useState("");   // 视角:""=原文,否则分支 slug
 
   useEffect(() => {
-    api.heroItems().then(setData).catch(() => setData({ hero: null, items: [] }));
-  }, []);
+    api.heroItems(book || undefined).then(setData).catch(() => setData({ hero: null, items: [] }));
+  }, [book]);
 
   const stats = useMemo(() => {
     if (!data) return { items: 0, skills: 0, concepts: 0, owned: 0, withFs: 0, total: 0 };
@@ -103,6 +105,8 @@ export default function ItemsPage() {
         subtitle={data?.catalog_mode
           ? "全书宝物 / 功法目录（按重要度与伏笔关联排序）— 物中藏笔，看哪些钩子还没收"
           : `${data?.hero?.name || "主角"}沿途获得 / 失去的物品与功法 — 物中藏笔，看哪些钩子还没收`} />
+
+      <BranchViewPicker value={book} onChange={setBook} style={{ marginBottom: 12 }} />
 
       {data?.catalog_mode && (
         <div style={{ margin: "0 0 14px", padding: "8px 12px", borderRadius: 6, fontSize: 12,

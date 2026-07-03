@@ -5,6 +5,7 @@ import { Drawer, Tag } from "antd";
 import { api } from "@/lib/api";
 import { useTheme } from "@/components/ThemeProvider";
 import PageTitle from "@/components/PageTitle";
+import BranchViewPicker from "@/components/BranchViewPicker";
 
 const CATEGORY_LABEL: Record<string, string> = {
   identity: "身份谜团",
@@ -64,8 +65,9 @@ export default function MysteriesPage() {
   const [filterSev, setFilterSev] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("active");
   const [showLowConf, setShowLowConf] = useState(false);
+  const [book, setBook] = useState("");   // 视角:""=原文,否则分支 slug
 
-  const load = () => api.mysteries().then(setItems).catch((e) => setMsg(String(e)));
+  const load = () => api.mysteries(book || undefined).then(setItems).catch((e) => setMsg(String(e)));
 
   useEffect(() => {
     load();
@@ -74,7 +76,8 @@ export default function MysteriesPage() {
       for (const e of es) byId[e.id] = e;
       setEntityById(byId);
     }).catch(() => {});
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book]);
 
   useEffect(() => {
     if (!busy) return;
@@ -135,6 +138,8 @@ export default function MysteriesPage() {
     <>
       <PageTitle title="宏观疑点"
         subtitle="读完整本书还在追问的大问题：身份 · 王朝 · 世界本源 · 幕后。每条带浮现/强化/收束时间线" />
+
+      <BranchViewPicker value={book} onChange={setBook} style={{ marginBottom: 12 }} />
 
       <div className="card">
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
