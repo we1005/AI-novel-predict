@@ -28,6 +28,7 @@ type Book = {
   branch_name?: string | null;
   outline_run_id?: number | null;
   base_chapter?: number | null;
+  is_compose?: boolean;   // 墨析 compose 虚拟书 → 墨笔书架隐藏
 };
 
 type LibraryFile = {
@@ -177,7 +178,7 @@ export default function LibraryPage() {
         <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
           <BookOutlined /> 已导入
           <span className="muted" style={{ fontSize: 12, fontWeight: "normal" }}>
-            {bundle.books.length} 本
+            {bundle.books.filter((b) => !b.is_compose).length} 本
           </span>
         </h3>
 
@@ -191,8 +192,8 @@ export default function LibraryPage() {
           gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
           alignItems: "start",   // 不拉伸,带分支的书更高时其它书不跟着变高
         }}>
-          {bundle.books.filter((b) => !b.is_branch).map((p) => {
-            const branches = bundle.books.filter((b) => b.is_branch && b.parent_slug === p.slug);
+          {bundle.books.filter((b) => !b.is_branch && !b.is_compose).map((p) => {
+            const branches = bundle.books.filter((b) => b.is_branch && !b.is_compose && b.parent_slug === p.slug);
             return (
               <div key={p.slug} style={{ display: "flex", flexDirection: "column" }}>
                 <BookCard

@@ -191,6 +191,17 @@ def record_compose(cslug: str, *, project_slug: str = "", use_case: str = "",
              "v": voice_source, "o": outline_run_id,
              "m": json.dumps(meta or {}, ensure_ascii=False),
              "t": datetime.now(timezone.utc).isoformat()})
+    # 写 compose 标记到书目录 → 墨笔书架据此识别并隐藏(compose 虚拟书是墨析的生成产物,
+    # 与墨笔共享 data/books/ 会串进墨笔书架;标记后墨笔前端过滤掉,墨析侧仍照常用)。
+    try:
+        from app.books import library as _lib
+        d = _lib.book_dir(cslug)
+        if d.is_dir():
+            (d / "compose.json").write_text(
+                json.dumps({"is_compose": True, "use_case": use_case, "project_slug": project_slug},
+                           ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
     return get_compose(cslug)
 
 

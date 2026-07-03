@@ -169,10 +169,14 @@ def list_books() -> list[dict[str, Any]]:
             continue
         p = book_paths(d.name)
         bm = branch_meta(d.name) or {}
+        # compose 虚拟书(墨析生成产物)标记:墨笔书架据此隐藏——它们与墨笔共享 data/books/,
+        # 但属墨析的融合/移植/技法产物,不该混进墨笔的续写书架。
+        is_compose = (d / "compose.json").exists()
         out.append({
             "slug": d.name,
             "title": bm.get("branch_name") or d.name,
             "active": d.name == active,
+            "is_compose": is_compose,
             "has_corpus": p["corpus_txt"].exists(),
             "has_db": p["db_path"].exists(),
             "corpus_bytes": p["corpus_txt"].stat().st_size if p["corpus_txt"].exists() else 0,
