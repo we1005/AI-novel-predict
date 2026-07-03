@@ -168,9 +168,12 @@ function OutlinePageInner() {
               </select>
             </label>
           </div>
-          <button onClick={toggleForm} className="ghost" style={{ padding: "4px 12px", fontSize: 12 }}>
-            {formCollapsed ? "展开生成表单 ▼" : "折叠 ▲"}
-          </button>
+          <Tooltip title={formCollapsed ? "展开生成表单" : "折叠生成表单"} placement="left">
+            <button onClick={toggleForm} className="ghost"
+              style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }}>
+              {formCollapsed ? "▼" : "▲"}
+            </button>
+          </Tooltip>
         </div>
 
         {!formCollapsed && (
