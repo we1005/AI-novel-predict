@@ -750,15 +750,21 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
   };
 
   const [forking, setForking] = useState(false);
-  // 当前书已有的分支(用于判断某候选弧是否已建过分支 → 按钮显示"已建"而非重复报错)。
-  const [branchesOfBook, setBranchesOfBook] = useState<any[]>([]);
+  // 判断当前选中候选弧是否已建过分支,避免重复 fork(重复会后端 400)。
+  const [allBooks, setAllBooks] = useState<any[]>([]);
+  const [activeSlug, setActiveSlug] = useState<string>("");
   const refreshBranches = () => api.booksList().then((d: any) => {
-    const act = d?.active;
-    setBranchesOfBook((d?.books || []).filter((b: any) => b.is_branch && b.parent_slug === act));
+    setActiveSlug(d?.active || "");
+    setAllBooks(d?.books || []);
   }).catch(() => {});
   useEffect(() => { refreshBranches(); }, []);
-  // 当前选中候选弧是否已建分支:按 (arc_run_id, chosen_index) 精确匹配。
-  const existingBranch = branchesOfBook.find((b) => b.arc_run_id === runId && b.chosen_index === idx);
+  // 两种"已建"情形(按 arc_run_id+chosen_index 精确匹配):
+  //  ① 当前 active 书本身就是这个候选弧的分支(你正站在该分支上看它自己的候选);
+  //  ② 存在一本"以当前书为 parent"的子分支匹配该候选。
+  const activeBook = allBooks.find((b) => b.slug === activeSlug);
+  const selfIsThisBranch = !!(activeBook?.is_branch && activeBook.arc_run_id === runId && activeBook.chosen_index === idx);
+  const childBranch = allBooks.find((b) => b.is_branch && b.parent_slug === activeSlug && b.arc_run_id === runId && b.chosen_index === idx);
+  const existingBranch = selfIsThisBranch ? activeBook : childBranch;
 
   // 一个候选弧 = 一个分支:把当前书 fork 成一本派生"分支书",分支元数据记 arc_run_id+chosen_index。
   const forkAsBranch = async () => {
@@ -827,8 +833,10 @@ function WholeBookPanel({ runId, candidates, defaultIndex }: { runId: number; ca
         </button>
         {existingBranch ? (
           <button className="ghost" disabled style={{ padding: "6px 14px", opacity: 0.7, cursor: "default" }}
-            title={`此候选弧已建分支「${existingBranch.branch_name || existingBranch.slug}」——到「书架」切换到它即可推演/续写。要重建请先在书架删掉旧分支。`}>
-            ✓ 已建分支「{existingBranch.branch_name || existingBranch.slug}」
+            title={selfIsThisBranch
+              ? "你当前就在此候选弧的分支上,直接推演/续写即可;无需再建。"
+              : `此候选弧已建分支「${existingBranch.branch_name || existingBranch.slug}」——到「书架」切换到它即可推演/续写。要重建请先在书架删掉旧分支。`}>
+            {selfIsThisBranch ? "✓ 当前就是此分支" : `✓ 已建分支「${existingBranch.branch_name || existingBranch.slug}」`}
           </button>
         ) : (
           <button className="ghost" onClick={forkAsBranch} disabled={forking} style={{ padding: "6px 14px" }}
