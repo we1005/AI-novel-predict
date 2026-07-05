@@ -1,0 +1,179 @@
+/*
+ * 墨笔落地页签名样式层。Tailwind 负责布局/间距/颜色 utility;
+ * 这里只放"成熟组件给不了"的东西:混排字体分流、毛玻璃、朱文印、
+ * 竖排双墨手稿、clip-path 揭幕、水印浮动、marquee。
+ */
+
+/*
+ * 混排字体 `mb-serif` —— 按 Unicode 范围逐字符切换:
+ *   拉丁(英文+西文标点)→ Noto Serif SC(含 Latin 衬线字形)
+ *   CJK(汉字+全宽标点)→ LXGW 霞鹜文楷
+ * 同名两条 @font-face,浏览器按每个字符码点各选其一 → 一行内中英自动切字体。
+ */
+@font-face {
+  font-family: 'mb-serif';
+  font-style: normal;
+  font-weight: 100 900;
+  src: local('Noto Serif SC'), local('NotoSerifSC-Regular'), local('NotoSerifCJKsc-Regular');
+  unicode-range: U+0020-024F, U+0370-03FF, U+1E00-1EFF, U+2000-206F, U+2190-22FF,
+    U+2460-24FF, U+25A0-25FF, U+2600-26FF;
+}
+@font-face {
+  font-family: 'mb-serif';
+  font-style: normal;
+  font-weight: 100 900;
+  src: local('LXGW WenKai Screen'), local('LXGWWenKaiScreen'), local('LXGW WenKai');
+  unicode-range: U+2E80-9FFF, U+F900-FAFF, U+FE30-FE4F, U+FF00-FFEF, U+3000-303F, U+3040-30FF;
+}
+
+.home-root {
+  background: var(--color-mb-canvas);
+  color: var(--color-mb-ink);
+  font-family: 'mb-serif', 'Noto Serif SC', 'LXGW WenKai Screen', -apple-system,
+    BlinkMacSystemFont, 'PingFang SC', serif;
+  font-feature-settings: 'kern';
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+  min-height: 100vh;
+}
+
+/* ── 字体语义类 ── */
+.font-mb-display {
+  font-family: 'mb-serif', 'LXGW WenKai Screen', 'Noto Serif SC', serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.font-mb-body {
+  font-family: 'mb-serif', 'LXGW WenKai Screen', 'Noto Serif SC', serif;
+  letter-spacing: 0.01em;
+}
+.font-mb-caps {
+  font-family: 'mb-serif', 'Noto Serif SC', 'Times New Roman', serif;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+.font-mb-num {
+  font-family: 'mb-serif', 'Noto Serif SC', 'Times New Roman', serif;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+/* ── 毛玻璃 ── */
+.glass {
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 10px 40px -12px rgba(20, 20, 26, 0.12),
+    0 2px 6px rgba(20, 20, 26, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+.glass-navbar {
+  background: rgba(250, 247, 242, 0.72);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid var(--color-mb-line);
+}
+
+/* ── 背景水印字(大,极低透明度,随滚动视差) ── */
+.mark {
+  position: fixed;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+  font-family: 'LXGW WenKai Screen', 'STKaiti', serif;
+  font-weight: 900;
+  color: var(--color-mb-ink);
+  line-height: 1;
+  opacity: 0.04;
+  will-change: transform;
+}
+
+/* ── Hero clip-path 揭幕 ── */
+@keyframes mb-reveal {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0;
+  }
+  22% {
+    opacity: 1;
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+.mb-reveal {
+  animation: mb-reveal 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.mb-reveal-1 {
+  animation-delay: 120ms;
+}
+.mb-reveal-2 {
+  animation-delay: 260ms;
+}
+.mb-reveal-3 {
+  animation-delay: 400ms;
+}
+.mb-reveal-4 {
+  animation-delay: 540ms;
+}
+
+/* ── 竖排双墨手稿 ── */
+.manu {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-family: 'mb-serif', 'LXGW WenKai Screen', 'STKaiti', serif;
+  font-size: clamp(18px, 2.3vw, 22px);
+  line-height: 2.25;
+  letter-spacing: 0.06em;
+  height: 100%;
+  text-align: justify;
+}
+.manu .ori {
+  color: var(--color-mb-ink);
+}
+.manu .cont {
+  color: var(--color-mb-qing);
+}
+/* 朱文印:朱砂描边方章,竖排两行 */
+.seal-mark {
+  display: inline-block;
+  color: var(--color-mb-seal);
+  border: 1.6px solid var(--color-mb-seal);
+  border-radius: 3px;
+  padding: 9px 5px;
+  margin: 8px 3px;
+  font-size: 0.62em;
+  line-height: 1.3;
+  letter-spacing: 0.05em;
+  box-shadow: 0 0 0 3px var(--color-mb-canvas);
+}
+
+/* ── 卡片 hover 抬升 ── */
+.lift {
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 220ms ease;
+}
+.lift:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 24px 60px -16px rgba(20, 20, 26, 0.18), 0 2px 8px rgba(20, 20, 26, 0.04);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .mb-reveal,
+  .mark {
+    animation: none !important;
+  }
+  .lift {
+    transition: none;
+  }
+}

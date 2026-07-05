@@ -1,0 +1,40 @@
+/*
+ * Tailwind v4 入口 —— 独立落地站,启用完整 Preflight(不与其它页面共存,无冲突顾虑)。
+ * 设计 token 走 @theme:声明 --color-xxx 即自动生成 bg-/text-/border- 等 utility。
+ */
+@import "tailwindcss";
+
+@theme {
+  /* ── 墨笔调色板(暖白宣纸 · 浓墨 · 花青续写 · 朱砂印,与孪生站玄鉴同调) ── */
+  --color-mb-canvas: #faf7f2;          /* 暖白宣纸 */
+  --color-mb-canvas-2: #f2ede3;        /* 次级米底 */
+  --color-mb-ink: #14141a;             /* 浓墨=原著/主文字 */
+  --color-mb-ink-soft: #4a4a55;        /* 次级文字 */
+  --color-mb-ink-mute: #8a8a95;        /* 弱化文字/标签 */
+  --color-mb-line: oklch(0.2 0.01 285 / 0.08);
+  --color-mb-line-2: oklch(0.2 0.01 285 / 0.14);
+  --color-mb-qing: #2e6b75;            /* 花青=墨笔续写 */
+  --color-mb-qing-soft: #e7eeef;
+  --color-mb-seal: #b4361a;            /* 朱砂印 */
+  --color-mb-seal-soft: #f4e3de;
+
+  /* ── shadcn-vue 语义 token(primary=朱砂,ring=花青) ── */
+  --color-background: #faf7f2;
+  --color-foreground: #14141a;
+  --color-primary: #b4361a;
+  --color-primary-foreground: #fffaf6;
+  --color-secondary: #f2ede3;
+  --color-secondary-foreground: #14141a;
+  --color-muted: #f2ede3;
+  --color-muted-foreground: #6a6a75;
+  --color-accent: #e7eeef;
+  --color-accent-foreground: #204a52;
+  --color-border: oklch(0.2 0.01 285 / 0.12);
+  --color-ring: #2e6b75;
+
+  /* 字体家族(Tailwind font-serif / font-display) */
+  --font-serif: "Noto Serif SC", "LXGW WenKai Screen", "Songti SC", serif;
+  --font-display: "LXGW WenKai Screen", "Noto Serif SC", "STKaiti", KaiTi, serif;
+
+  --radius: 0.75rem;
+}

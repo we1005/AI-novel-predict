@@ -1,0 +1,29 @@
+{
+  "name": "mobi-landing",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "墨笔 · MoBi 产品介绍页(工程化版:Vue3 + Vite + Tailwind v4 + reka-ui/shadcn-vue)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4180"
+  },
+  "dependencies": {
+    "@vueuse/motion": "^3.0.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-vue-next": "^1.0.0",
+    "reka-ui": "^2.9.6",
+    "tailwind-merge": "^3.5.0",
+    "vue": "^3.5.30"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.3",
+    "@types/node": "^24.12.0",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "tailwindcss": "^4.2.3",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.0"
+  }
+}
