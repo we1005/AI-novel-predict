@@ -30,16 +30,8 @@ const mark2 = computed(() => `translate3d(0, ${scrollY.value * 0.1}px, 0)`)
 
 <template>
   <div class="home-root relative">
-    <!-- 暖光晕 -->
-    <div
-      class="fixed inset-0 z-0 pointer-events-none"
-      aria-hidden="true"
-      style="
-        background:
-          radial-gradient(60% 50% at 82% 6%, rgba(180, 54, 26, 0.05), transparent 70%),
-          radial-gradient(55% 45% at 10% 92%, rgba(46, 107, 117, 0.06), transparent 72%);
-      "
-    />
+    <!-- 环境网格光晕(缓慢漂移) -->
+    <div class="mesh-bg" aria-hidden="true" />
     <!-- 幽灵水印 記 / 續 -->
     <div
       class="mark"

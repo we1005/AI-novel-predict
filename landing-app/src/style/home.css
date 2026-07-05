@@ -63,20 +63,71 @@
   letter-spacing: 0;
 }
 
-/* ── 毛玻璃 ── */
+/* ── 液态毛玻璃(Apple / visionOS 质感):镜面高光 + 多层景深投影 + 高饱和背景模糊 ── */
 .glass {
-  background: rgba(255, 255, 255, 0.55);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  box-shadow: 0 10px 40px -12px rgba(20, 20, 26, 0.12),
-    0 2px 6px rgba(20, 20, 26, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  position: relative;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 44%),
+    linear-gradient(150deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.32));
+  -webkit-backdrop-filter: blur(26px) saturate(185%);
+  backdrop-filter: blur(26px) saturate(185%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 1px 1px rgba(20, 20, 26, 0.03),
+    0 10px 30px -14px rgba(20, 20, 26, 0.12),
+    0 36px 64px -34px rgba(20, 20, 26, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(20, 20, 26, 0.04);
 }
-.glass-navbar {
-  background: rgba(250, 247, 242, 0.72);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
-  border-bottom: 1px solid var(--color-mb-line);
+/* 悬浮玻璃(nav 药丸 / 更强景深) */
+.glass-float {
+  box-shadow:
+    0 2px 6px rgba(20, 20, 26, 0.05),
+    0 16px 44px -12px rgba(20, 20, 26, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+/* ── 3D 指针倾斜(hero 手稿)+ 动态镜面反光 ── */
+.tilt {
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+.glare-dynamic {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 5;
+  mix-blend-mode: soft-light;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+/* ── 环境网格光晕(缓慢漂移,Apple 柔色氛围) ── */
+@keyframes mesh-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-3%, 2%, 0) scale(1.08);
+  }
+  100% {
+    transform: translate3d(2%, -2%, 0) scale(1.04);
+  }
+}
+.mesh-bg {
+  position: fixed;
+  inset: -12%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 34% at 18% 16%, rgba(180, 54, 26, 0.1), transparent 62%),
+    radial-gradient(34% 30% at 84% 22%, rgba(46, 107, 117, 0.1), transparent 64%),
+    radial-gradient(46% 40% at 68% 88%, rgba(180, 54, 26, 0.07), transparent 66%),
+    radial-gradient(40% 38% at 12% 82%, rgba(46, 107, 117, 0.08), transparent 66%);
+  filter: blur(26px);
+  animation: mesh-drift 28s ease-in-out infinite alternate;
 }
 
 /* ── 背景水印字(大,极低透明度,随滚动视差) ── */
@@ -170,10 +221,12 @@
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   .mb-reveal,
-  .mark {
+  .mark,
+  .mesh-bg {
     animation: none !important;
   }
-  .lift {
+  .lift,
+  .tilt {
     transition: none;
   }
 }

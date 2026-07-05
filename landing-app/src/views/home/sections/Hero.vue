@@ -1,7 +1,53 @@
 <script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
 import { ArrowRight } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { brand } from '../../../brand'
+
+// hero 手稿:3D 指针倾斜 + 动态镜面反光。触屏 / reduced-motion 自动关闭。
+const rx = ref(0)
+const ry = ref(0)
+const gx = ref(50)
+const gy = ref(50)
+const active = ref(false)
+let enabled = false
+
+onMounted(() => {
+  enabled =
+    window.matchMedia('(hover: hover) and (pointer: fine)').matches &&
+    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+})
+
+function onMove(e: PointerEvent) {
+  if (!enabled) return
+  const el = e.currentTarget as HTMLElement
+  const r = el.getBoundingClientRect()
+  const px = (e.clientX - r.left) / r.width
+  const py = (e.clientY - r.top) / r.height
+  ry.value = (px - 0.5) * 12
+  rx.value = -(py - 0.5) * 10
+  gx.value = px * 100
+  gy.value = py * 100
+  active.value = true
+}
+function onLeave() {
+  active.value = false
+  rx.value = 0
+  ry.value = 0
+}
+
+const tiltStyle = computed(() => ({
+  transform: active.value
+    ? `perspective(1000px) rotateX(${rx.value}deg) rotateY(${ry.value}deg) scale(1.015)`
+    : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)',
+  transition: active.value
+    ? 'transform 0.1s ease-out'
+    : 'transform 0.55s cubic-bezier(0.2,0.8,0.2,1)',
+}))
+const glareStyle = computed(() => ({
+  opacity: active.value ? 0.55 : 0,
+  background: `radial-gradient(240px circle at ${gx.value}% ${gy.value}%, rgba(255,255,255,0.65), transparent 60%)`,
+}))
 </script>
 
 <template>
@@ -76,38 +122,47 @@ import { brand } from '../../../brand'
         </div>
       </div>
 
-      <!-- 竖排双墨手稿 -->
+      <!-- 竖排双墨手稿(3D 倾斜玻璃) -->
       <div
-        class="glass rounded-[20px] relative justify-self-end w-full max-w-[400px] h-[min(60vh,520px)] px-8 py-7 flex overflow-hidden max-lg:h-auto max-lg:justify-self-stretch max-lg:max-w-none"
-        aria-label="手稿:原著墨迹在朱文印处转为墨笔续写的花青"
+        class="justify-self-end w-full max-w-[400px] max-lg:justify-self-stretch max-lg:max-w-none"
         v-motion
-        :initial="{ opacity: 0, y: 24, scale: 0.97 }"
-        :enter="{ opacity: 1, y: 0, scale: 1, transition: { duration: 700, delay: 320 } }"
+        :initial="{ opacity: 0, y: 24 }"
+        :enter="{ opacity: 1, y: 0, transition: { duration: 700, delay: 320 } }"
       >
-        <span
-          class="absolute top-5 bottom-5 right-5 w-px bg-mb-line-2 max-lg:hidden"
-          aria-hidden="true"
-        />
-        <p class="manu max-lg:[writing-mode:horizontal-tb] max-lg:h-auto max-lg:leading-[2]">
-          <span class="ori">夜雨敲窗,他写到这一行,墨已干,书未竟。</span>
+        <div
+          class="glass tilt rounded-[22px] relative h-[min(60vh,520px)] px-8 py-7 flex overflow-hidden max-lg:h-auto"
+          :style="tiltStyle"
+          @pointermove="onMove"
+          @pointerleave="onLeave"
+          aria-label="手稿:原著墨迹在朱文印处转为墨笔续写的花青"
+        >
           <span
-            class="seal-mark"
+            class="absolute top-5 bottom-5 right-5 w-px bg-mb-line-2 max-lg:hidden"
             aria-hidden="true"
-            v-motion
-            :initial="{ opacity: 0, scale: 1.4, rotate: -9 }"
-            :enter="{ opacity: 1, scale: 1, rotate: -3, transition: { duration: 550, delay: 980 } }"
-          >
-            {{ brand.sealText[0] }}<br />{{ brand.sealText[1] }}
-          </span>
-          <span
-            class="cont"
-            v-motion
-            :initial="{ opacity: 0 }"
-            :enter="{ opacity: 1, transition: { duration: 800, delay: 760 } }"
-          >
-            可故事记得每一道伏笔、每个人的来路——于是笔自己接着写了下去,一直写到结局。
-          </span>
-        </p>
+          />
+          <p class="manu max-lg:[writing-mode:horizontal-tb] max-lg:h-auto max-lg:leading-[2]">
+            <span class="ori">夜雨敲窗,他写到这一行,墨已干,书未竟。</span>
+            <span
+              class="seal-mark"
+              aria-hidden="true"
+              v-motion
+              :initial="{ opacity: 0, scale: 1.4, rotate: -9 }"
+              :enter="{ opacity: 1, scale: 1, rotate: -3, transition: { duration: 550, delay: 980 } }"
+            >
+              {{ brand.sealText[0] }}<br />{{ brand.sealText[1] }}
+            </span>
+            <span
+              class="cont"
+              v-motion
+              :initial="{ opacity: 0 }"
+              :enter="{ opacity: 1, transition: { duration: 800, delay: 760 } }"
+            >
+              可故事记得每一道伏笔、每个人的来路——于是笔自己接着写了下去,一直写到结局。
+            </span>
+          </p>
+          <!-- 动态镜面反光 -->
+          <div class="glare-dynamic" :style="glareStyle" aria-hidden="true" />
+        </div>
       </div>
     </div>
   </section>
