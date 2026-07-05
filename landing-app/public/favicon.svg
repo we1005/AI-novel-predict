@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="墨笔">
+  <rect x="1.5" y="1.5" width="29" height="29" rx="8" fill="#f7f3ec"/>
+  <!-- 笔杆 -->
+  <path d="M15.7 15.7 L23.6 7.3" fill="none" stroke="#14141a" stroke-width="3" stroke-linecap="round"/>
+  <!-- 笔锋(墨色水滴) -->
+  <path d="M8.3 24.2 C11 20.1 12.9 17.8 15.3 15.2 L17.2 16.7 C14.8 19.3 12.6 21.4 8.3 24.2 Z" fill="#14141a"/>
+  <!-- 朱砂墨迹(自笔尖淌出) -->
+  <path d="M8.6 24.1 C12.6 25.7 17.2 25.2 21.6 23.3" fill="none" stroke="#b4361a" stroke-width="1.9" stroke-linecap="round"/>
+</svg>
