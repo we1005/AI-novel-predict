@@ -1,10 +1,19 @@
-# Netlify：纯静态站，无需构建。发布目录就是本文件夹。
+# Netlify · 墨笔合并站(落地页 + 阅读站子目录)
+# 纯静态,无需构建。发布目录就是本文件夹。
+#   /            → 落地页(landing-app 构建产物)
+#   /read/       → 墨笔书阁·天之炽 阅读站(hash 路由 SPA)
 [build]
   publish = "."
   command = ""
 
-# 安全/缓存(可选)
+# 阅读站章节数据缓存
 [[headers]]
-  for = "/data/*"
+  for = "/read/data/*"
   [headers.values]
     Cache-Control = "public, max-age=3600"
+
+# 落地页带 hash 的资源可长缓存
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

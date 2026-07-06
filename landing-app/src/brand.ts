@@ -5,8 +5,9 @@ export const brand = {
   english: 'MoBi',
   englishSub: 'A memory-native engine for continuing long novels',
   tagline: '记忆驱动的长篇续写引擎',
-  // 外链:已上线的续写作品阅读站
-  readUrl: 'https://mobi-ai-novel.netlify.app/',
+  // 阅读站:与落地页同站打包,作为 结果/read/ 子目录(相对路径)。
+  // 若要改回指向线上 Netlify 站,换成 'https://mobi-ai-novel.netlify.app/' 即可。
+  readUrl: './read/',
   // 背景装饰汉字(浮动,极低透明度)
   hanziFloat: ['記', '續', '墨'] as const,
   // 手稿签名印文(朱文竖排方章)

@@ -1,20 +1,20 @@
-# 墨笔书阁 · 天之炽 静态阅读站
+# 墨笔 · 合并静态站(结果/)
 
-纯静态网站(HTML/CSS/原生 JS),零构建,可直接部署到 Netlify。
+一个可整体部署的纯静态文件夹:落地页在根,阅读站在 `read/` 子目录,**全相对路径**。
 
 ## 结构
-- `index.html` — SPA 外壳(hash 路由)
-- `assets/` — 样式与脚本
-- `data/books.json` — 书架索引
-- `data/tianzhichi/meta.json` — 简介 + 大纲 + 目录(toc)
-- `data/tianzhichi/ch/<章号>.json` — 每章正文(中文)
+- `index.html` · `assets/` · `favicon-*.png` · `brush-logo.png` — 落地页(由 `../landing-app` 构建)
+- `read/` — 墨笔书阁·天之炽 阅读站(零构建 SPA,`index.html` + `assets/` + `data/`)
+- `netlify.toml` — 发布配置(publish=".")
 
-## 页面
-1. 书架首页(书脊封面)→ 2. 书籍简介(剧情/大纲/原著 vs 续写)→ 3. 阅读页(左目录右正文)
+落地页的「读续写的《天之炽》」按钮相对链到 `./read/`。
 
-## 本地预览
-    python3 -m http.server 8099   # 然后打开 http://localhost:8099
+## 本地预览(阅读站靠 fetch 读 data,必须走 http,不能 file:// 直接打开)
+    cd 结果 && python3 -m http.server 8099
+    # 落地页 http://localhost:8099/   阅读站 http://localhost:8099/read/
 
-## 部署到 Netlify
-- 方式A:把本文件夹直接拖到 Netlify「Deploy」拖拽区即可。
-- 方式B:连 Git 仓库,Publish directory 设为本文件夹(netlify.toml 已设 publish=".")。
+## 重建落地页(不动 read/)
+    ./build_site.sh            # 见项目根;构建 landing-app 并同步进本文件夹
+
+## 部署 Netlify
+    netlify deploy --prod --dir=结果

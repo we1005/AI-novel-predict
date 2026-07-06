@@ -17,6 +17,11 @@
 - 后端：`backend/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000`（venv 的 uvicorn shebang 已坏，必须 `python -m`）。
 - 前端：`cd frontend && npm run dev`（端口 3100）。
 
+## 对外合并静态站 `结果/`（落地页 + 阅读站,可整体部署）
+- 结构：`结果/` 根 = **落地页**(源码 `landing-app/`,Vue3+Vite+Tailwind v4,`base:'./'` 全相对);`结果/read/` = **阅读站**(墨笔书阁·天之炽,零构建 SPA + `data/` 章节 JSON)。落地页「读续写」按钮相对链到 `./read/`(`landing-app/src/brand.ts` 的 `readUrl`)。
+- **改完落地页一键重建**：项目根 `./build_site.sh`(构建 landing-app → rsync 同步进 `结果/`,**不动 `read/`** 与根 `netlify.toml`/`README.md`)。
+- 阅读站靠 `fetch()` 读 `data/*.json`,**必须走 http**(不能 file:// 直接打开):`cd 结果 && python3 -m http.server 8099`。部署:`netlify deploy --prod --dir=结果`。
+
 ## 架构要点（详见 墨笔-agent架构设计docs/ 与 墨笔-改进记录与架构.md）
 - 多服务商：火山引擎 Coding-Plan + 阿里 DashScope，按任务路由：结构化→doubao-seed-2.0-code，散文→minimax-m3，快审/抽取→doubao-seed-2.0-lite / qwen3.5-flash。
 - **结构化输出一律 JSON-in-text（贴 schema + json_repair），不用 forced tool_choice**——doubao 系大上下文下强制工具会静默吞输出。
